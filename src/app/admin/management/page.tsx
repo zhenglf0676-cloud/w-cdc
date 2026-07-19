@@ -116,7 +116,7 @@ export default function ManagementPage() {
   
   // Discharge outlets state
   const [dischargeOutlets, setDischargeOutlets] = useState<DischargeOutlet[]>([]);
-  const [outletMap, setOutletMap] = useState<any>(null);
+  const outletMapRef = useRef<any>(null);
   const [outletMarkers, setOutletMarkers] = useState<any[]>([]);
   const [outletMapCenter, setOutletMapCenter] = useState<[number, number]>([30.2741, 120.1551]);
   const [outletDialogOpen, setOutletDialogOpen] = useState(false);
@@ -326,7 +326,7 @@ export default function ManagementPage() {
 
   // Initialize outlet map when tab changes to discharge
   useEffect(() => {
-    if (activeTab === 'discharge' && !outletMap && typeof window !== 'undefined') {
+    if (activeTab === 'discharge' && !outletMapRef.current && typeof window !== 'undefined') {
       console.log('Initializing outlet map...');
       AMapLoader.load({
         key: '2e7e0b14442f42267a79052677e15dce',
@@ -343,7 +343,9 @@ export default function ManagementPage() {
             resizeEnable: true,
           });
           console.log('Map instance created:', mapInstance);
-          setOutletMap(mapInstance);
+          outletMapRef.current = mapInstance;
+          // Force re-render to trigger marker update
+          setOutletMapCenter([...outletMapCenter]);
         } else {
           console.error('Map container not found!');
         }
@@ -355,7 +357,7 @@ export default function ManagementPage() {
 
   // Update outlet markers when map or outlets change
   useEffect(() => {
-    if (!outletMap) return;
+    if (!outletMapRef.current) return;
     
     // Clear old markers
     outletMarkers.forEach((marker) => marker.setMap(null));
@@ -388,7 +390,7 @@ export default function ManagementPage() {
       const statusColor = outlet.status === 'pending' ? '#F59E0B' : '#10B981';
       
       marker.on('click', () => {
-        const infoWindow = new outletMap.InfoWindow({
+        const infoWindow = new AMap.InfoWindow({
           content: `
             <div style="padding:10px;min-width:180px;font-family:'Noto Sans SC',sans-serif;">
               <div style="font-weight:600;font-size:14px;margin-bottom:6px;">${outlet.name}</div>
@@ -398,21 +400,23 @@ export default function ManagementPage() {
               </div>
             </div>
           `,
-          offset: new outletMap.Pixel(0, -30),
+          offset: new AMap.Pixel(0, -30),
         });
-        infoWindow.open(outletMap, marker.getPosition());
+        infoWindow.open(outletMapRef.current, marker.getPosition());
       });
       
-      marker.setMap(outletMap);
+      marker.setMap(outletMapRef.current);
       return marker;
     });
     
     setOutletMarkers(newMarkers);
     
     // Center map on first outlet
-    const firstOutlet = displayOutlets[0];
-    outletMap.setCenter([firstOutlet.latitude, firstOutlet.longitude]);
-  }, [outletMap, displayOutlets]);
+    if (displayOutlets.length > 0) {
+      const firstOutlet = displayOutlets[0];
+      outletMapRef.current?.setCenter([firstOutlet.longitude, firstOutlet.latitude]);
+    }
+  }, [outletMapRef.current, displayOutlets]);
 
   if (isLoading) {
     return (
