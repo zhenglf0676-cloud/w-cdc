@@ -134,6 +134,13 @@ export default function EnterpriseHome() {
     fetchData();
   }, [session]);
 
+  // 当地图已初始化但 userLocation 更新时，更新地图中心
+  useEffect(() => {
+    if (mapInstanceRef.current && userLocation) {
+      mapInstanceRef.current.setCenter([userLocation.lng, userLocation.lat]);
+    }
+  }, [userLocation]);
+
   // 初始化地图
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
