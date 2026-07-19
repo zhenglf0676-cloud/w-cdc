@@ -1,0 +1,115 @@
+'use client';
+
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+  Home,
+  Radio,
+  BarChart3,
+  User,
+  ChevronLeft,
+  ChevronRight,
+  LogOut,
+  Building2,
+} from 'lucide-react';
+import { useAuth } from '@/lib/auth-context';
+import { cn } from '@/lib/utils';
+
+interface EnterpriseSidebarProps {
+  activeItem?: string;
+}
+
+const menuItems = [
+  { id: 'home', label: '首页（污染物管理）', icon: Home, href: '/enterprise' },
+  { id: 'monitor', label: '排污点监测', icon: Radio, href: '/enterprise/monitor' },
+  { id: 'cdc', label: 'CDC 分析', icon: BarChart3, href: '/enterprise/cdc' },
+  { id: 'profile', label: '个人中心', icon: User, href: '/enterprise/profile' },
+];
+
+export function EnterpriseSidebar({ activeItem = 'home' }: EnterpriseSidebarProps) {
+  const router = useRouter();
+  const { user, signOut } = useAuth();
+  const [collapsed, setCollapsed] = useState(false);
+
+  const handleLogout = async () => {
+    await signOut();
+    router.push('/login');
+  };
+
+  const companyName = user?.user_metadata?.company_name || '企业用户';
+
+  return (
+    <div
+      className={cn(
+        'fixed left-0 top-0 z-40 flex h-full flex-col bg-[#0F2B46] text-white transition-all duration-300',
+        collapsed ? 'w-16' : 'w-64'
+      )}
+    >
+      {/* Logo */}
+      <div className="flex h-14 items-center gap-2 border-b border-white/10 px-4">
+        <Building2 className="h-6 w-6 shrink-0 text-sky-400" />
+        {!collapsed && (
+          <span className="text-sm font-semibold whitespace-nowrap">园区地下水环境监测平台</span>
+        )}
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 space-y-1 overflow-y-auto px-2 py-4">
+        {menuItems.map((item) => {
+          const Icon = item.icon;
+          const isActive = activeItem === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => router.push(item.href)}
+              className={cn(
+                'flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors',
+                isActive
+                  ? 'bg-sky-600 text-white'
+                  : 'text-slate-300 hover:bg-white/10 hover:text-white'
+              )}
+              title={collapsed ? item.label : undefined}
+            >
+              <Icon className="h-5 w-5 shrink-0" />
+              {!collapsed && <span className="whitespace-nowrap">{item.label}</span>}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* User Info & Logout */}
+      <div className="border-t border-white/10 p-3">
+        {!collapsed && (
+          <div className="mb-3 flex items-center gap-2 rounded-md bg-white/5 px-3 py-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-600 text-xs font-semibold">
+              {companyName.charAt(0)}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">{companyName}</p>
+              <p className="truncate text-xs text-slate-400">企业用户</p>
+            </div>
+          </div>
+        )}
+        <button
+          onClick={handleLogout}
+          className={cn(
+            'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-red-500/20 hover:text-red-400',
+            collapsed && 'justify-center'
+          )}
+          title={collapsed ? '退出登录' : undefined}
+        >
+          <LogOut className="h-4 w-4 shrink-0" />
+          {!collapsed && <span>退出登录</span>}
+        </button>
+      </div>
+
+      {/* Collapse Toggle */}
+      <button
+        onClick={() => setCollapsed(!collapsed)}
+        className="absolute -right-3 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:bg-slate-50"
+      >
+        {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
+      </button>
+    </div>
+  );
+}
