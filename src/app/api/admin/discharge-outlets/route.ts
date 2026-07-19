@@ -16,13 +16,10 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin();
 
-    // 获取所有排污口申请，关联用户信息
+    // 获取所有排污口申请
     const { data: outlets, error } = await supabase
       .from('discharge_outlets')
-      .select(`
-        *,
-        profiles:user_id (full_name, company_name)
-      `)
+      .select('*')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -33,10 +30,22 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // 获取所有用户信息
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('user_id, full_name, company_name');
+
+    // 关联用户信息
+    const profileMap = new Map(profiles?.map(p => [p.user_id, p]) || []);
+    const outletsWithProfiles = outlets?.map(o => ({
+      ...o,
+      profiles: profileMap.get(o.user_id) || null,
+    })) || [];
+
     // 按状态分组
-    const pending = outlets?.filter(o => o.status === 'pending') || [];
-    const approved = outlets?.filter(o => o.status === 'approved') || [];
-    const rejected = outlets?.filter(o => o.status === 'rejected') || [];
+    const pending = outletsWithProfiles.filter(o => o.status === 'pending');
+    const approved = outletsWithProfiles.filter(o => o.status === 'approved');
+    const rejected = outletsWithProfiles.filter(o => o.status === 'rejected');
 
     return NextResponse.json({
       success: true,
