@@ -2,17 +2,14 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { EnterpriseSidebar } from '@/components/enterprise-sidebar';
 import { useAuth } from '@/lib/auth-context';
 import {
   Search,
   Plus,
-  Minus,
   MapPin,
   Building2,
   Droplets,
   CheckCircle,
-  ChevronRight,
   AlertCircle,
   FileText,
   Loader2,
@@ -169,14 +166,12 @@ export default function EnterpriseHome() {
     if (!trimmed) return;
 
     if (type === 'heavy_metal') {
-      // 检查是否已存在
       if (customHeavyMetals.includes(trimmed)) {
         return;
       }
       setCustomHeavyMetals((prev) => [...prev, trimmed]);
       setHeavyMetalInput('');
     } else {
-      // 检查是否已存在
       if (customOthers.includes(trimmed)) {
         return;
       }
@@ -199,7 +194,6 @@ export default function EnterpriseHome() {
     setSubmitError('');
 
     try {
-      // 构建污染物列表（过滤掉"重金属"和"其他"这两个分类选项）
       const pollutants = POLLUTANT_OPTIONS.filter(
         (p) => selectedPollutants.includes(p.id) && !p.custom
       ).map((p) => ({
@@ -207,12 +201,10 @@ export default function EnterpriseHome() {
         label: p.label,
       }));
 
-      // 添加自定义重金属
       customHeavyMetals.forEach((metal) => {
         pollutants.push({ id: `heavy_metal_${metal}`, label: metal });
       });
 
-      // 添加自定义其他
       customOthers.forEach((other) => {
         pollutants.push({ id: `other_${other}`, label: other });
       });
@@ -273,237 +265,233 @@ export default function EnterpriseHome() {
         </div>
       </header>
 
-        {/* Content */}
-        <div className="flex gap-4 p-4">
-          {/* Map Area */}
-          <div className="flex-1">
-            <div className="relative rounded-lg border bg-white shadow-sm">
-              {/* Search Bar */}
-              <div className="absolute left-4 top-4 z-10 flex items-center gap-2 rounded-md border bg-white px-3 py-1.5 shadow-sm">
-                <Search className="h-4 w-4 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="搜索企业或排污口名称"
-                  className="w-48 bg-transparent text-sm outline-none placeholder:text-slate-400"
-                />
-              </div>
-
-              {/* Map */}
-              <div ref={mapContainerRef} className="h-[600px] w-full rounded-lg" />
-
-              {/* Legend */}
-              <div className="absolute bottom-4 left-4 rounded-lg border bg-white/95 p-3 shadow-sm backdrop-blur-sm">
-                <h4 className="mb-2 text-xs font-semibold text-slate-700">图例</h4>
-                <div className="space-y-1.5 text-xs text-slate-600">
-                  <div className="flex items-center gap-2">
-                    <Building2 className="h-3.5 w-3.5 text-blue-600" />
-                    <span>企业</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Droplets className="h-3.5 w-3.5 text-green-600" />
-                    <span>排污口</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="h-3.5 w-5 border-t-2 border-dashed border-blue-400" />
-                    <span>园区边界</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Panel */}
-          <div className="w-80 space-y-4">
-            {/* Apply Pollutants */}
-            <div className="rounded-lg border bg-white p-4 shadow-sm">
-              <div className="mb-3 flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
-                  <FileText className="h-4 w-4 text-blue-600" />
-                </div>
-                <h3 className="font-semibold text-slate-900">申请污染物</h3>
-              </div>
-              <p className="mb-3 text-xs text-slate-500">选择企业拟排放的污染物，提交管理员审批</p>
-
-              <div className="space-y-2">
-                {POLLUTANT_OPTIONS.map((p) => (
-                  <div key={p.id}>
-                    <label
-                      className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-slate-700 transition-colors hover:bg-slate-50"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedPollutants.includes(p.id)}
-                        onChange={() => togglePollutant(p.id)}
-                        className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-                      />
-                      <span>{p.label}</span>
-                    </label>
-                    {/* 重金属输入框 */}
-                    {p.id === 'heavy_metal' && isHeavyMetalSelected && (
-                      <div className="ml-6 mt-1 space-y-1">
-                        <div className="flex gap-1">
-                          <input
-                            type="text"
-                            value={heavyMetalInput}
-                            onChange={(e) => setHeavyMetalInput(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                addCustomPollutant('heavy_metal', heavyMetalInput);
-                              }
-                            }}
-                            placeholder="输入重金属名称（如 Cr⁶、Pb）"
-                            className="flex-1 rounded border border-slate-200 px-2 py-1 text-xs focus:border-sky-500 focus:outline-none"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => addCustomPollutant('heavy_metal', heavyMetalInput)}
-                            className="rounded bg-sky-100 px-2 py-1 text-xs text-sky-700 hover:bg-sky-200"
-                          >
-                            添加
-                          </button>
-                        </div>
-                        {customHeavyMetals.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
-                            {customHeavyMetals.map((item) => (
-                              <span
-                                key={item}
-                                className="inline-flex items-center gap-1 rounded bg-sky-50 px-2 py-0.5 text-xs text-sky-700"
-                              >
-                                {item}
-                                <button
-                                  type="button"
-                                  onClick={() => removeCustomPollutant('heavy_metal', item)}
-                                  className="text-sky-400 hover:text-sky-600"
-                                >
-                                  ×
-                                </button>
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {/* 其他输入框 */}
-                    {p.id === 'other' && isOtherSelected && (
-                      <div className="ml-6 mt-1 space-y-1">
-                        <div className="flex gap-1">
-                          <input
-                            type="text"
-                            value={otherInput}
-                            onChange={(e) => setOtherInput(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                addCustomPollutant('other', otherInput);
-                              }
-                            }}
-                            placeholder="输入污染物名称"
-                            className="flex-1 rounded border border-slate-200 px-2 py-1 text-xs focus:border-sky-500 focus:outline-none"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => addCustomPollutant('other', otherInput)}
-                            className="rounded bg-sky-100 px-2 py-1 text-xs text-sky-700 hover:bg-sky-200"
-                          >
-                            添加
-                          </button>
-                        </div>
-                        {customOthers.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
-                            {customOthers.map((item) => (
-                              <span
-                                key={item}
-                                className="inline-flex items-center gap-1 rounded bg-sky-50 px-2 py-0.5 text-xs text-sky-700"
-                              >
-                                {item}
-                                <button
-                                  type="button"
-                                  onClick={() => removeCustomPollutant('other', item)}
-                                  className="text-sky-400 hover:text-sky-600"
-                                >
-                                  ×
-                                </button>
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              <button
-                onClick={handleSubmitPollutants}
-                disabled={submitting || selectedPollutants.length === 0}
-                className="mt-4 flex w-full items-center justify-center gap-2 rounded-md bg-sky-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky-700 disabled:opacity-50"
-              >
-                {submitting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : submitSuccess ? (
-                  <CheckCircle className="h-4 w-4" />
-                ) : (
-                  <FileText className="h-4 w-4" />
-                )}
-                {submitSuccess ? '提交成功' : '提交申请'}
-              </button>
-
-              {/* 错误提示 */}
-              {submitError && (
-                <div className="mt-3 flex items-center gap-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
-                  <AlertCircle className="h-4 w-4 shrink-0" />
-                  <span>{submitError}</span>
-                </div>
-              )}
+      {/* Content */}
+      <div className="flex gap-4 p-4">
+        {/* Map Area */}
+        <div className="flex-1">
+          <div className="relative rounded-lg border bg-white shadow-sm">
+            {/* Search Bar */}
+            <div className="absolute left-4 top-4 z-10 flex items-center gap-2 rounded-md border bg-white px-3 py-1.5 shadow-sm">
+              <Search className="h-4 w-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="搜索企业或排污口名称"
+                className="w-48 bg-transparent text-sm outline-none placeholder:text-slate-400"
+              />
             </div>
 
-            {/* Apply Discharge Outlet */}
-            <div className="rounded-lg border bg-white p-4 shadow-sm">
-              <div className="mb-3 flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-50">
-                  <MapPin className="h-4 w-4 text-green-600" />
-                </div>
-                <h3 className="font-semibold text-slate-900">申请排污口</h3>
-              </div>
-              <p className="mb-3 text-xs text-slate-500">在地图上选择位置，填写信息提交审批</p>
+            {/* Map */}
+            <div ref={mapContainerRef} className="h-[600px] w-full rounded-lg" />
 
-              <div className="space-y-3">
-                <div className="flex items-center gap-3 rounded-md bg-slate-50 p-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-100 text-sky-600">
-                    <MapPin className="h-4 w-4" />
-                  </div>
-                  <div className="text-xs text-slate-600">
-                    <p className="font-medium">1. 在地图上点击选择位置</p>
-                  </div>
+            {/* Legend */}
+            <div className="absolute bottom-4 left-4 rounded-lg border bg-white/95 p-3 shadow-sm backdrop-blur-sm">
+              <h4 className="mb-2 text-xs font-semibold text-slate-700">图例</h4>
+              <div className="space-y-1.5 text-xs text-slate-600">
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-3.5 w-3.5 text-blue-600" />
+                  <span>企业</span>
                 </div>
-                <div className="flex items-center gap-3 rounded-md bg-slate-50 p-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-100 text-sky-600">
-                    <AlertCircle className="h-4 w-4" />
-                  </div>
-                  <div className="text-xs text-slate-600">
-                    <p className="font-medium">2. 自动获取经纬度坐标</p>
-                  </div>
+                <div className="flex items-center gap-2">
+                  <Droplets className="h-3.5 w-3.5 text-green-600" />
+                  <span>排污口</span>
                 </div>
-                <div className="flex items-center gap-3 rounded-md bg-slate-50 p-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-100 text-sky-600">
-                    <FileText className="h-4 w-4" />
-                  </div>
-                  <div className="text-xs text-slate-600">
-                    <p className="font-medium">3. 填写名称并提交申请</p>
-                  </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-3.5 w-5 border-t-2 border-dashed border-blue-400" />
+                  <span>园区边界</span>
                 </div>
               </div>
-
-              <button className="mt-4 flex w-full items-center justify-center gap-2 rounded-md border-2 border-dashed border-sky-300 bg-sky-50 px-4 py-2.5 text-sm font-medium text-sky-700 transition-colors hover:bg-sky-100">
-                <Plus className="h-4 w-4" />
-                新增排污口申请
-              </button>
             </div>
           </div>
         </div>
+
+        {/* Right Panel */}
+        <div className="w-80 space-y-4">
+          {/* Apply Pollutants */}
+          <div className="rounded-lg border bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50">
+                <FileText className="h-4 w-4 text-blue-600" />
+              </div>
+              <h3 className="font-semibold text-slate-900">申请污染物</h3>
+            </div>
+            <p className="mb-3 text-xs text-slate-500">选择企业拟排放的污染物，提交管理员审批</p>
+
+            <div className="space-y-2">
+              {POLLUTANT_OPTIONS.map((p) => (
+                <div key={p.id}>
+                  <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-slate-700 transition-colors hover:bg-slate-50">
+                    <input
+                      type="checkbox"
+                      checked={selectedPollutants.includes(p.id)}
+                      onChange={() => togglePollutant(p.id)}
+                      className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                    />
+                    <span>{p.label}</span>
+                  </label>
+                  {/* 重金属输入框 */}
+                  {p.id === 'heavy_metal' && isHeavyMetalSelected && (
+                    <div className="ml-6 mt-1 space-y-1">
+                      <div className="flex gap-1">
+                        <input
+                          type="text"
+                          value={heavyMetalInput}
+                          onChange={(e) => setHeavyMetalInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              addCustomPollutant('heavy_metal', heavyMetalInput);
+                            }
+                          }}
+                          placeholder="输入重金属名称（如 Cr⁶、Pb）"
+                          className="flex-1 rounded border border-slate-200 px-2 py-1 text-xs focus:border-sky-500 focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => addCustomPollutant('heavy_metal', heavyMetalInput)}
+                          className="rounded bg-sky-100 px-2 py-1 text-xs text-sky-700 hover:bg-sky-200"
+                        >
+                          添加
+                        </button>
+                      </div>
+                      {customHeavyMetals.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {customHeavyMetals.map((item) => (
+                            <span
+                              key={item}
+                              className="inline-flex items-center gap-1 rounded bg-sky-50 px-2 py-0.5 text-xs text-sky-700"
+                            >
+                              {item}
+                              <button
+                                type="button"
+                                onClick={() => removeCustomPollutant('heavy_metal', item)}
+                                className="text-sky-400 hover:text-sky-600"
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {/* 其他输入框 */}
+                  {p.id === 'other' && isOtherSelected && (
+                    <div className="ml-6 mt-1 space-y-1">
+                      <div className="flex gap-1">
+                        <input
+                          type="text"
+                          value={otherInput}
+                          onChange={(e) => setOtherInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              addCustomPollutant('other', otherInput);
+                            }
+                          }}
+                          placeholder="输入污染物名称"
+                          className="flex-1 rounded border border-slate-200 px-2 py-1 text-xs focus:border-sky-500 focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => addCustomPollutant('other', otherInput)}
+                          className="rounded bg-sky-100 px-2 py-1 text-xs text-sky-700 hover:bg-sky-200"
+                        >
+                          添加
+                        </button>
+                      </div>
+                      {customOthers.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {customOthers.map((item) => (
+                            <span
+                              key={item}
+                              className="inline-flex items-center gap-1 rounded bg-sky-50 px-2 py-0.5 text-xs text-sky-700"
+                            >
+                              {item}
+                              <button
+                                type="button"
+                                onClick={() => removeCustomPollutant('other', item)}
+                                className="text-sky-400 hover:text-sky-600"
+                              >
+                                ×
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={handleSubmitPollutants}
+              disabled={submitting || selectedPollutants.length === 0}
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-md bg-sky-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky-700 disabled:opacity-50"
+            >
+              {submitting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : submitSuccess ? (
+                <CheckCircle className="h-4 w-4" />
+              ) : (
+                <FileText className="h-4 w-4" />
+              )}
+              {submitSuccess ? '提交成功' : '提交申请'}
+            </button>
+
+            {/* 错误提示 */}
+            {submitError && (
+              <div className="mt-3 flex items-center gap-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{submitError}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Apply Discharge Outlet */}
+          <div className="rounded-lg border bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-50">
+                <MapPin className="h-4 w-4 text-green-600" />
+              </div>
+              <h3 className="font-semibold text-slate-900">申请排污口</h3>
+            </div>
+            <p className="mb-3 text-xs text-slate-500">在地图上选择位置，填写信息提交审批</p>
+
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 rounded-md bg-slate-50 p-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-100 text-sky-600">
+                  <MapPin className="h-4 w-4" />
+                </div>
+                <div className="text-xs text-slate-600">
+                  <p className="font-medium">1. 在地图上点击选择位置</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 rounded-md bg-slate-50 p-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-100 text-sky-600">
+                  <AlertCircle className="h-4 w-4" />
+                </div>
+                <div className="text-xs text-slate-600">
+                  <p className="font-medium">2. 自动获取经纬度坐标</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 rounded-md bg-slate-50 p-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-100 text-sky-600">
+                  <FileText className="h-4 w-4" />
+                </div>
+                <div className="text-xs text-slate-600">
+                  <p className="font-medium">3. 填写名称并提交申请</p>
+                </div>
+              </div>
+            </div>
+
+            <button className="mt-4 flex w-full items-center justify-center gap-2 rounded-md border-2 border-dashed border-sky-300 bg-sky-50 px-4 py-2.5 text-sm font-medium text-sky-700 transition-colors hover:bg-sky-100">
+              <Plus className="h-4 w-4" />
+              新增排污口申请
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
-  </div>
-  </div>
   );
 }

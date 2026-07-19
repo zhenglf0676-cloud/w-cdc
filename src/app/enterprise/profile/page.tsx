@@ -371,7 +371,6 @@ export default function EnterpriseProfilePage() {
             )}
           </main>
         </div>
-      </div>
 
       {/* 消息详情弹窗 */}
       {selectedNotification && (
