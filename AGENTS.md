@@ -19,11 +19,24 @@
 │   └── start.sh            # 生产环境启动脚本
 ├── src/
 │   ├── app/                # 页面路由与布局
+│   │   ├── api/            # API 路由
+│   │   │   └── supabase-config/  # Supabase 配置接口
+│   │   ├── login/          # 登录页面
+│   │   ├── register/       # 注册页面
+│   │   ├── layout.tsx      # 根布局（注入 Auth Provider）
+│   │   └── page.tsx        # 首页（认证后 Dashboard）
 │   ├── components/ui/      # Shadcn UI 组件库
 │   ├── hooks/              # 自定义 Hooks
 │   ├── lib/                # 工具库
+│   │   ├── auth-context.tsx       # Auth 上下文（用户状态管理）
+│   │   ├── supabase-browser.ts    # 浏览器端 Supabase 客户端
+│   │   ├── supabase-config-inject.tsx  # Supabase 配置注入
 │   │   └── utils.ts        # 通用工具函数 (cn)
-│   └── server.ts           # 自定义服务端入口
+│   ├── middleware.ts        # 路由中间件
+│   ├── server.ts           # 自定义服务端入口
+│   └── storage/database/   # 数据库层
+│       ├── supabase-client.ts     # 服务端 Supabase 客户端
+│       └── shared/schema.ts       # Drizzle Schema 定义
 ├── next.config.ts          # Next.js 配置
 ├── package.json            # 项目依赖管理
 └── tsconfig.json           # TypeScript 配置
@@ -63,3 +76,24 @@
 
 - 模板默认预装核心组件库 `shadcn/ui`，位于`src/components/ui/`目录下
 - Next.js 项目**必须默认**采用 shadcn/ui 组件、风格和规范，**除非用户指定用其他的组件和规范。**
+
+## 认证系统
+
+- 使用 Supabase Auth 实现用户认证
+- 支持邮箱密码登录/注册（手机号登录未启用）
+- 邮箱注册自动确认（mailer_auto_confirm: true）
+- 认证状态通过 `useAuth()` hook 获取
+- 前端 Supabase 客户端通过 `/api/supabase-config` 动态获取配置
+- 用户角色存储在 `profiles` 表中（role: admin/enterprise）
+
+## 业务功能规划
+
+### Admin（管理员）端
+- 首页：园区地图，显示企业和排污口
+- 企业管理：审批企业、污染物、排污口
+- 实时监测：预警中心
+
+### User（企业）端
+- 首页：污染物管理 + 地图
+- 排污点监测：实时监测、历史曲线
+- CDC 分析
