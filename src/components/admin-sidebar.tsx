@@ -22,7 +22,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { title: '首页（园区地图）', href: '/admin', icon: LayoutDashboard },
-  { title: '企业管理', href: '/admin/enterprises', icon: Building2 },
+  { title: '企业管理', href: '/admin/management', icon: Building2 },
   { title: '实时监测（预警中心）', href: '/admin/monitoring', icon: Activity },
   { title: '系统管理', href: '/admin/settings', icon: Settings },
 ];

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Home,
@@ -30,6 +30,27 @@ export function EnterpriseSidebar({ activeItem = 'home' }: EnterpriseSidebarProp
   const router = useRouter();
   const { user, signOut } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const fetchUnreadCount = async () => {
+    try {
+      const res = await fetch('/api/enterprise/notifications');
+      if (res.ok) {
+        const data = await res.json();
+        setUnreadCount(data.unreadCount || 0);
+      }
+    } catch (error) {
+      console.error('获取未读消息数量失败:', error);
+    }
+  };
+
+  // 获取未读消息数量
+  useEffect(() => {
+    fetchUnreadCount();
+    // 每 30 秒刷新一次
+    const interval = setInterval(fetchUnreadCount, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleLogout = async () => {
     await signOut();
@@ -58,6 +79,7 @@ export function EnterpriseSidebar({ activeItem = 'home' }: EnterpriseSidebarProp
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeItem === item.id;
+          const showBadge = item.id === 'profile' && unreadCount > 0;
           return (
             <button
               key={item.id}
@@ -71,7 +93,16 @@ export function EnterpriseSidebar({ activeItem = 'home' }: EnterpriseSidebarProp
               title={collapsed ? item.label : undefined}
             >
               <Icon className="h-5 w-5 shrink-0" />
-              {!collapsed && <span className="whitespace-nowrap">{item.label}</span>}
+              {!collapsed && (
+                <>
+                  <span className="whitespace-nowrap flex-1 text-left">{item.label}</span>
+                  {showBadge && (
+                    <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-semibold text-white">
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </span>
+                  )}
+                </>
+              )}
             </button>
           );
         })}
