@@ -42,7 +42,7 @@ export function AdminSidebar() {
       try {
         const response = await fetch('/api/admin/applications/pending-count', {
           headers: {
-            'x-session': JSON.stringify(session),
+            'x-session': session.access_token,
           },
         });
 
