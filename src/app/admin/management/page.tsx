@@ -494,7 +494,7 @@ export default function ManagementPage() {
                         </div>
                         <div className="flex flex-wrap gap-2">
                           {app.pollutants.map((p, idx) => (
-                            <Badge key={idx} variant="secondary" className="text-xs">
+                            <Badge key={`${app.id}-${idx}`} variant="secondary" className="text-xs">
                               {getPollutantName(p)}
                             </Badge>
                           ))}
@@ -779,7 +779,7 @@ export default function ManagementPage() {
               <Label className="text-sm font-medium">申请污染物</Label>
               <div className="flex flex-wrap gap-2 mt-2">
                 {selectedApp?.pollutants.map((p, idx) => (
-                  <Badge key={idx} variant="secondary" className="px-3 py-1">
+                  <Badge key={`${selectedApp.id}-${idx}`} variant="secondary" className="px-3 py-1">
                     {getPollutantName(p)}
                   </Badge>
                 ))}
