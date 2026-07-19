@@ -322,50 +322,13 @@ export default function ManagementPage() {
   const approvedOutlets = dischargeOutlets.filter((o) => o.status === 'approved');
   const displayOutlets = [...pendingOutlets, ...approvedOutlets];
 
-  // Initialize outlet map and add markers when tab changes to discharge
-  useEffect(() => {
-    if (activeTab !== 'discharge') return;
-
-    // Initialize map if not already initialized
-    if (!outletMapRef.current && typeof window !== 'undefined') {
-      import('@amap/amap-jsapi-loader').then((AMapLoader) => {
-        (window as any)._AMapSecurityConfig = {
-          securityJsCode: '0ab574a1c887c61ecaa4af9250d8563d',
-        };
-        return AMapLoader.load({
-          key: '2e7e0b14442f42267a79052677e15dce',
-          version: '2.0',
-          plugins: ['AMap.Scale', 'AMap.ToolBar', 'AMap.Marker'],
-        });
-      }).then((AMap) => {
-        const container = document.getElementById('outlet-map-container');
-        if (container) {
-          const mapInstance = new AMap.Map('outlet-map-container', {
-            zoom: 13,
-            center: [106.3067, 29.5332],
-            resizeEnable: true,
-          });
-          outletMapRef.current = mapInstance;
-          
-          // Add markers after map is initialized
-          addMarkersToMap(AMap, mapInstance);
-        } else {
-          console.error('Map container not found!');
-        }
-      }).catch((err) => {
-        console.error('Failed to load AMap:', err);
-      });
-    } else if (outletMapRef.current) {
-      // Map already initialized, just update markers
-      const AMap = (window as any).AMap;
-      if (AMap) {
-        addMarkersToMap(AMap, outletMapRef.current);
-      }
-    }
-  }, [activeTab, displayOutlets]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Helper function to add markers to map
-  const addMarkersToMap = (AMap: any, map: any) => {
+  const addMarkersToMap = () => {
+    const AMap = (window as any).__AMap__ || (window as any).AMap;
+    const map = outletMapRef.current;
+    
+    if (!AMap || !map) return;
+    
     // Clear old markers
     outletMarkers.forEach((marker) => marker.setMap(null));
     
@@ -425,6 +388,64 @@ export default function ManagementPage() {
       map.setCenter([firstOutlet.longitude, firstOutlet.latitude]);
     }
   };
+
+  // Initialize outlet map when tab changes to discharge
+  useEffect(() => {
+    if (activeTab !== 'discharge') return;
+
+    // Wait for DOM to be ready
+    const timer = setTimeout(() => {
+      if (typeof window === 'undefined') return;
+      
+      import('@amap/amap-jsapi-loader').then((AMapLoader) => {
+        (window as any)._AMapSecurityConfig = {
+          securityJsCode: '0ab574a1c887c61ecaa4af9250d8563d',
+        };
+        return AMapLoader.load({
+          key: '2e7e0b14442f42267a79052677e15dce',
+          version: '2.0',
+          plugins: ['AMap.Scale', 'AMap.ToolBar', 'AMap.Marker'],
+        });
+      }).then((AMap) => {
+        const container = document.getElementById('outlet-map-container');
+        if (!container) {
+          console.error('Map container not found!');
+          return;
+        }
+        
+        // Destroy existing map if any
+        if (outletMapRef.current) {
+          outletMapRef.current.destroy();
+          outletMapRef.current = null;
+        }
+        
+        // Create new map instance
+        const mapInstance = new AMap.Map('outlet-map-container', {
+          zoom: 13,
+          center: [106.3067, 29.5332],
+          resizeEnable: true,
+        });
+        outletMapRef.current = mapInstance;
+        
+        // Store AMap reference for marker updates
+        (window as any).__AMap__ = AMap;
+        
+        // Add markers after map is initialized
+        addMarkersToMap();
+      }).catch((err) => {
+        console.error('Failed to load AMap:', err);
+      });
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Update markers when displayOutlets changes
+  useEffect(() => {
+    if (activeTab === 'discharge' && outletMapRef.current) {
+      addMarkersToMap();
+    }
+  }, [displayOutlets]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (isLoading) {
     return (
