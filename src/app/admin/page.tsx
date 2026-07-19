@@ -11,12 +11,24 @@ interface Enterprise {
   park_name: string;
   latitude: number;
   longitude: number;
+  outlet_count?: number;
+}
+
+interface DischargeOutlet {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  status: 'pending' | 'approved' | 'rejected';
+  user_id: string;
+  company_name?: string;
 }
 
 export default function AdminHome() {
   const { session } = useAuth();
   const [parkName, setParkName] = useState('');
   const [enterprises, setEnterprises] = useState<Enterprise[]>([]);
+  const [dischargeOutlets, setDischargeOutlets] = useState<DischargeOutlet[]>([]);
   const [loading, setLoading] = useState(true);
   const [mapError, setMapError] = useState('');
   const mapRef = useRef<HTMLDivElement>(null);
@@ -25,24 +37,40 @@ export default function AdminHome() {
     if (!session) return;
 
     // 加载数据
-    fetch('/api/admin/park-enterprises', {
-      headers: {
-        'x-session': session.access_token,
-      },
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) {
-          setParkName(data.data.parkName);
-          setEnterprises(data.data.enterprises);
+    const fetchData = async () => {
+      try {
+        // 获取企业数据
+        const enterprisesRes = await fetch('/api/admin/park-enterprises', {
+          headers: {
+            'x-session': session.access_token,
+          },
+        });
+        const enterprisesData = await enterprisesRes.json();
+        if (enterprisesData.success) {
+          setParkName(enterprisesData.data.parkName);
+          setEnterprises(enterprisesData.data.enterprises);
         } else {
-          console.error('加载企业数据失败:', data.error);
+          console.error('加载企业数据失败:', enterprisesData.error);
         }
-      })
-      .catch((err) => {
+
+        // 获取已审批通过的排污口
+        const outletsRes = await fetch('/api/discharge-outlets/approved', {
+          headers: {
+            'x-session': session.access_token,
+          },
+        });
+        const outletsData = await outletsRes.json();
+        if (outletsData.success) {
+          setDischargeOutlets(outletsData.data || []);
+        }
+      } catch (err) {
         console.error('请求失败:', err);
-      })
-      .finally(() => setLoading(false));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
   }, [session]);
 
   useEffect(() => {
@@ -91,12 +119,14 @@ export default function AdminHome() {
 
           // 点击标记显示信息窗体
           marker.on('click', () => {
+            const outletCount = dischargeOutlets.filter(o => o.user_id === enterprise.user_id && o.status === 'approved').length;
             const infoWindow = new AMap.InfoWindow({
               content: `
                 <div class="info-window">
                   <h3>${enterprise.company_name}</h3>
                   <p>负责人：${enterprise.full_name}</p>
                   <p>所属园区：${enterprise.park_name}</p>
+                  <p>排污口数量：${outletCount}</p>
                   <p>位置：${enterprise.latitude.toFixed(6)}, ${enterprise.longitude.toFixed(6)}</p>
                 </div>
               `,
@@ -107,6 +137,39 @@ export default function AdminHome() {
 
           mapInstance.add(marker);
         });
+
+        // 添加已审批通过的排污口标记
+        dischargeOutlets
+          .filter(outlet => outlet.status === 'approved')
+          .forEach((outlet) => {
+            const marker = new AMap.Marker({
+              position: [outlet.longitude, outlet.latitude],
+              title: outlet.name,
+              label: {
+                content: `<div style="background: #10b981; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px;">${outlet.name}</div>`,
+                direction: 'top',
+              },
+            });
+
+            // 点击标记显示信息窗体
+            marker.on('click', () => {
+              const enterprise = enterprises.find(e => e.user_id === outlet.user_id);
+              const infoWindow = new AMap.InfoWindow({
+                content: `
+                  <div class="info-window">
+                    <h3>${outlet.name}</h3>
+                    <p>所属企业：${enterprise?.company_name || '未知'}</p>
+                    <p>状态：已通过</p>
+                    <p>位置：${outlet.latitude.toFixed(6)}, ${outlet.longitude.toFixed(6)}</p>
+                  </div>
+                `,
+                offset: new AMap.Pixel(0, -30),
+              });
+              infoWindow.open(mapInstance, marker.getPosition());
+            });
+
+            mapInstance.add(marker);
+          });
       })
       .catch((err) => {
         console.error('地图加载失败:', err);
@@ -182,24 +245,30 @@ export default function AdminHome() {
                     <h2 className="font-medium text-[#0F172A]">企业列表</h2>
                   </div>
                   <div className="divide-y divide-[#E2E8F0]">
-                    {enterprises.map((enterprise) => (
-                      <div key={enterprise.user_id} className="p-4 hover:bg-[#F8FAFC]">
-                        <div className="flex items-start gap-3">
-                          <MapPin className="w-5 h-5 text-[#0EA5E9] mt-0.5 flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-medium text-[#0F172A] truncate">
-                              {enterprise.company_name}
-                            </h3>
-                            <p className="text-sm text-[#64748B] mt-1">
-                              负责人：{enterprise.full_name}
-                            </p>
-                            <p className="text-xs text-[#94A3B8] mt-1">
-                              {enterprise.latitude.toFixed(6)}, {enterprise.longitude.toFixed(6)}
-                            </p>
+                    {enterprises.map((enterprise) => {
+                      const outletCount = dischargeOutlets.filter(o => o.user_id === enterprise.user_id && o.status === 'approved').length;
+                      return (
+                        <div key={enterprise.user_id} className="p-4 hover:bg-[#F8FAFC]">
+                          <div className="flex items-start gap-3">
+                            <MapPin className="w-5 h-5 text-[#0EA5E9] mt-0.5 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-medium text-[#0F172A] truncate">
+                                {enterprise.company_name}
+                              </h3>
+                              <p className="text-sm text-[#64748B] mt-1">
+                                负责人：{enterprise.full_name}
+                              </p>
+                              <p className="text-sm text-[#64748B] mt-1">
+                                排污口：<span className="text-[#0EA5E9] font-medium">{outletCount}</span> 个
+                              </p>
+                              <p className="text-xs text-[#94A3B8] mt-1">
+                                {enterprise.latitude.toFixed(6)}, {enterprise.longitude.toFixed(6)}
+                              </p>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -210,6 +279,12 @@ export default function AdminHome() {
                     <div className="flex items-center gap-2">
                       <MapPin className="w-5 h-5 text-[#0EA5E9]" />
                       <span className="text-sm text-[#64748B]">企业位置</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-5 h-5 rounded bg-[#10b981] flex items-center justify-center">
+                        <span className="text-white text-xs">●</span>
+                      </div>
+                      <span className="text-sm text-[#64748B]">排污口（已通过）</span>
                     </div>
                   </div>
                 </div>

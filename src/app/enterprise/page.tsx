@@ -23,6 +23,16 @@ interface Enterprise {
   longitude: number;
 }
 
+interface DischargeOutlet {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  status: 'pending' | 'approved' | 'rejected';
+  reject_reason?: string;
+  created_at: string;
+}
+
 const POLLUTANT_OPTIONS = [
   { id: 'cod', label: 'COD（化学需氧量）', default: true, custom: false },
   { id: 'nh3n', label: 'NH₃-N（氨氮）', default: true, custom: false },
@@ -53,6 +63,15 @@ export default function EnterpriseHome() {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  
+  // 排污口相关状态
+  const [dischargeOutlets, setDischargeOutlets] = useState<DischargeOutlet[]>([]);
+  const [outletName, setOutletName] = useState('');
+  const [selectedOutletLocation, setSelectedOutletLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [outletMarker, setOutletMarker] = useState<any>(null);
+  const [submittingOutlet, setSubmittingOutlet] = useState(false);
+  const [outletSuccess, setOutletSuccess] = useState(false);
+  const [outletError, setOutletError] = useState('');
 
   // 认证检查
   useEffect(() => {
@@ -94,6 +113,17 @@ export default function EnterpriseHome() {
         if (res.ok) {
           const data = await res.json();
           setEnterprises(data.enterprises || []);
+        }
+
+        // 获取本企业的排污口列表
+        const outletsRes = await fetch('/api/enterprise/discharge-outlets', {
+          headers: { 'x-session': session.access_token },
+        });
+        if (outletsRes.ok) {
+          const outletsData = await outletsRes.json();
+          if (outletsData.success) {
+            setDischargeOutlets(outletsData.data || []);
+          }
         }
       } catch (error) {
         console.error('Failed to fetch data:', error);
@@ -150,10 +180,48 @@ export default function EnterpriseHome() {
           map.add(marker);
         }
       });
+
+      // 添加已审批通过的排污口标记
+      dischargeOutlets
+        .filter((outlet) => outlet.status === 'approved')
+        .forEach((outlet) => {
+          const marker = new AMap.Marker({
+            position: [outlet.longitude, outlet.latitude],
+            title: outlet.name,
+            label: {
+              content: `<div class="outlet-label" style="background: #10b981; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px;">${outlet.name}</div>`,
+              direction: 'top',
+            },
+          });
+          map.add(marker);
+        });
+
+      // 添加地图点击事件，用于选择排污口位置
+      map.on('click', (e: any) => {
+        const lnglat = e.lnglat;
+        const lng = lnglat.getLng();
+        const lat = lnglat.getLat();
+        
+        setSelectedOutletLocation({ lat, lng });
+        
+        // 移除旧的标记
+        if (outletMarker) {
+          map.remove(outletMarker);
+        }
+        
+        // 添加新标记
+        const newMarker = new AMap.Marker({
+          position: [lng, lat],
+          content: '<div style="background: #ef4444; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white;"></div>',
+          offset: new AMap.Pixel(-6, -6),
+        });
+        map.add(newMarker);
+        setOutletMarker(newMarker);
+      });
     };
 
     initMap().catch(console.error);
-  }, [enterprises, userLocation]);
+  }, [enterprises, userLocation, dischargeOutlets]);
 
   const togglePollutant = (id: string) => {
     setSelectedPollutants((prev) =>
@@ -236,6 +304,66 @@ export default function EnterpriseHome() {
 
   const isHeavyMetalSelected = selectedPollutants.includes('heavy_metal');
   const isOtherSelected = selectedPollutants.includes('other');
+
+  const handleSubmitOutlet = async () => {
+    if (!outletName.trim() || !selectedOutletLocation) {
+      setOutletError('请先在地图上选择位置并填写排污口名称');
+      setTimeout(() => setOutletError(''), 3000);
+      return;
+    }
+
+    setSubmittingOutlet(true);
+    setOutletError('');
+
+    try {
+      const res = await fetch('/api/enterprise/discharge-outlets', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-session': session?.access_token || '',
+        },
+        body: JSON.stringify({
+          name: outletName.trim(),
+          latitude: selectedOutletLocation.lat,
+          longitude: selectedOutletLocation.lng,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        setOutletError(data.error || '提交失败');
+        setTimeout(() => setOutletError(''), 5000);
+        throw new Error(data.error || '提交失败');
+      }
+
+      setOutletSuccess(true);
+      setOutletName('');
+      setSelectedOutletLocation(null);
+      
+      // 移除标记
+      if (outletMarker && mapInstanceRef.current) {
+        mapInstanceRef.current.remove(outletMarker);
+        setOutletMarker(null);
+      }
+
+      // 刷新排污口列表
+      const outletsRes = await fetch('/api/enterprise/discharge-outlets', {
+        headers: { 'x-session': session?.access_token || '' },
+      });
+      if (outletsRes.ok) {
+        const outletsData = await outletsRes.json();
+        if (outletsData.success) {
+          setDischargeOutlets(outletsData.data || []);
+        }
+      }
+
+      setTimeout(() => setOutletSuccess(false), 3000);
+    } catch (error) {
+      console.error('提交排污口申请失败:', error);
+    } finally {
+      setSubmittingOutlet(false);
+    }
+  };
 
   if (isLoading || redirecting) {
     return (
@@ -456,39 +584,85 @@ export default function EnterpriseHome() {
               </div>
               <h3 className="font-semibold text-slate-900">申请排污口</h3>
             </div>
-            <p className="mb-3 text-xs text-slate-500">在地图上选择位置，填写信息提交审批</p>
+            <p className="mb-3 text-xs text-slate-500">在地图上点击选择位置，填写名称提交审批</p>
 
             <div className="space-y-3">
-              <div className="flex items-center gap-3 rounded-md bg-slate-50 p-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-100 text-sky-600">
-                  <MapPin className="h-4 w-4" />
+              {/* 选中的位置 */}
+              <div className="rounded-md bg-slate-50 p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <MapPin className="h-4 w-4 text-sky-600" />
+                  <span className="text-xs font-medium text-slate-700">选中位置</span>
                 </div>
-                <div className="text-xs text-slate-600">
-                  <p className="font-medium">1. 在地图上点击选择位置</p>
-                </div>
+                {selectedOutletLocation ? (
+                  <div className="text-xs text-slate-600">
+                    <p>经度: {selectedOutletLocation.lng.toFixed(6)}</p>
+                    <p>纬度: {selectedOutletLocation.lat.toFixed(6)}</p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400">请在地图上点击选择位置</p>
+                )}
               </div>
-              <div className="flex items-center gap-3 rounded-md bg-slate-50 p-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-100 text-sky-600">
-                  <AlertCircle className="h-4 w-4" />
-                </div>
-                <div className="text-xs text-slate-600">
-                  <p className="font-medium">2. 自动获取经纬度坐标</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 rounded-md bg-slate-50 p-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-100 text-sky-600">
-                  <FileText className="h-4 w-4" />
-                </div>
-                <div className="text-xs text-slate-600">
-                  <p className="font-medium">3. 填写名称并提交申请</p>
-                </div>
+
+              {/* 排污口名称 */}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-700">排污口名称</label>
+                <input
+                  type="text"
+                  value={outletName}
+                  onChange={(e) => setOutletName(e.target.value)}
+                  placeholder="请输入排污口名称"
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                />
               </div>
             </div>
 
-            <button className="mt-4 flex w-full items-center justify-center gap-2 rounded-md border-2 border-dashed border-sky-300 bg-sky-50 px-4 py-2.5 text-sm font-medium text-sky-700 transition-colors hover:bg-sky-100">
-              <Plus className="h-4 w-4" />
-              新增排污口申请
+            <button
+              onClick={handleSubmitOutlet}
+              disabled={submittingOutlet || !outletName.trim() || !selectedOutletLocation}
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-md bg-green-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:opacity-50"
+            >
+              {submittingOutlet ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : outletSuccess ? (
+                <CheckCircle className="h-4 w-4" />
+              ) : (
+                <Plus className="h-4 w-4" />
+              )}
+              {outletSuccess ? '提交成功' : '提交排污口申请'}
             </button>
+
+            {/* 错误提示 */}
+            {outletError && (
+              <div className="mt-3 flex items-center gap-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{outletError}</span>
+              </div>
+            )}
+
+            {/* 排污口列表 */}
+            {dischargeOutlets.length > 0 && (
+              <div className="mt-4 border-t pt-4">
+                <h4 className="mb-2 text-xs font-semibold text-slate-700">我的排污口</h4>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {dischargeOutlets.map((outlet) => (
+                    <div key={outlet.id} className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <MapPin className="h-3.5 w-3.5 text-green-600" />
+                        <span className="text-xs text-slate-700">{outlet.name}</span>
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 rounded ${
+                        outlet.status === 'approved' ? 'bg-green-100 text-green-700' :
+                        outlet.status === 'pending' ? 'bg-amber-100 text-amber-700' :
+                        'bg-red-100 text-red-700'
+                      }`}>
+                        {outlet.status === 'approved' ? '已通过' :
+                         outlet.status === 'pending' ? '待审批' : '已拒绝'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

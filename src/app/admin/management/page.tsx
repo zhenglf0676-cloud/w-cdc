@@ -33,6 +33,7 @@ import {
   ChevronDown,
   ChevronUp,
   AlertCircle,
+  MapPin,
 } from 'lucide-react';
 
 interface PollutantItem {
@@ -62,6 +63,22 @@ interface Notification {
   content: any;
   is_read: boolean;
   created_at: string;
+}
+
+interface DischargeOutlet {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  status: 'pending' | 'approved' | 'rejected';
+  reject_reason?: string;
+  created_at: string;
+  approved_at?: string;
+  user_id: string;
+  profiles?: {
+    full_name: string;
+    company_name: string;
+  };
 }
 
 const POLLUTANT_UNITS: Record<string, string> = {
@@ -95,6 +112,15 @@ export default function ManagementPage() {
   const [rejectReason, setRejectReason] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [showApproved, setShowApproved] = useState(false);
+  
+  // Discharge outlets state
+  const [dischargeOutlets, setDischargeOutlets] = useState<DischargeOutlet[]>([]);
+  const [outletMap, setOutletMap] = useState<any>(null);
+  const [outletMarkers, setOutletMarkers] = useState<any[]>([]);
+  const [outletMapCenter, setOutletMapCenter] = useState<[number, number]>([30.2741, 120.1551]);
+  const [outletDialogOpen, setOutletDialogOpen] = useState(false);
+  const [selectedOutlet, setSelectedOutlet] = useState<DischargeOutlet | null>(null);
+  const [outletRejectReason, setOutletRejectReason] = useState('');
 
   useEffect(() => {
     if (!isLoading && !session) {
@@ -105,8 +131,23 @@ export default function ManagementPage() {
   useEffect(() => {
     if (session) {
       fetchApplications();
+      fetchDischargeOutlets();
     }
   }, [session]);
+
+  const fetchDischargeOutlets = async () => {
+    try {
+      const res = await fetch('/api/admin/discharge-outlets', {
+        headers: { 'x-session': session!.access_token },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setDischargeOutlets(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch discharge outlets:', error);
+    }
+  };
 
   const fetchApplications = async () => {
     try {
@@ -206,9 +247,150 @@ export default function ManagementPage() {
     setDialogOpen(true);
   };
 
+  const handleOutletApprove = async () => {
+    if (!selectedOutlet) return;
+
+    try {
+      const res = await fetch('/api/admin/discharge-outlets/approve', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-session': session!.access_token,
+        },
+        body: JSON.stringify({ outletId: selectedOutlet.id }),
+      });
+
+      if (res.ok) {
+        setOutletDialogOpen(false);
+        fetchDischargeOutlets();
+      } else {
+        const data = await res.json();
+        alert(data.error || '审批失败');
+      }
+    } catch (error) {
+      console.error('Failed to approve outlet:', error);
+      alert('审批失败');
+    }
+  };
+
+  const handleOutletReject = async () => {
+    if (!selectedOutlet) return;
+
+    try {
+      const res = await fetch('/api/admin/discharge-outlets/reject', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-session': session!.access_token,
+        },
+        body: JSON.stringify({
+          outletId: selectedOutlet.id,
+          rejectReason: outletRejectReason,
+        }),
+      });
+
+      if (res.ok) {
+        setOutletDialogOpen(false);
+        setOutletRejectReason('');
+        fetchDischargeOutlets();
+      } else {
+        const data = await res.json();
+        alert(data.error || '操作失败');
+      }
+    } catch (error) {
+      console.error('Failed to reject outlet:', error);
+      alert('操作失败');
+    }
+  };
+
+  const openOutletDialog = (outlet: DischargeOutlet) => {
+    setSelectedOutlet(outlet);
+    setOutletRejectReason('');
+    setOutletDialogOpen(true);
+  };
+
   const pendingApps = applications.filter((a) => a.status === 'pending');
   const approvedApps = applications.filter((a) => a.status === 'approved');
   const rejectedApps = applications.filter((a) => a.status === 'rejected');
+
+  // Filter discharge outlets (only pending and approved, not rejected)
+  const pendingOutlets = dischargeOutlets.filter((o) => o.status === 'pending');
+  const approvedOutlets = dischargeOutlets.filter((o) => o.status === 'approved');
+  const displayOutlets = [...pendingOutlets, ...approvedOutlets];
+
+  // Initialize outlet map when tab changes to discharge
+  useEffect(() => {
+    if (activeTab === 'discharge' && !outletMap && typeof window !== 'undefined') {
+      AMapLoader.load({
+        key: '2e7e0b14442f42267a79052677e15dce',
+        version: '2.0',
+        plugins: ['AMap.Scale', 'AMap.ToolBar', 'AMap.Marker'],
+      }).then((AMap) => {
+        const mapInstance = new AMap.Map('outlet-map-container', {
+          zoom: 13,
+          center: outletMapCenter,
+          resizeEnable: true,
+        });
+        setOutletMap(mapInstance);
+      });
+    }
+  }, [activeTab]);
+
+  // Update outlet markers when map or outlets change
+  useEffect(() => {
+    if (outletMap && displayOutlets.length > 0) {
+      outletMarkers.forEach((marker) => marker.setMap(null));
+      
+      const newMarkers = displayOutlets.map((outlet) => {
+        const color = outlet.status === 'pending' ? '#F59E0B' : '#10B981';
+        const markerContent = document.createElement('div');
+        markerContent.style.cssText = `
+          width: 28px; height: 28px; border-radius: 50%;
+          background: ${color}; border: 3px solid white;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          display: flex; align-items: center; justify-content: center;
+          color: white; font-weight: bold; font-size: 12px;
+        `;
+        markerContent.innerHTML = '<span>排</span>';
+        
+        const marker = new outletMap.Marker({
+          position: new outletMap.lnglat(outlet.longitude, outlet.latitude),
+          content: markerContent,
+          offset: new outletMap.Pixel(-14, -14),
+        });
+        
+        const companyName = outlet.profiles?.company_name || '未知企业';
+        const statusText = outlet.status === 'pending' ? '待审批' : '已通过';
+        const statusColor = outlet.status === 'pending' ? '#F59E0B' : '#10B981';
+        
+        marker.on('click', () => {
+          const infoWindow = new outletMap.InfoWindow({
+            content: `
+              <div style="padding:10px;min-width:180px;font-family:'Noto Sans SC',sans-serif;">
+                <div style="font-weight:600;font-size:14px;margin-bottom:6px;">${outlet.name}</div>
+                <div style="font-size:12px;color:#64748B;margin-bottom:4px;">${companyName}</div>
+                <div style="font-size:12px;">
+                  状态：<span style="color:${statusColor};font-weight:500;">${statusText}</span>
+                </div>
+              </div>
+            `,
+            offset: new outletMap.Pixel(0, -30),
+          });
+          infoWindow.open(outletMap, marker.getPosition());
+        });
+        
+        marker.setMap(outletMap);
+        return marker;
+      });
+      
+      setOutletMarkers(newMarkers);
+      
+      if (displayOutlets.length > 0) {
+        const firstOutlet = displayOutlets[0];
+        outletMap.setCenter([firstOutlet.latitude, firstOutlet.longitude]);
+      }
+    }
+  }, [outletMap, displayOutlets]);
 
   if (isLoading) {
     return (
@@ -418,15 +600,163 @@ export default function ManagementPage() {
       )}
 
       {activeTab === 'discharge' && (
-        <Card>
-          <CardContent className="py-12">
-            <div className="text-center text-gray-500">
-              <FileText className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-              <p>排污口审批功能开发中...</p>
+        <div className="flex gap-4 p-4">
+          {/* Left: Map */}
+          <div className="flex-1">
+            <div className="relative rounded-lg border bg-white shadow-sm">
+              <div id="outlet-map-container" style={{ height: 520, borderRadius: 8 }} />
+              <div className="absolute top-3 left-3 z-10 bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-sm">
+                <div className="flex items-center gap-4 text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded-full bg-amber-500 border-2 border-white shadow-sm" />
+                    <span className="text-gray-600">待审批 ({pendingOutlets.length})</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded-full bg-emerald-500 border-2 border-white shadow-sm" />
+                    <span className="text-gray-600">已通过 ({approvedOutlets.length})</span>
+                  </div>
+                </div>
+              </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+
+          {/* Right: Outlet List */}
+          <div className="w-80 space-y-4">
+            {/* Pending Outlets */}
+            <div className="rounded-lg border bg-white p-4 shadow-sm">
+              <h3 className="font-semibold text-gray-900 flex items-center gap-2 mb-3">
+                <Clock className="h-4 w-4 text-amber-500" />
+                待审批排污口
+              </h3>
+              {pendingOutlets.length === 0 ? (
+                <p className="text-sm text-gray-400 py-4 text-center">暂无待审批排污口</p>
+              ) : (
+                <div className="space-y-2 max-h-[240px] overflow-y-auto">
+                  {pendingOutlets.map((outlet) => (
+                    <div
+                      key={outlet.id}
+                      className="flex items-center justify-between p-3 bg-amber-50 rounded-lg border border-amber-100 cursor-pointer hover:border-amber-300 transition-colors"
+                      onClick={() => {
+                        if (outletMap) {
+                          outletMap.setCenter([outlet.longitude, outlet.latitude]);
+                          outletMap.setZoom(16);
+                        }
+                      }}
+                    >
+                      <div>
+                        <p className="font-medium text-sm">{outlet.name}</p>
+                        <p className="text-xs text-gray-500">{outlet.profiles?.company_name}</p>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openOutletDialog(outlet);
+                        }}
+                      >
+                        审批
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Approved Outlets */}
+            <div className="rounded-lg border bg-white p-4 shadow-sm">
+              <h3 className="font-semibold text-gray-900 flex items-center gap-2 mb-3">
+                <CheckCircle className="h-4 w-4 text-emerald-500" />
+                已通过排污口
+              </h3>
+              {approvedOutlets.length === 0 ? (
+                <p className="text-sm text-gray-400 py-4 text-center">暂无已通过排污口</p>
+              ) : (
+                <div className="space-y-2 max-h-[240px] overflow-y-auto">
+                  {approvedOutlets.map((outlet) => (
+                    <div
+                      key={outlet.id}
+                      className="flex items-center justify-between p-3 bg-emerald-50 rounded-lg border border-emerald-100 cursor-pointer hover:border-emerald-300 transition-colors"
+                      onClick={() => {
+                        if (outletMap) {
+                          outletMap.setCenter([outlet.longitude, outlet.latitude]);
+                          outletMap.setZoom(16);
+                        }
+                      }}
+                    >
+                      <div>
+                        <p className="font-medium text-sm">{outlet.name}</p>
+                        <p className="text-xs text-gray-500">{outlet.profiles?.company_name}</p>
+                      </div>
+                      <Badge className="bg-emerald-100 text-emerald-700">已通过</Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
+
+      {/* 排污口审批弹窗 */}
+      <Dialog open={outletDialogOpen} onOpenChange={setOutletDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>排污口审批</DialogTitle>
+            <DialogDescription>
+              审批企业的排污口申请
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <Label className="text-sm font-medium">排污口信息</Label>
+              <div className="mt-2 p-3 bg-gray-50 rounded-lg space-y-2">
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-500">名称</span>
+                  <span className="text-sm font-medium">{selectedOutlet?.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-500">企业</span>
+                  <span className="text-sm font-medium">{selectedOutlet?.profiles?.company_name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-sm text-gray-500">坐标</span>
+                  <span className="text-sm font-mono text-xs">
+                    {selectedOutlet?.latitude.toFixed(6)}, {selectedOutlet?.longitude.toFixed(6)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            <div>
+              <Label className="text-sm font-medium">拒绝原因（可选）</Label>
+              <Input
+                placeholder="如不通过，请填写原因"
+                value={outletRejectReason}
+                onChange={(e) => setOutletRejectReason(e.target.value)}
+                className="mt-2"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={handleOutletReject}
+              className="border-red-200 text-red-600 hover:bg-red-50"
+            >
+              <XCircle className="h-4 w-4 mr-2" />
+              拒绝
+            </Button>
+            <Button onClick={handleOutletApprove} className="bg-green-600 hover:bg-green-700">
+              <CheckCircle className="h-4 w-4 mr-2" />
+              通过
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* 审批弹窗 */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
