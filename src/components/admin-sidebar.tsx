@@ -13,8 +13,6 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
-import { getSupabaseCredentials, getSupabaseServiceRoleKey } from '@/storage/database/supabase-client';
 
 interface NavItem {
   title: string;
@@ -42,18 +40,16 @@ export function AdminSidebar() {
       if (!session?.access_token) return;
 
       try {
-        const { url } = getSupabaseCredentials();
-        const serviceRoleKey = getSupabaseServiceRoleKey();
-        const db = createClient(url, serviceRoleKey!, {
-          auth: { autoRefreshToken: false, persistSession: false },
+        const response = await fetch('/api/admin/applications/pending-count', {
+          headers: {
+            'x-session': JSON.stringify(session),
+          },
         });
 
-        const { count } = await db
-          .from('pollutant_applications')
-          .select('*', { count: 'exact', head: true })
-          .eq('status', 'pending');
-
-        setPendingCount(count || 0);
+        if (response.ok) {
+          const data = await response.json();
+          setPendingCount(data.count || 0);
+        }
       } catch (error) {
         console.error('获取待审批数量失败:', error);
       }
