@@ -367,7 +367,7 @@ export default function ManagementPage() {
       markerContent.innerHTML = '<span>排</span>';
       
       const marker = new outletMap.Marker({
-        position: new outletMap.lnglat(outlet.longitude, outlet.latitude),
+        position: new AMap.LngLat(outlet.longitude, outlet.latitude),
         content: markerContent,
         offset: new outletMap.Pixel(-14, -14),
       });
