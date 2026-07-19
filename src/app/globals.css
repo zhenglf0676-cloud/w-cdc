@@ -135,3 +135,37 @@
 body {
   @apply font-sans;
 }
+
+/* Admin 地图样式 */
+#admin-map {
+  background: #f5f5f5;
+}
+
+.enterprise-label {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.info-window {
+  padding: 8px;
+  min-width: 200px;
+}
+
+.info-window h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: hsl(var(--foreground));
+}
+
+.info-window p {
+  font-size: 14px;
+  color: hsl(var(--muted-foreground));
+  margin-bottom: 4px;
+}
