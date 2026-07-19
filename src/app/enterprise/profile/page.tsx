@@ -17,6 +17,7 @@ import {
   Mail,
   MailOpen,
   Trash2,
+  AlertCircle,
 } from 'lucide-react';
 
 interface Notification {
@@ -28,12 +29,21 @@ interface Notification {
   created_at: string;
 }
 
+interface PollutantItem {
+  id?: string;
+  name?: string;
+  label?: string;
+  threshold?: number;
+  unit?: string;
+}
+
 export default function EnterpriseProfilePage() {
   const router = useRouter();
   const { session, isLoading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<'messages' | 'applications' | 'info'>('messages');
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedNotification, setSelectedNotification] = useState<Notification | null>(null);
 
   // 认证检查
   useEffect(() => {
@@ -87,6 +97,14 @@ export default function EnterpriseProfilePage() {
       }
     } catch (error) {
       console.error('Failed to mark as read:', error);
+    }
+  };
+
+  // 打开消息详情
+  const openNotification = (notification: Notification) => {
+    setSelectedNotification(notification);
+    if (!notification.is_read) {
+      markAsRead(notification.id);
     }
   };
 
@@ -272,19 +290,29 @@ export default function EnterpriseProfilePage() {
                     {notifications.map((notification) => (
                       <div
                         key={notification.id}
-                        onClick={() => !notification.is_read && markAsRead(notification.id)}
+                        onClick={() => openNotification(notification)}
                         className={cn(
-                          'p-4 rounded-lg border transition-colors cursor-pointer',
+                          'p-4 rounded-lg border transition-all cursor-pointer group',
                           notification.is_read
-                            ? 'bg-white hover:bg-muted/50'
-                            : 'bg-blue-50 border-blue-200 hover:bg-blue-100'
+                            ? 'bg-white hover:bg-muted/50 hover:shadow-sm'
+                            : 'bg-blue-50 border-blue-200 hover:bg-blue-100 hover:shadow-md'
                         )}
                       >
                         <div className="flex items-start gap-3">
-                          {getMessageIcon(notification.type)}
+                          <div className={cn(
+                            'mt-0.5',
+                            notification.type === 'approval_approved' ? 'text-green-600' :
+                            notification.type === 'approval_rejected' ? 'text-red-600' :
+                            'text-blue-600'
+                          )}>
+                            {getMessageIcon(notification.type)}
+                          </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between mb-1">
-                              <h3 className="font-medium text-sm truncate">
+                              <h3 className={cn(
+                                'font-medium text-sm truncate',
+                                !notification.is_read && 'text-blue-900'
+                              )}>
                                 {notification.title}
                               </h3>
                               <span className="text-xs text-muted-foreground ml-2">
@@ -297,9 +325,24 @@ export default function EnterpriseProfilePage() {
                                 (notification.type === 'approval_rejected' && `您的申请未通过${notification.content?.reject_reason ? '，原因：' + notification.content.reject_reason : ''}`) ||
                                 '您有一条新消息'}
                             </p>
+                            <div className="flex items-center gap-2 mt-2">
+                              <span className={cn(
+                                'text-xs px-2 py-0.5 rounded',
+                                notification.type === 'approval_approved' ? 'bg-green-100 text-green-700' :
+                                notification.type === 'approval_rejected' ? 'bg-red-100 text-red-700' :
+                                'bg-blue-100 text-blue-700'
+                              )}>
+                                {notification.type === 'approval_approved' ? '审批通过' :
+                                 notification.type === 'approval_rejected' ? '审批拒绝' :
+                                 '系统通知'}
+                              </span>
+                              <span className="text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                                点击查看详情 →
+                              </span>
+                            </div>
                           </div>
                           {!notification.is_read && (
-                            <div className="h-2 w-2 rounded-full bg-blue-500 mt-2"></div>
+                            <div className="h-2 w-2 rounded-full bg-blue-500 mt-2 animate-pulse"></div>
                           )}
                         </div>
                       </div>
@@ -331,6 +374,141 @@ export default function EnterpriseProfilePage() {
           </main>
         </div>
       </div>
+
+      {/* 消息详情弹窗 */}
+      {selectedNotification && (
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={() => setSelectedNotification(null)}
+        >
+          <div 
+            className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 弹窗头部 */}
+            <div className={cn(
+              'px-6 py-4 border-b',
+              selectedNotification.type === 'approval_approved' ? 'bg-green-50 border-green-100' :
+              selectedNotification.type === 'approval_rejected' ? 'bg-red-50 border-red-100' :
+              'bg-blue-50 border-blue-100'
+            )}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className={cn(
+                    'p-2 rounded-lg',
+                    selectedNotification.type === 'approval_approved' ? 'bg-green-100 text-green-600' :
+                    selectedNotification.type === 'approval_rejected' ? 'bg-red-100 text-red-600' :
+                    'bg-blue-100 text-blue-600'
+                  )}>
+                    {getMessageIcon(selectedNotification.type)}
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-lg">
+                      {selectedNotification.title}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      {new Date(selectedNotification.created_at).toLocaleString('zh-CN')}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedNotification(null)}
+                  className="p-2 hover:bg-black/5 rounded-lg transition-colors"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* 弹窗内容 */}
+            <div className="px-6 py-5 overflow-y-auto max-h-[60vh]">
+              {/* 消息状态标签 */}
+              <div className="mb-4">
+                <span className={cn(
+                  'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium',
+                  selectedNotification.type === 'approval_approved' ? 'bg-green-100 text-green-700' :
+                  selectedNotification.type === 'approval_rejected' ? 'bg-red-100 text-red-700' :
+                  'bg-blue-100 text-blue-700'
+                )}>
+                  {selectedNotification.type === 'approval_approved' && <CheckCircle className="h-4 w-4" />}
+                  {selectedNotification.type === 'approval_rejected' && <XCircle className="h-4 w-4" />}
+                  {selectedNotification.type === 'approval_approved' ? '审批通过' :
+                   selectedNotification.type === 'approval_rejected' ? '审批拒绝' :
+                   '系统通知'}
+                </span>
+              </div>
+
+              {/* 消息内容 */}
+              <div className="prose prose-sm max-w-none">
+                <p className="text-base leading-relaxed text-gray-700">
+                  {selectedNotification.content?.message || '您有一条新消息'}
+                </p>
+              </div>
+
+              {/* 审批通过的污染物列表 */}
+              {selectedNotification.type === 'approval_approved' && selectedNotification.content?.pollutants && (
+                <div className="mt-6 p-4 bg-gray-50 rounded-lg border">
+                  <h4 className="font-medium text-sm text-gray-700 mb-3 flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    已审批污染物清单
+                  </h4>
+                  <div className="space-y-2">
+                    {(selectedNotification.content.pollutants as Array<{ id?: string; label?: string; name?: string; threshold?: number; unit?: string }>).map((p, idx) => (
+                      <div key={idx} className="flex items-center justify-between py-2 px-3 bg-white rounded border">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">{p.label || p.name || p.id}</span>
+                        </div>
+                        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                          {p.threshold !== undefined && (
+                            <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded">
+                              阈值: {p.threshold} {p.unit || ''}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 审批拒绝的原因 */}
+              {selectedNotification.type === 'approval_rejected' && selectedNotification.content?.reject_reason && (
+                <div className="mt-6 p-4 bg-red-50 rounded-lg border border-red-100">
+                  <h4 className="font-medium text-sm text-red-700 mb-2 flex items-center gap-2">
+                    <XCircle className="h-4 w-4" />
+                    拒绝原因
+                  </h4>
+                  <p className="text-sm text-red-600">{selectedNotification.content.reject_reason}</p>
+                </div>
+              )}
+
+              {/* 提示信息 */}
+              <div className="mt-6 p-4 bg-amber-50 rounded-lg border border-amber-100">
+                <p className="text-sm text-amber-700 flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <span>
+                    {selectedNotification.type === 'approval_approved' 
+                      ? '请按照阈值标准进行排放，系统将持续监测相关指标。如有问题请联系管理员。'
+                      : selectedNotification.type === 'approval_rejected'
+                      ? '如有疑问，请联系管理员了解详情。您可以修改后重新提交申请。'
+                      : '如有任何问题，请联系管理员。'}
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            {/* 弹窗底部 */}
+            <div className="px-6 py-4 border-t bg-gray-50 flex justify-end gap-3">
+              <button
+                onClick={() => setSelectedNotification(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
