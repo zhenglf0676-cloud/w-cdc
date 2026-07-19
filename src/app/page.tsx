@@ -11,8 +11,14 @@ export default function HomeRedirect() {
   const [role, setRole] = useState<string | null>(null);
 
   useEffect(() => {
+    // 未登录且加载完成，直接跳转登录页
     if (!isLoading && !isAuthenticated) {
       router.replace('/login');
+      return;
+    }
+
+    // 加载中，不处理
+    if (isLoading) {
       return;
     }
 

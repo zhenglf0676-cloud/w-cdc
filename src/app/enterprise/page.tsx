@@ -49,6 +49,7 @@ export default function EnterpriseHome() {
   );
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   // 认证检查
   useEffect(() => {
@@ -60,11 +61,26 @@ export default function EnterpriseHome() {
     }
   }, [user, isLoading, router]);
 
-  // 获取园区企业数据
+  // 获取园区企业数据和用户位置
   useEffect(() => {
     if (!session) return;
-    const fetchEnterprises = async () => {
+    const fetchData = async () => {
       try {
+        // 获取用户位置
+        const profileRes = await fetch('/api/profiles/me', {
+          headers: { 'x-session': session.access_token },
+        });
+        if (profileRes.ok) {
+          const profileData = await profileRes.json();
+          if (profileData.success && profileData.data.latitude && profileData.data.longitude) {
+            setUserLocation({
+              lat: profileData.data.latitude,
+              lng: profileData.data.longitude,
+            });
+          }
+        }
+
+        // 获取园区企业
         const res = await fetch('/api/admin/park-enterprises', {
           headers: { 'x-session': session.access_token },
         });
@@ -73,12 +89,12 @@ export default function EnterpriseHome() {
           setEnterprises(data.enterprises || []);
         }
       } catch (error) {
-        console.error('Failed to fetch enterprises:', error);
+        console.error('Failed to fetch data:', error);
       } finally {
         setLoadingData(false);
       }
     };
-    fetchEnterprises();
+    fetchData();
   }, [session]);
 
   // 初始化地图
@@ -97,9 +113,14 @@ export default function EnterpriseHome() {
         plugins: ['AMap.Scale', 'AMap.ToolBar'],
       });
 
+      // 使用用户位置作为地图中心，如果没有则使用默认位置
+      const center = userLocation
+        ? [userLocation.lng, userLocation.lat]
+        : [106.32409, 29.591176];
+
       const map = new AMap.Map(mapContainerRef.current!, {
-        zoom: 14,
-        center: [106.32409, 29.591176],
+        zoom: 16,
+        center: center,
         mapStyle: 'amap://styles/light',
       });
 
@@ -125,7 +146,7 @@ export default function EnterpriseHome() {
     };
 
     initMap().catch(console.error);
-  }, [enterprises]);
+  }, [enterprises, userLocation]);
 
   const togglePollutant = (id: string) => {
     setSelectedPollutants((prev) =>
