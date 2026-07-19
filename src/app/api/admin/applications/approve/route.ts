@@ -69,6 +69,13 @@ export async function POST(request: Request) {
 
     // 创建通知
     const pollutantNames = thresholds.map((t: any) => t.label || t.name || t.id).join('、');
+    const pollutantDetails = thresholds.map((t: any) => {
+      const name = t.label || t.name || t.id;
+      const threshold = t.threshold || 0;
+      const unit = t.unit || 'mg/L';
+      return `${name}：${threshold}${unit}`;
+    }).join('；');
+    
     const { error: notificationError } = await db
       .from('notifications')
       .insert({
@@ -78,7 +85,7 @@ export async function POST(request: Request) {
         content: {
           application_id: applicationId,
           pollutants: thresholds,
-          message: `您的 ${pollutantNames} 申请已通过审批。阈值标准已由管理员设置，请前往个人中心查看详情。`,
+          message: `【企业】您好，您提交的${pollutantNames}污染物排放申请已审核通过！\n该污染物许可排放阈值：${pollutantDetails}，请严格按限值规范排污。`,
         },
       });
 

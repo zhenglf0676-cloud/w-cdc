@@ -401,45 +401,15 @@ export default function EnterpriseProfilePage() {
 
             {/* 弹窗内容 - 信件风格 */}
             <div className="px-8 py-6">
-              {/* 日期 */}
-              <p className="text-sm text-gray-500 mb-4">
-                {new Date(selectedNotification.created_at).toLocaleDateString('zh-CN', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                })}
-              </p>
-
               {/* 正文 */}
-              <div className="text-gray-700 leading-relaxed space-y-3">
-                <p>{selectedNotification.content?.message || '您有一条新消息'}</p>
-                
-                {/* 审批通过的污染物清单 */}
-                {selectedNotification.type === 'approval_approved' && selectedNotification.content?.pollutants && (
-                  <div className="my-4">
-                    <p className="text-sm text-gray-600 mb-2">已审批污染物：</p>
-                    <div className="space-y-1">
-                      {(selectedNotification.content.pollutants as Array<{ id?: string; label?: string; name?: string; threshold?: number; unit?: string }>).map((p, idx) => (
-                        <p key={idx} className="text-sm pl-4">
-                          • {p.label || p.name || p.id}：阈值 {p.threshold} {p.unit || ''}
-                        </p>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* 审批拒绝的原因 */}
-                {selectedNotification.type === 'approval_rejected' && selectedNotification.content?.reject_reason && (
-                  <p className="my-4">
-                    拒绝原因：{selectedNotification.content.reject_reason}
-                  </p>
-                )}
-
-                {/* 结尾 */}
-                <p className="text-sm text-gray-500 mt-6 pt-4 border-t">
-                  如有疑问，请联系管理员反映。
-                </p>
+              <div className="text-gray-700 leading-relaxed whitespace-pre-line">
+                {selectedNotification.content?.message || '您有一条新消息'}
               </div>
+
+              {/* 时间 */}
+              <p className="text-sm text-gray-500 mt-6 pt-4 border-t text-right">
+                时间：{new Date(selectedNotification.created_at).toLocaleString('zh-CN')}
+              </p>
             </div>
           </div>
         </div>

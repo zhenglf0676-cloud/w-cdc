@@ -77,7 +77,7 @@ export async function POST(request: Request) {
         content: {
           application_id: applicationId,
           reject_reason: rejectReason || '未说明原因',
-          message: `您的污染物申请未通过审批。${rejectReason ? `原因：${rejectReason}` : ''}`,
+          message: `【企业】您好，您提交的污染物排放申请审批未通过：\n驳回原因：${rejectReason || '未说明原因'}。\n如需修改重报或咨询详情，请联系平台管理员。`,
         },
       });
 
