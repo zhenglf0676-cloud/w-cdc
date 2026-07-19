@@ -327,17 +327,28 @@ export default function ManagementPage() {
   // Initialize outlet map when tab changes to discharge
   useEffect(() => {
     if (activeTab === 'discharge' && !outletMap && typeof window !== 'undefined') {
+      console.log('Initializing outlet map...');
       AMapLoader.load({
         key: '2e7e0b14442f42267a79052677e15dce',
         version: '2.0',
         plugins: ['AMap.Scale', 'AMap.ToolBar', 'AMap.Marker'],
       }).then((AMap) => {
-        const mapInstance = new AMap.Map('outlet-map-container', {
-          zoom: 13,
-          center: outletMapCenter,
-          resizeEnable: true,
-        });
-        setOutletMap(mapInstance);
+        console.log('AMap loaded, creating map instance...');
+        const container = document.getElementById('outlet-map-container');
+        console.log('Map container:', container);
+        if (container) {
+          const mapInstance = new AMap.Map('outlet-map-container', {
+            zoom: 13,
+            center: outletMapCenter,
+            resizeEnable: true,
+          });
+          console.log('Map instance created:', mapInstance);
+          setOutletMap(mapInstance);
+        } else {
+          console.error('Map container not found!');
+        }
+      }).catch((err) => {
+        console.error('Failed to load AMap:', err);
       });
     }
   }, [activeTab]);
