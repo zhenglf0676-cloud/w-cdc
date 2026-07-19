@@ -18,6 +18,7 @@ import {
   MailOpen,
   Trash2,
   AlertCircle,
+  X,
 } from 'lucide-react';
 
 interface Notification {
