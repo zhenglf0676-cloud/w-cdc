@@ -142,7 +142,12 @@ export default function ManagementPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        setDischargeOutlets(data);
+        // API 返回 { success: true, data: { pending, approved, rejected } } 格式
+        const allOutlets = [
+          ...(data.data?.pending || []),
+          ...(data.data?.approved || []),
+        ];
+        setDischargeOutlets(allOutlets);
       }
     } catch (error) {
       console.error('Failed to fetch discharge outlets:', error);
