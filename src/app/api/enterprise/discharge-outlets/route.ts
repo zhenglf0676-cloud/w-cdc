@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { getSupabaseCredentials, getSupabaseServiceRoleKey } from '@/storage/database/supabase-client';
+import { getSupabaseCredentials, getSupabaseServiceRoleKey, getSupabaseClient } from '@/storage/database/supabase-client';
 
 // 使用 service role key 绕过 RLS
 function getSupabaseAdmin() {
@@ -14,6 +14,18 @@ function getSupabaseAdmin() {
 // POST /api/enterprise/discharge-outlets - 企业提交排污口申请
 export async function POST(request: NextRequest) {
   try {
+    const token = request.headers.get('x-session');
+    if (!token) {
+      return NextResponse.json({ error: '未登录' }, { status: 401 });
+    }
+
+    const client = getSupabaseClient(token);
+    const { data: { user }, error: authError } = await client.auth.getUser();
+    
+    if (authError || !user) {
+      return NextResponse.json({ error: '未登录' }, { status: 401 });
+    }
+
     const supabase = getSupabaseAdmin();
     const body = await request.json();
     const { name, latitude, longitude } = body;
@@ -22,15 +34,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: '缺少必要参数' },
         { status: 400 }
-      );
-    }
-
-    // 获取当前用户
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: '未登录' },
-        { status: 401 }
       );
     }
 
@@ -108,16 +111,19 @@ export async function POST(request: NextRequest) {
 // GET /api/enterprise/discharge-outlets - 企业获取自己的排污口列表
 export async function GET(request: NextRequest) {
   try {
-    const supabase = getSupabaseAdmin();
-
-    // 获取当前用户
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: '未登录' },
-        { status: 401 }
-      );
+    const token = request.headers.get('x-session');
+    if (!token) {
+      return NextResponse.json({ error: '未登录' }, { status: 401 });
     }
+
+    const client = getSupabaseClient(token);
+    const { data: { user }, error: authError } = await client.auth.getUser();
+    
+    if (authError || !user) {
+      return NextResponse.json({ error: '未登录' }, { status: 401 });
+    }
+
+    const supabase = getSupabaseAdmin();
 
     // 获取用户的排污口列表
     const { data: outlets, error } = await supabase
