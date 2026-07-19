@@ -199,13 +199,13 @@ export default function EnterpriseHome() {
     setSubmitError('');
 
     try {
-      // 构建污染物列表
-      const pollutants = POLLUTANT_OPTIONS.filter((p) => selectedPollutants.includes(p.id)).map(
-        (p) => ({
-          id: p.id,
-          label: p.label,
-        })
-      );
+      // 构建污染物列表（过滤掉"重金属"和"其他"这两个分类选项）
+      const pollutants = POLLUTANT_OPTIONS.filter(
+        (p) => selectedPollutants.includes(p.id) && !p.custom
+      ).map((p) => ({
+        id: p.id,
+        label: p.label,
+      }));
 
       // 添加自定义重金属
       customHeavyMetals.forEach((metal) => {
@@ -258,13 +258,9 @@ export default function EnterpriseHome() {
   const companyName = user.user_metadata?.company_name || user.user_metadata?.full_name || '企业用户';
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      <EnterpriseSidebar activeItem="home" />
-
-      {/* Main Content */}
-      <div className="ml-64">
-        {/* Top Bar */}
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-white px-6 shadow-sm">
+    <div className="p-6">
+      {/* Top Bar */}
+      <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-white px-6 shadow-sm">
           <div>
             <h1 className="text-lg font-semibold text-slate-900">首页（污染物管理）</h1>
             <p className="text-xs text-slate-500">管理企业污染物与排污口，实时掌握排污情况</p>

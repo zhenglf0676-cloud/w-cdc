@@ -194,11 +194,8 @@ export default function EnterpriseProfilePage() {
   }
 
   return (
-    <div className="flex min-h-screen bg-background">
-      <EnterpriseSidebar activeItem="profile" />
-
-      <div className="flex-1">
-        {/* 顶部导航 */}
+    <div className="p-6">
+      {/* 顶部导航 */}
         <header className="sticky top-0 z-30 border-b bg-white">
           <div className="flex h-16 items-center justify-between px-6">
             <h1 className="text-lg font-semibold text-foreground">个人中心</h1>
