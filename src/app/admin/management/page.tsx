@@ -795,7 +795,7 @@ export default function ManagementPage() {
               <Label className="text-sm font-medium">申请污染物</Label>
               <div className="flex flex-wrap gap-2 mt-2">
                 {selectedApp?.pollutants.map((p, idx) => (
-                  <Badge key={`${selectedApp.id}-${idx}`} variant="secondary" className="px-3 py-1">
+                  <Badge key={`${getPollutantKey(p)}-${idx}-${p.id || 'no-id'}`} variant="secondary" className="px-3 py-1">
                     {getPollutantName(p)}
                   </Badge>
                 ))}
@@ -811,7 +811,7 @@ export default function ManagementPage() {
                   const key = getPollutantKey(p);
                   const name = getPollutantName(p);
                   return (
-                  <div key={`${key}-${idx}`} className="flex items-center gap-3">
+                  <div key={`${key}-${idx}-${p.id || 'no-id'}`} className="flex items-center gap-3">
                     <span className="w-32 text-sm">{name}</span>
                     <Input
                       type="number"
