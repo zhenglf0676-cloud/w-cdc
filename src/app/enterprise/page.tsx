@@ -27,13 +27,13 @@ interface Enterprise {
 }
 
 const POLLUTANT_OPTIONS = [
-  { id: 'cod', label: 'COD（化学需氧量）', default: true },
-  { id: 'nh3n', label: 'NH₃-N（氨氮）', default: true },
-  { id: 'tp', label: 'TP（总磷）', default: true },
-  { id: 'tn', label: 'TN（总氮）', default: false },
-  { id: 'ph', label: 'pH（酸碱度）', default: false },
-  { id: 'heavy_metal', label: '重金属（如 Cr⁶）', default: false },
-  { id: 'other', label: '其他', default: false },
+  { id: 'cod', label: 'COD（化学需氧量）', default: true, custom: false },
+  { id: 'nh3n', label: 'NH₃-N（氨氮）', default: true, custom: false },
+  { id: 'tp', label: 'TP（总磷）', default: true, custom: false },
+  { id: 'tn', label: 'TN（总氮）', default: false, custom: false },
+  { id: 'ph', label: 'pH（酸碱度）', default: false, custom: false },
+  { id: 'heavy_metal', label: '重金属', default: false, custom: true },
+  { id: 'other', label: '其他', default: false, custom: true },
 ];
 
 export default function EnterpriseHome() {
@@ -47,6 +47,10 @@ export default function EnterpriseHome() {
   const [selectedPollutants, setSelectedPollutants] = useState<string[]>(
     POLLUTANT_OPTIONS.filter((p) => p.default).map((p) => p.id)
   );
+  const [customHeavyMetals, setCustomHeavyMetals] = useState<string[]>([]);
+  const [customOthers, setCustomOthers] = useState<string[]>([]);
+  const [heavyMetalInput, setHeavyMetalInput] = useState('');
+  const [otherInput, setOtherInput] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
@@ -154,6 +158,35 @@ export default function EnterpriseHome() {
     );
   };
 
+  const addCustomPollutant = (type: 'heavy_metal' | 'other', value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+
+    if (type === 'heavy_metal') {
+      // 检查是否已存在
+      if (customHeavyMetals.includes(trimmed)) {
+        return;
+      }
+      setCustomHeavyMetals((prev) => [...prev, trimmed]);
+      setHeavyMetalInput('');
+    } else {
+      // 检查是否已存在
+      if (customOthers.includes(trimmed)) {
+        return;
+      }
+      setCustomOthers((prev) => [...prev, trimmed]);
+      setOtherInput('');
+    }
+  };
+
+  const removeCustomPollutant = (type: 'heavy_metal' | 'other', value: string) => {
+    if (type === 'heavy_metal') {
+      setCustomHeavyMetals((prev) => prev.filter((p) => p !== value));
+    } else {
+      setCustomOthers((prev) => prev.filter((p) => p !== value));
+    }
+  };
+
   const handleSubmitPollutants = async () => {
     if (selectedPollutants.length === 0) return;
     setSubmitting(true);
@@ -163,6 +196,9 @@ export default function EnterpriseHome() {
     setSubmitSuccess(true);
     setTimeout(() => setSubmitSuccess(false), 3000);
   };
+
+  const isHeavyMetalSelected = selectedPollutants.includes('heavy_metal');
+  const isOtherSelected = selectedPollutants.includes('other');
 
   if (isLoading) {
     return (
@@ -249,18 +285,111 @@ export default function EnterpriseHome() {
 
               <div className="space-y-2">
                 {POLLUTANT_OPTIONS.map((p) => (
-                  <label
-                    key={p.id}
-                    className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-slate-700 transition-colors hover:bg-slate-50"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedPollutants.includes(p.id)}
-                      onChange={() => togglePollutant(p.id)}
-                      className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-                    />
-                    <span>{p.label}</span>
-                  </label>
+                  <div key={p.id}>
+                    <label
+                      className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-slate-700 transition-colors hover:bg-slate-50"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedPollutants.includes(p.id)}
+                        onChange={() => togglePollutant(p.id)}
+                        className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                      />
+                      <span>{p.label}</span>
+                    </label>
+                    {/* 重金属输入框 */}
+                    {p.id === 'heavy_metal' && isHeavyMetalSelected && (
+                      <div className="ml-6 mt-1 space-y-1">
+                        <div className="flex gap-1">
+                          <input
+                            type="text"
+                            value={heavyMetalInput}
+                            onChange={(e) => setHeavyMetalInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                addCustomPollutant('heavy_metal', heavyMetalInput);
+                              }
+                            }}
+                            placeholder="输入重金属名称（如 Cr⁶、Pb）"
+                            className="flex-1 rounded border border-slate-200 px-2 py-1 text-xs focus:border-sky-500 focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => addCustomPollutant('heavy_metal', heavyMetalInput)}
+                            className="rounded bg-sky-100 px-2 py-1 text-xs text-sky-700 hover:bg-sky-200"
+                          >
+                            添加
+                          </button>
+                        </div>
+                        {customHeavyMetals.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {customHeavyMetals.map((item) => (
+                              <span
+                                key={item}
+                                className="inline-flex items-center gap-1 rounded bg-sky-50 px-2 py-0.5 text-xs text-sky-700"
+                              >
+                                {item}
+                                <button
+                                  type="button"
+                                  onClick={() => removeCustomPollutant('heavy_metal', item)}
+                                  className="text-sky-400 hover:text-sky-600"
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {/* 其他输入框 */}
+                    {p.id === 'other' && isOtherSelected && (
+                      <div className="ml-6 mt-1 space-y-1">
+                        <div className="flex gap-1">
+                          <input
+                            type="text"
+                            value={otherInput}
+                            onChange={(e) => setOtherInput(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                addCustomPollutant('other', otherInput);
+                              }
+                            }}
+                            placeholder="输入污染物名称"
+                            className="flex-1 rounded border border-slate-200 px-2 py-1 text-xs focus:border-sky-500 focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => addCustomPollutant('other', otherInput)}
+                            className="rounded bg-sky-100 px-2 py-1 text-xs text-sky-700 hover:bg-sky-200"
+                          >
+                            添加
+                          </button>
+                        </div>
+                        {customOthers.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {customOthers.map((item) => (
+                              <span
+                                key={item}
+                                className="inline-flex items-center gap-1 rounded bg-sky-50 px-2 py-0.5 text-xs text-sky-700"
+                              >
+                                {item}
+                                <button
+                                  type="button"
+                                  onClick={() => removeCustomPollutant('other', item)}
+                                  className="text-sky-400 hover:text-sky-600"
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
 
