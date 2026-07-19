@@ -4,7 +4,7 @@ import { getSupabaseClient } from '@/storage/database/supabase-client';
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { userId, role, fullName, companyName } = body;
+    const { userId, role, fullName, companyName, parkName, latitude, longitude } = body;
 
     if (!userId || !role || !fullName) {
       return NextResponse.json(
@@ -31,6 +31,9 @@ export async function POST(request: NextRequest) {
       role,
       full_name: fullName,
       company_name: companyName || null,
+      park_name: parkName || null,
+      latitude: latitude ?? null,
+      longitude: longitude ?? null,
     });
 
     if (error) {

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Eye, EyeOff, Droplets, Loader2, Shield, Factory, MapPin } from 'lucide-react';
+import { Eye, EyeOff, Droplets, Loader2, Shield, Factory, MapPin, Building2 } from 'lucide-react';
 import { getSupabaseBrowserClientWithRetry } from '@/lib/supabase-browser';
 import { useSupabaseConfig } from '@/lib/supabase-config-inject';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import LocationPicker from '@/components/location-picker';
 
 const APP_ICON_URL = 'https://coze-coding-project.tos.coze.site/gen_project_icon/2026-07-19/7664132817533763599_1784448963.png?sign=4906513018-895757e6df-0-736898d83ce3829565980b6ed3d392d92eb800346f56fde50229a2899b5a2cc6';
 const APP_NAME = '地下水监测网站';
@@ -30,6 +31,8 @@ export default function RegisterPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [role, setRole] = useState<UserRole>('');
   const [companyName, setCompanyName] = useState('');
+  const [parkName, setParkName] = useState('');
+  const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -49,9 +52,15 @@ export default function RegisterPage() {
       setError('请选择账户角色');
       return;
     }
-    if (role === 'enterprise' && !companyName.trim()) {
-      setError('使用者需要填写企业名称');
-      return;
+    if (role === 'enterprise') {
+      if (!companyName.trim()) {
+        setError('使用者需要填写企业名称');
+        return;
+      }
+      if (!parkName.trim()) {
+        setError('请选择所属园区');
+        return;
+      }
     }
     if (password.length < 6) {
       setError('密码长度至少为6位');
@@ -73,6 +82,9 @@ export default function RegisterPage() {
             full_name: fullName.trim(),
             role: role,
             company_name: role === 'enterprise' ? companyName.trim() : null,
+            park_name: role === 'enterprise' ? parkName.trim() : null,
+            latitude: role === 'enterprise' && location ? location.lat : null,
+            longitude: role === 'enterprise' && location ? location.lng : null,
           },
         },
       });
@@ -97,6 +109,9 @@ export default function RegisterPage() {
               role: role,
               fullName: fullName.trim(),
               companyName: role === 'enterprise' ? companyName.trim() : null,
+              parkName: role === 'enterprise' ? parkName.trim() : null,
+              latitude: role === 'enterprise' && location ? location.lat : null,
+              longitude: role === 'enterprise' && location ? location.lng : null,
             }),
           });
         } catch (profileError) {
@@ -107,8 +122,7 @@ export default function RegisterPage() {
           router.push('/');
           router.refresh();
         } else {
-          // Auto-confirm is on, but session might not be returned
-          // Try signing in directly
+          // Auto-confirm is on, try signing in directly
           const { error: signInError } = await supabase.auth.signInWithPassword({
             email: email.trim(),
             password,
@@ -137,25 +151,24 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#F8FAFC] px-4 py-8">
+    <div className="flex min-h-screen items-start justify-center bg-[#F8FAFC] px-4 py-8">
       <div className="w-full max-w-md">
         {/* Brand */}
-        <div className="mb-6 flex flex-col items-center gap-3">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#0F2B46] shadow-lg">
+        <div className="mb-6 flex flex-col items-center gap-2">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#0F2B46] shadow-lg">
             {APP_ICON_URL ? (
               <Image
                 src={APP_ICON_URL}
                 alt={APP_NAME}
-                width={40}
-                height={40}
+                width={36}
+                height={36}
                 className="rounded-lg object-contain"
               />
             ) : (
-              <Droplets className="h-7 w-7 text-[#0EA5E9]" />
+              <Droplets className="h-6 w-6 text-[#0EA5E9]" />
             )}
           </div>
-          <h1 className="text-xl font-bold tracking-tight text-[#0F172A]">{APP_NAME}</h1>
-          <p className="text-sm text-[#64748B]">地下水监测排污预警系统</p>
+          <h1 className="text-lg font-bold tracking-tight text-[#0F172A]">{APP_NAME}</h1>
         </div>
 
         {/* Register Card */}
@@ -174,6 +187,59 @@ export default function RegisterPage() {
                 </div>
               )}
 
+              {/* Role Selection */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-[#0F172A]">账户角色</Label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setRole('admin')}
+                    disabled={isLoading}
+                    className={cn(
+                      'flex flex-col items-center gap-1.5 rounded-lg border-2 p-3 transition-all',
+                      role === 'admin'
+                        ? 'border-[#0EA5E9] bg-[#0EA5E9]/5'
+                        : 'border-[#E2E8F0] bg-white hover:border-[#CBD5E1]'
+                    )}
+                  >
+                    <Shield className={cn(
+                      'h-5 w-5',
+                      role === 'admin' ? 'text-[#0EA5E9]' : 'text-[#94A3B8]'
+                    )} />
+                    <span className={cn(
+                      'text-sm font-medium',
+                      role === 'admin' ? 'text-[#0EA5E9]' : 'text-[#64748B]'
+                    )}>
+                      管理者
+                    </span>
+                    <span className="text-xs text-[#94A3B8]">园区管理</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRole('enterprise')}
+                    disabled={isLoading}
+                    className={cn(
+                      'flex flex-col items-center gap-1.5 rounded-lg border-2 p-3 transition-all',
+                      role === 'enterprise'
+                        ? 'border-[#0EA5E9] bg-[#0EA5E9]/5'
+                        : 'border-[#E2E8F0] bg-white hover:border-[#CBD5E1]'
+                    )}
+                  >
+                    <Factory className={cn(
+                      'h-5 w-5',
+                      role === 'enterprise' ? 'text-[#0EA5E9]' : 'text-[#94A3B8]'
+                    )} />
+                    <span className={cn(
+                      'text-sm font-medium',
+                      role === 'enterprise' ? 'text-[#0EA5E9]' : 'text-[#64748B]'
+                    )}>
+                      使用者
+                    </span>
+                    <span className="text-xs text-[#94A3B8]">企业用户</span>
+                  </button>
+                </div>
+              </div>
+
               {/* Account Name */}
               <div className="space-y-2">
                 <Label htmlFor="fullName" className="text-sm font-medium text-[#0F172A]">
@@ -182,13 +248,16 @@ export default function RegisterPage() {
                 <Input
                   id="fullName"
                   type="text"
-                  placeholder="请输入您的姓名"
+                  placeholder={role === 'admin' ? '请输入园区名称（如：XX产业园区）' : '请输入您的姓名'}
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   className="h-10 border-[#E2E8F0] bg-white text-[#0F172A] placeholder:text-[#94A3B8]"
                   autoComplete="name"
                   disabled={isLoading}
                 />
+                {role === 'admin' && (
+                  <p className="text-xs text-[#94A3B8]">管理者账号名即为园区名称，企业注册时可选择所属园区</p>
+                )}
               </div>
 
               {/* Email */}
@@ -208,83 +277,52 @@ export default function RegisterPage() {
                 />
               </div>
 
-              {/* Role Selection */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-[#0F172A]">
-                  账户角色
-                </Label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setRole('admin')}
-                    disabled={isLoading}
-                    className={cn(
-                      'flex flex-col items-center gap-2 rounded-lg border-2 p-3 transition-all',
-                      role === 'admin'
-                        ? 'border-[#0EA5E9] bg-[#0EA5E9]/5'
-                        : 'border-[#E2E8F0] bg-white hover:border-[#CBD5E1]'
-                    )}
-                  >
-                    <Shield className={cn(
-                      'h-5 w-5',
-                      role === 'admin' ? 'text-[#0EA5E9]' : 'text-[#94A3B8]'
-                    )} />
-                    <span className={cn(
-                      'text-sm font-medium',
-                      role === 'admin' ? 'text-[#0EA5E9]' : 'text-[#64748B]'
-                    )}>
-                      管理者
-                    </span>
-                    <span className="text-xs text-[#94A3B8]">园区监控管理</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRole('enterprise')}
-                    disabled={isLoading}
-                    className={cn(
-                      'flex flex-col items-center gap-2 rounded-lg border-2 p-3 transition-all',
-                      role === 'enterprise'
-                        ? 'border-[#0EA5E9] bg-[#0EA5E9]/5'
-                        : 'border-[#E2E8F0] bg-white hover:border-[#CBD5E1]'
-                    )}
-                  >
-                    <Factory className={cn(
-                      'h-5 w-5',
-                      role === 'enterprise' ? 'text-[#0EA5E9]' : 'text-[#94A3B8]'
-                    )} />
-                    <span className={cn(
-                      'text-sm font-medium',
-                      role === 'enterprise' ? 'text-[#0EA5E9]' : 'text-[#64748B]'
-                    )}>
-                      使用者
-                    </span>
-                    <span className="text-xs text-[#94A3B8]">企业排污监测</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Company Name (only for enterprise) */}
+              {/* Enterprise Fields */}
               {role === 'enterprise' && (
-                <div className="space-y-2">
-                  <Label htmlFor="companyName" className="text-sm font-medium text-[#0F172A]">
-                    <span className="flex items-center gap-1.5">
-                      <MapPin className="h-3.5 w-3.5 text-[#64748B]" />
-                      所属企业
-                    </span>
-                  </Label>
-                  <Input
-                    id="companyName"
-                    type="text"
-                    placeholder="请输入企业名称"
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    className="h-10 border-[#E2E8F0] bg-white text-[#0F172A] placeholder:text-[#94A3B8]"
+                <>
+                  {/* Company Name */}
+                  <div className="space-y-2">
+                    <Label htmlFor="companyName" className="text-sm font-medium text-[#0F172A]">
+                      <span className="flex items-center gap-1.5">
+                        <Building2 className="h-3.5 w-3.5 text-[#64748B]" />
+                        所属企业
+                      </span>
+                    </Label>
+                    <Input
+                      id="companyName"
+                      type="text"
+                      placeholder="请输入企业名称"
+                      value={companyName}
+                      onChange={(e) => setCompanyName(e.target.value)}
+                      className="h-10 border-[#E2E8F0] bg-white text-[#0F172A] placeholder:text-[#94A3B8]"
+                      disabled={isLoading}
+                    />
+                  </div>
+
+                  {/* Park Name */}
+                  <div className="space-y-2">
+                    <Label htmlFor="parkName" className="text-sm font-medium text-[#0F172A]">
+                      所属园区
+                    </Label>
+                    <Input
+                      id="parkName"
+                      type="text"
+                      placeholder="请输入所属园区名称"
+                      value={parkName}
+                      onChange={(e) => setParkName(e.target.value)}
+                      className="h-10 border-[#E2E8F0] bg-white text-[#0F172A] placeholder:text-[#94A3B8]"
+                      disabled={isLoading}
+                    />
+                    <p className="text-xs text-[#94A3B8]">填写园区管理者注册的园区名称，用于关联管理</p>
+                  </div>
+
+                  {/* Location Picker */}
+                  <LocationPicker
+                    value={location}
+                    onChange={setLocation}
                     disabled={isLoading}
                   />
-                  <p className="text-xs text-[#94A3B8]">
-                    注册后可在地图上绑定企业精确位置
-                  </p>
-                </div>
+                </>
               )}
 
               {/* Password */}
