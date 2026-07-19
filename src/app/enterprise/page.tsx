@@ -68,7 +68,7 @@ export default function EnterpriseHome() {
   const [dischargeOutlets, setDischargeOutlets] = useState<DischargeOutlet[]>([]);
   const [outletName, setOutletName] = useState('');
   const [selectedOutletLocation, setSelectedOutletLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [outletMarker, setOutletMarker] = useState<any>(null);
+  const outletMarkerRef = useRef<any>(null);
   const [submittingOutlet, setSubmittingOutlet] = useState(false);
   const [outletSuccess, setOutletSuccess] = useState(false);
   const [outletError, setOutletError] = useState('');
@@ -202,11 +202,9 @@ export default function EnterpriseHome() {
         const lng = lnglat.getLng();
         const lat = lnglat.getLat();
         
-        setSelectedOutletLocation({ lat, lng });
-        
         // 移除旧的标记
-        if (outletMarker) {
-          map.remove(outletMarker);
+        if (outletMarkerRef.current) {
+          map.remove(outletMarkerRef.current);
         }
         
         // 添加新标记
@@ -216,7 +214,8 @@ export default function EnterpriseHome() {
           offset: new AMap.Pixel(-6, -6),
         });
         map.add(newMarker);
-        setOutletMarker(newMarker);
+        outletMarkerRef.current = newMarker;
+        setSelectedOutletLocation({ lat, lng });
       });
     };
 
@@ -341,9 +340,9 @@ export default function EnterpriseHome() {
       setSelectedOutletLocation(null);
       
       // 移除标记
-      if (outletMarker && mapInstanceRef.current) {
-        mapInstanceRef.current.remove(outletMarker);
-        setOutletMarker(null);
+      if (outletMarkerRef.current && mapInstanceRef.current) {
+        mapInstanceRef.current.remove(outletMarkerRef.current);
+        outletMarkerRef.current = null;
       }
 
       // 刷新排污口列表
