@@ -796,11 +796,11 @@ export default function ManagementPage() {
             <div>
               <Label className="text-sm font-medium mb-3 block">设置阈值</Label>
               <div className="space-y-3">
-                {selectedApp?.pollutants.map((p) => {
+                {selectedApp?.pollutants.map((p, idx) => {
                   const key = getPollutantKey(p);
                   const name = getPollutantName(p);
                   return (
-                  <div key={key} className="flex items-center gap-3">
+                  <div key={`${key}-${idx}`} className="flex items-center gap-3">
                     <span className="w-32 text-sm">{name}</span>
                     <Input
                       type="number"
