@@ -44,6 +44,7 @@ export default function EnterpriseHome() {
 
   const [enterprises, setEnterprises] = useState<Enterprise[]>([]);
   const [loadingData, setLoadingData] = useState(true);
+  const [redirecting, setRedirecting] = useState(false);
   const [selectedPollutants, setSelectedPollutants] = useState<string[]>(
     POLLUTANT_OPTIONS.filter((p) => p.default).map((p) => p.id)
   );
@@ -58,10 +59,14 @@ export default function EnterpriseHome() {
   // 认证检查
   useEffect(() => {
     if (!isLoading && !user) {
+      setRedirecting(true);
       router.push('/login');
+      return;
     }
     if (!isLoading && user?.user_metadata?.role !== 'enterprise') {
+      setRedirecting(true);
       router.push('/admin');
+      return;
     }
   }, [user, isLoading, router]);
 
@@ -190,17 +195,53 @@ export default function EnterpriseHome() {
   const handleSubmitPollutants = async () => {
     if (selectedPollutants.length === 0) return;
     setSubmitting(true);
-    // TODO: 后续实现提交逻辑
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setSubmitting(false);
-    setSubmitSuccess(true);
-    setTimeout(() => setSubmitSuccess(false), 3000);
+
+    try {
+      // 构建污染物列表
+      const pollutants = POLLUTANT_OPTIONS.filter((p) => selectedPollutants.includes(p.id)).map(
+        (p) => ({
+          id: p.id,
+          label: p.label,
+        })
+      );
+
+      // 添加自定义重金属
+      customHeavyMetals.forEach((metal) => {
+        pollutants.push({ id: `heavy_metal_${metal}`, label: `重金属：${metal}` });
+      });
+
+      // 添加自定义其他
+      customOthers.forEach((other) => {
+        pollutants.push({ id: `other_${other}`, label: `其他：${other}` });
+      });
+
+      const res = await fetch('/api/enterprise/applications', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-session': session?.access_token || '',
+        },
+        body: JSON.stringify({ pollutants }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || '提交失败');
+      }
+
+      setSubmitSuccess(true);
+      setTimeout(() => setSubmitSuccess(false), 3000);
+    } catch (error) {
+      console.error('提交申请失败:', error);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const isHeavyMetalSelected = selectedPollutants.includes('heavy_metal');
   const isOtherSelected = selectedPollutants.includes('other');
 
-  if (isLoading) {
+  if (isLoading || redirecting) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
         <Loader2 className="h-8 w-8 animate-spin text-sky-500" />

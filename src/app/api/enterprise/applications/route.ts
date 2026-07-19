@@ -1,0 +1,117 @@
+import { NextResponse } from 'next/server';
+import { getSupabaseClient, getSupabaseCredentials } from '@/storage/database/supabase-client';
+
+export async function GET(request: Request) {
+  const token = request.headers.get('x-session');
+  if (!token) {
+    return NextResponse.json({ error: '未登录' }, { status: 401 });
+  }
+
+  const { url, anonKey } = getSupabaseCredentials();
+  const client = getSupabaseClient(token);
+
+  // 获取当前用户
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: '认证失败' }, { status: 401 });
+  }
+
+  // 获取用户信息
+  const { data: profile } = await client.from('profiles').select('*').eq('user_id', user.id).single();
+
+  if (!profile) {
+    return NextResponse.json({ error: '用户信息不存在' }, { status: 404 });
+  }
+
+  // 获取该企业的申请记录
+  const { data: applications, error } = await client
+    .from('pollutant_applications')
+    .select('*')
+    .eq('company_id', profile.id)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ applications });
+}
+
+export async function POST(request: Request) {
+  const token = request.headers.get('x-session');
+  if (!token) {
+    return NextResponse.json({ error: '未登录' }, { status: 401 });
+  }
+
+  const { url, anonKey } = getSupabaseCredentials();
+  const client = getSupabaseClient(token);
+
+  // 获取当前用户
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: '认证失败' }, { status: 401 });
+  }
+
+  // 获取用户信息
+  const { data: profile } = await client.from('profiles').select('*').eq('user_id', user.id).single();
+
+  if (!profile) {
+    return NextResponse.json({ error: '用户信息不存在' }, { status: 404 });
+  }
+
+  const body = await request.json();
+  const { pollutants } = body;
+
+  if (!pollutants || !Array.isArray(pollutants) || pollutants.length === 0) {
+    return NextResponse.json({ error: '请选择至少一种污染物' }, { status: 400 });
+  }
+
+  // 检查是否已申请并通过的污染物
+  const { data: approvedApplications } = await client
+    .from('pollutant_applications')
+    .select('pollutants')
+    .eq('company_id', profile.id)
+    .eq('status', 'approved');
+
+  if (approvedApplications && approvedApplications.length > 0) {
+    const approvedPollutantNames = approvedApplications.flatMap((app: any) =>
+      app.pollutants.map((p: any) => p.name)
+    );
+
+    const duplicatePollutants = pollutants.filter((p: any) =>
+      approvedPollutantNames.includes(p.name)
+    );
+
+    if (duplicatePollutants.length > 0) {
+      return NextResponse.json(
+        {
+          error: `以下污染物已通过审批，不能重复申请：${duplicatePollutants.map((p: any) => p.label).join('、')}`,
+        },
+        { status: 400 }
+      );
+    }
+  }
+
+  // 创建申请记录
+  const { data, error } = await client
+    .from('pollutant_applications')
+    .insert({
+      company_id: profile.id,
+      pollutants: pollutants,
+      status: 'pending',
+    })
+    .select()
+    .single();
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true, application: data });
+}
