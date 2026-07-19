@@ -3,7 +3,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { MapPin, Building2, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
-import { AdminSidebar } from '@/components/admin-sidebar';
 
 interface Enterprise {
   user_id: string;
@@ -134,13 +133,8 @@ export default function AdminHome() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
-      {/* 左侧边栏 */}
-      <AdminSidebar />
-
-      {/* 主内容区 */}
-      <div className="ml-64">
-        {/* 顶部导航 */}
-        <header className="bg-white border-b border-[#E2E8F0] sticky top-0 z-30">
+      {/* 顶部导航 */}
+      <header className="bg-white border-b border-[#E2E8F0] sticky top-0 z-30">
           <div className="px-6 py-4 flex items-center justify-between">
             <div>
               <h1 className="text-xl font-semibold text-[#0F172A]">{parkName || '园区地图'}</h1>
@@ -223,7 +217,6 @@ export default function AdminHome() {
             </div>
           )}
         </div>
-      </div>
     </div>
   );
 }
