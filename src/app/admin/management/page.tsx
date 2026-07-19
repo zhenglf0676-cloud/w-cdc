@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
-import AMapLoader from '@amap/amap-jsapi-loader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -118,7 +117,6 @@ export default function ManagementPage() {
   const [dischargeOutlets, setDischargeOutlets] = useState<DischargeOutlet[]>([]);
   const outletMapRef = useRef<any>(null);
   const [outletMarkers, setOutletMarkers] = useState<any[]>([]);
-  const [outletMapCenter, setOutletMapCenter] = useState<[number, number]>([30.2741, 120.1551]);
   const [outletDialogOpen, setOutletDialogOpen] = useState(false);
   const [selectedOutlet, setSelectedOutlet] = useState<DischargeOutlet | null>(null);
   const [outletRejectReason, setOutletRejectReason] = useState('');
@@ -324,41 +322,50 @@ export default function ManagementPage() {
   const approvedOutlets = dischargeOutlets.filter((o) => o.status === 'approved');
   const displayOutlets = [...pendingOutlets, ...approvedOutlets];
 
-  // Initialize outlet map when tab changes to discharge
+  // Initialize outlet map and add markers when tab changes to discharge
   useEffect(() => {
-    if (activeTab === 'discharge' && !outletMapRef.current && typeof window !== 'undefined') {
-      console.log('Initializing outlet map...');
-      AMapLoader.load({
-        key: '2e7e0b14442f42267a79052677e15dce',
-        version: '2.0',
-        plugins: ['AMap.Scale', 'AMap.ToolBar', 'AMap.Marker'],
+    if (activeTab !== 'discharge') return;
+
+    // Initialize map if not already initialized
+    if (!outletMapRef.current && typeof window !== 'undefined') {
+      import('@amap/amap-jsapi-loader').then((AMapLoader) => {
+        (window as any)._AMapSecurityConfig = {
+          securityJsCode: '0ab574a1c887c61ecaa4af9250d8563d',
+        };
+        return AMapLoader.load({
+          key: '2e7e0b14442f42267a79052677e15dce',
+          version: '2.0',
+          plugins: ['AMap.Scale', 'AMap.ToolBar', 'AMap.Marker'],
+        });
       }).then((AMap) => {
-        console.log('AMap loaded, creating map instance...');
         const container = document.getElementById('outlet-map-container');
-        console.log('Map container:', container);
         if (container) {
           const mapInstance = new AMap.Map('outlet-map-container', {
             zoom: 13,
-            center: outletMapCenter,
+            center: [106.3067, 29.5332],
             resizeEnable: true,
           });
-          console.log('Map instance created:', mapInstance);
           outletMapRef.current = mapInstance;
-          // Force re-render to trigger marker update
-          setOutletMapCenter([...outletMapCenter]);
+          
+          // Add markers after map is initialized
+          addMarkersToMap(AMap, mapInstance);
         } else {
           console.error('Map container not found!');
         }
       }).catch((err) => {
         console.error('Failed to load AMap:', err);
       });
+    } else if (outletMapRef.current) {
+      // Map already initialized, just update markers
+      const AMap = (window as any).AMap;
+      if (AMap) {
+        addMarkersToMap(AMap, outletMapRef.current);
+      }
     }
-  }, [activeTab]);
+  }, [activeTab, displayOutlets]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Update outlet markers when map or outlets change
-  useEffect(() => {
-    if (!outletMapRef.current) return;
-    
+  // Helper function to add markers to map
+  const addMarkersToMap = (AMap: any, map: any) => {
     // Clear old markers
     outletMarkers.forEach((marker) => marker.setMap(null));
     
@@ -367,6 +374,7 @@ export default function ManagementPage() {
       return;
     }
     
+    // Add new markers
     const newMarkers = displayOutlets.map((outlet) => {
       const color = outlet.status === 'pending' ? '#F59E0B' : '#10B981';
       const markerContent = document.createElement('div');
@@ -402,10 +410,10 @@ export default function ManagementPage() {
           `,
           offset: new AMap.Pixel(0, -30),
         });
-        infoWindow.open(outletMapRef.current, marker.getPosition());
+        infoWindow.open(map, marker.getPosition());
       });
       
-      marker.setMap(outletMapRef.current);
+      map.add(marker);
       return marker;
     });
     
@@ -414,9 +422,9 @@ export default function ManagementPage() {
     // Center map on first outlet
     if (displayOutlets.length > 0) {
       const firstOutlet = displayOutlets[0];
-      outletMapRef.current?.setCenter([firstOutlet.longitude, firstOutlet.latitude]);
+      map.setCenter([firstOutlet.longitude, firstOutlet.latitude]);
     }
-  }, [outletMapRef.current, displayOutlets]);
+  };
 
   if (isLoading) {
     return (
@@ -663,9 +671,9 @@ export default function ManagementPage() {
                       key={outlet.id}
                       className="flex items-center justify-between p-3 bg-amber-50 rounded-lg border border-amber-100 cursor-pointer hover:border-amber-300 transition-colors"
                       onClick={() => {
-                        if (outletMap) {
-                          outletMap.setCenter([outlet.longitude, outlet.latitude]);
-                          outletMap.setZoom(16);
+                        if (outletMapRef.current) {
+                          outletMapRef.current.setCenter([outlet.longitude, outlet.latitude]);
+                          outletMapRef.current.setZoom(16);
                         }
                       }}
                     >
@@ -703,9 +711,9 @@ export default function ManagementPage() {
                       key={outlet.id}
                       className="flex items-center justify-between p-3 bg-emerald-50 rounded-lg border border-emerald-100 cursor-pointer hover:border-emerald-300 transition-colors"
                       onClick={() => {
-                        if (outletMap) {
-                          outletMap.setCenter([outlet.longitude, outlet.latitude]);
-                          outletMap.setZoom(16);
+                        if (outletMapRef.current) {
+                          outletMapRef.current.setCenter([outlet.longitude, outlet.latitude]);
+                          outletMapRef.current.setZoom(16);
                         }
                       }}
                     >

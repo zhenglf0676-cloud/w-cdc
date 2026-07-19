@@ -30,7 +30,8 @@ const menuItems = [
 export function EnterpriseSidebar({ activeItem = 'home' }: EnterpriseSidebarProps) {
   const router = useRouter();
   const { user, signOut } = useAuth();
-  const { isReady } = useSupabaseConfig();
+  const { isLoading, error } = useSupabaseConfig();
+  const isReady = !isLoading && !error;
   const [collapsed, setCollapsed] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
