@@ -210,8 +210,37 @@ export default function EnterpriseHome() {
         // 添加新标记
         const newMarker = new AMap.Marker({
           position: [lng, lat],
-          content: '<div style="background: #ef4444; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white;"></div>',
-          offset: new AMap.Pixel(-6, -6),
+          content: `<div style="
+            background: #ef4444; 
+            width: 20px; 
+            height: 20px; 
+            border-radius: 50%; 
+            border: 3px solid white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            animation: pulse 1.5s infinite;
+          "></div>
+          <style>
+            @keyframes pulse {
+              0% { transform: scale(1); opacity: 1; }
+              50% { transform: scale(1.2); opacity: 0.8; }
+              100% { transform: scale(1); opacity: 1; }
+            }
+          </style>`,
+          offset: new AMap.Pixel(-10, -10),
+          label: {
+            content: `<div style="
+              background: #ef4444; 
+              color: white; 
+              padding: 4px 8px; 
+              border-radius: 4px; 
+              font-size: 12px;
+              font-weight: bold;
+              white-space: nowrap;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            ">已选择位置</div>`,
+            direction: 'top',
+            offset: new AMap.Pixel(0, -5),
+          },
         });
         map.add(newMarker);
         outletMarkerRef.current = newMarker;
