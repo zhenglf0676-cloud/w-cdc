@@ -366,10 +366,10 @@ export default function ManagementPage() {
       `;
       markerContent.innerHTML = '<span>排</span>';
       
-      const marker = new outletMap.Marker({
+      const marker = new AMap.Marker({
         position: new AMap.LngLat(outlet.longitude, outlet.latitude),
         content: markerContent,
-        offset: new outletMap.Pixel(-14, -14),
+        offset: new AMap.Pixel(-14, -14),
       });
       
       const companyName = outlet.profiles?.company_name || '未知企业';
