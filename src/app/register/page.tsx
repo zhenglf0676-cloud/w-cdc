@@ -33,6 +33,8 @@ export default function RegisterPage() {
   const [companyName, setCompanyName] = useState('');
   const [parkName, setParkName] = useState('');
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationConfirmed, setLocationConfirmed] = useState(false);
+  const [locationAddress, setLocationAddress] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -59,6 +61,10 @@ export default function RegisterPage() {
       }
       if (!parkName.trim()) {
         setError('请选择所属园区');
+        return;
+      }
+      if (!locationConfirmed) {
+        setError('请在地图上选择并确认企业位置');
         return;
       }
     }
@@ -320,6 +326,10 @@ export default function RegisterPage() {
                   <LocationPicker
                     value={location}
                     onChange={setLocation}
+                    onConfirm={(loc) => {
+                      setLocationConfirmed(true);
+                      setLocationAddress(loc.address);
+                    }}
                     disabled={isLoading}
                   />
                 </>
