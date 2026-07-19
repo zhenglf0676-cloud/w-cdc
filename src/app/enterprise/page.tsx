@@ -209,12 +209,12 @@ export default function EnterpriseHome() {
 
       // 添加自定义重金属
       customHeavyMetals.forEach((metal) => {
-        pollutants.push({ id: `heavy_metal_${metal}`, label: `重金属：${metal}` });
+        pollutants.push({ id: `heavy_metal_${metal}`, label: metal });
       });
 
       // 添加自定义其他
       customOthers.forEach((other) => {
-        pollutants.push({ id: `other_${other}`, label: `其他：${other}` });
+        pollutants.push({ id: `other_${other}`, label: other });
       });
 
       const res = await fetch('/api/enterprise/applications', {

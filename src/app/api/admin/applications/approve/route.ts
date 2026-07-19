@@ -44,13 +44,15 @@ export async function POST(request: Request) {
     // 获取申请信息
     const { data: application } = await db
       .from('pollutant_applications')
-      .select('*')
+      .select('*, profiles(company_name)')
       .eq('id', applicationId)
       .single();
 
     if (!application) {
       return NextResponse.json({ error: '申请不存在' }, { status: 404 });
     }
+
+    const companyName = application.profiles?.company_name || '未知企业';
 
     // 更新申请状态
     const { error: updateError } = await db
@@ -85,7 +87,7 @@ export async function POST(request: Request) {
         content: {
           application_id: applicationId,
           pollutants: thresholds,
-          message: `【企业】您好，您提交的${pollutantNames}污染物排放申请已审核通过！\n该污染物许可排放阈值：${pollutantDetails}，请严格按限值规范排污。`,
+          message: `【${companyName}】您好，您提交的${pollutantNames}污染物排放申请已审核通过！\n该污染物许可排放阈值：${pollutantDetails}，请严格按限值规范排污。`,
         },
       });
 

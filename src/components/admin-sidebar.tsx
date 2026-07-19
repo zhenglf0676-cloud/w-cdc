@@ -12,7 +12,9 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
+import { getSupabaseCredentials, getSupabaseServiceRoleKey } from '@/storage/database/supabase-client';
 
 interface NavItem {
   title: string;
@@ -30,8 +32,37 @@ const navItems: NavItem[] = [
 export function AdminSidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, signOut } = useAuth();
+  const { user, signOut, session } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+
+  // 获取待审批数量
+  useEffect(() => {
+    const fetchPendingCount = async () => {
+      if (!session?.access_token) return;
+
+      try {
+        const { url } = getSupabaseCredentials();
+        const serviceRoleKey = getSupabaseServiceRoleKey();
+        const db = createClient(url, serviceRoleKey!, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        });
+
+        const { count } = await db
+          .from('pollutant_applications')
+          .select('*', { count: 'exact', head: true })
+          .eq('status', 'pending');
+
+        setPendingCount(count || 0);
+      } catch (error) {
+        console.error('获取待审批数量失败:', error);
+      }
+    };
+
+    fetchPendingCount();
+    const interval = setInterval(fetchPendingCount, 30000); // 每30秒刷新一次
+    return () => clearInterval(interval);
+  }, [session]);
 
   const handleLogout = async () => {
     await signOut();
@@ -67,6 +98,7 @@ export function AdminSidebar() {
         {navItems.map((item) => {
           const isActive = pathname === item.href;
           const Icon = item.icon;
+          const showBadge = item.href === '/admin/management' && pendingCount > 0;
           return (
             <button
               key={item.href}
@@ -78,7 +110,14 @@ export function AdminSidebar() {
                   : 'text-white/70 hover:bg-white/10 hover:text-white'
               )}
             >
-              <Icon className="h-5 w-5 flex-shrink-0" />
+              <div className="relative flex-shrink-0">
+                <Icon className="h-5 w-5" />
+                {showBadge && (
+                  <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white">
+                    {pendingCount > 9 ? '9+' : pendingCount}
+                  </span>
+                )}
+              </div>
               {!collapsed && <span>{item.title}</span>}
             </button>
           );

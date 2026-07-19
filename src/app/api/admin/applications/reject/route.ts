@@ -44,13 +44,17 @@ export async function POST(request: Request) {
     // 获取申请信息
     const { data: application } = await db
       .from('pollutant_applications')
-      .select('*')
+      .select('*, profiles(company_name)')
       .eq('id', applicationId)
       .single();
 
     if (!application) {
       return NextResponse.json({ error: '申请不存在' }, { status: 404 });
     }
+
+    const companyName = application.profiles?.company_name || '未知企业';
+    const pollutants = application.pollutants as Array<{ label?: string; name?: string; id?: string }>;
+    const pollutantNames = pollutants.map((p) => p.label || p.name || p.id).join('、');
 
     // 更新申请状态
     const { error: updateError } = await db
@@ -77,7 +81,8 @@ export async function POST(request: Request) {
         content: {
           application_id: applicationId,
           reject_reason: rejectReason || '未说明原因',
-          message: `【企业】您好，您提交的污染物排放申请审批未通过：\n驳回原因：${rejectReason || '未说明原因'}。\n如需修改重报或咨询详情，请联系平台管理员。`,
+          pollutants: pollutants,
+          message: `【${companyName}】您好，您提交的${pollutantNames}污染物排放申请审批未通过：\n驳回原因：${rejectReason || '未说明原因'}。\n如需修改重报或咨询详情，请联系平台管理员。`,
         },
       });
 
