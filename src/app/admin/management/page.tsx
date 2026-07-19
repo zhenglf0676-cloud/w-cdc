@@ -344,58 +344,63 @@ export default function ManagementPage() {
 
   // Update outlet markers when map or outlets change
   useEffect(() => {
-    if (outletMap && displayOutlets.length > 0) {
-      outletMarkers.forEach((marker) => marker.setMap(null));
+    if (!outletMap) return;
+    
+    // Clear old markers
+    outletMarkers.forEach((marker) => marker.setMap(null));
+    
+    if (displayOutlets.length === 0) {
+      setOutletMarkers([]);
+      return;
+    }
+    
+    const newMarkers = displayOutlets.map((outlet) => {
+      const color = outlet.status === 'pending' ? '#F59E0B' : '#10B981';
+      const markerContent = document.createElement('div');
+      markerContent.style.cssText = `
+        width: 28px; height: 28px; border-radius: 50%;
+        background: ${color}; border: 3px solid white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        display: flex; align-items: center; justify-content: center;
+        color: white; font-weight: bold; font-size: 12px;
+      `;
+      markerContent.innerHTML = '<span>排</span>';
       
-      const newMarkers = displayOutlets.map((outlet) => {
-        const color = outlet.status === 'pending' ? '#F59E0B' : '#10B981';
-        const markerContent = document.createElement('div');
-        markerContent.style.cssText = `
-          width: 28px; height: 28px; border-radius: 50%;
-          background: ${color}; border: 3px solid white;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-          display: flex; align-items: center; justify-content: center;
-          color: white; font-weight: bold; font-size: 12px;
-        `;
-        markerContent.innerHTML = '<span>排</span>';
-        
-        const marker = new outletMap.Marker({
-          position: new outletMap.lnglat(outlet.longitude, outlet.latitude),
-          content: markerContent,
-          offset: new outletMap.Pixel(-14, -14),
-        });
-        
-        const companyName = outlet.profiles?.company_name || '未知企业';
-        const statusText = outlet.status === 'pending' ? '待审批' : '已通过';
-        const statusColor = outlet.status === 'pending' ? '#F59E0B' : '#10B981';
-        
-        marker.on('click', () => {
-          const infoWindow = new outletMap.InfoWindow({
-            content: `
-              <div style="padding:10px;min-width:180px;font-family:'Noto Sans SC',sans-serif;">
-                <div style="font-weight:600;font-size:14px;margin-bottom:6px;">${outlet.name}</div>
-                <div style="font-size:12px;color:#64748B;margin-bottom:4px;">${companyName}</div>
-                <div style="font-size:12px;">
-                  状态：<span style="color:${statusColor};font-weight:500;">${statusText}</span>
-                </div>
-              </div>
-            `,
-            offset: new outletMap.Pixel(0, -30),
-          });
-          infoWindow.open(outletMap, marker.getPosition());
-        });
-        
-        marker.setMap(outletMap);
-        return marker;
+      const marker = new outletMap.Marker({
+        position: new outletMap.lnglat(outlet.longitude, outlet.latitude),
+        content: markerContent,
+        offset: new outletMap.Pixel(-14, -14),
       });
       
-      setOutletMarkers(newMarkers);
+      const companyName = outlet.profiles?.company_name || '未知企业';
+      const statusText = outlet.status === 'pending' ? '待审批' : '已通过';
+      const statusColor = outlet.status === 'pending' ? '#F59E0B' : '#10B981';
       
-      if (displayOutlets.length > 0) {
-        const firstOutlet = displayOutlets[0];
-        outletMap.setCenter([firstOutlet.latitude, firstOutlet.longitude]);
-      }
-    }
+      marker.on('click', () => {
+        const infoWindow = new outletMap.InfoWindow({
+          content: `
+            <div style="padding:10px;min-width:180px;font-family:'Noto Sans SC',sans-serif;">
+              <div style="font-weight:600;font-size:14px;margin-bottom:6px;">${outlet.name}</div>
+              <div style="font-size:12px;color:#64748B;margin-bottom:4px;">${companyName}</div>
+              <div style="font-size:12px;">
+                状态：<span style="color:${statusColor};font-weight:500;">${statusText}</span>
+              </div>
+            </div>
+          `,
+          offset: new outletMap.Pixel(0, -30),
+        });
+        infoWindow.open(outletMap, marker.getPosition());
+      });
+      
+      marker.setMap(outletMap);
+      return marker;
+    });
+    
+    setOutletMarkers(newMarkers);
+    
+    // Center map on first outlet
+    const firstOutlet = displayOutlets[0];
+    outletMap.setCenter([firstOutlet.latitude, firstOutlet.longitude]);
   }, [outletMap, displayOutlets]);
 
   if (isLoading) {
