@@ -7,7 +7,7 @@ import { Loader2 } from 'lucide-react';
 
 export default function HomeRedirect() {
   const router = useRouter();
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const { isAuthenticated, isLoading, user, session } = useAuth();
   const [role, setRole] = useState<string | null>(null);
 
   useEffect(() => {
@@ -17,16 +17,23 @@ export default function HomeRedirect() {
     }
 
     // 获取用户角色
-    if (isAuthenticated && user) {
-      fetch('/api/profiles/me')
+    if (isAuthenticated && user && session) {
+      fetch('/api/profiles/me', {
+        headers: {
+          'x-session': session.access_token,
+        },
+      })
         .then((res) => res.json())
         .then((data) => {
           if (data.success) {
             setRole(data.data.role);
           }
+        })
+        .catch((err) => {
+          console.error('获取用户信息失败:', err);
         });
     }
-  }, [isLoading, isAuthenticated, user, router]);
+  }, [isLoading, isAuthenticated, user, session, router]);
 
   // 根据角色跳转
   useEffect(() => {
