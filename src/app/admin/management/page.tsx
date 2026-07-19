@@ -36,7 +36,9 @@ import {
 } from 'lucide-react';
 
 interface PollutantItem {
-  name: string;
+  id?: string;
+  name?: string;
+  label?: string;
   threshold?: number;
   unit?: string;
 }
@@ -72,6 +74,16 @@ const POLLUTANT_UNITS: Record<string, string> = {
   '其他': 'mg/L',
 };
 
+// 辅助函数：获取污染物名称
+const getPollutantName = (p: PollutantItem): string => {
+  return p.label || p.name || p.id || '未知';
+};
+
+// 辅助函数：获取污染物键值（用于 thresholds 对象）
+const getPollutantKey = (p: PollutantItem): string => {
+  return p.id || p.name || p.label || 'unknown';
+};
+
 export default function ManagementPage() {
   const { session, user, isLoading } = useAuth();
   const router = useRouter();
@@ -103,7 +115,9 @@ export default function ManagementPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        setApplications(data);
+        // API 返回 { pending: [], approved: [] } 格式
+        const allApplications = [...(data.pending || []), ...(data.approved || [])];
+        setApplications(allApplications);
       }
     } catch (error) {
       console.error('Failed to fetch applications:', error);
@@ -117,8 +131,8 @@ export default function ManagementPage() {
 
     const pollutants = selectedApp.pollutants.map((p) => ({
       ...p,
-      threshold: parseFloat(thresholds[p.name]?.value || '0'),
-      unit: thresholds[p.name]?.unit || POLLUTANT_UNITS[p.name] || 'mg/L',
+      threshold: parseFloat(thresholds[getPollutantKey(p)]?.value || '0'),
+      unit: thresholds[getPollutantKey(p)]?.unit || POLLUTANT_UNITS[getPollutantName(p)] || 'mg/L',
     }));
 
     try {
@@ -130,7 +144,7 @@ export default function ManagementPage() {
         },
         body: JSON.stringify({
           applicationId: selectedApp.id,
-          pollutants,
+          thresholds: pollutants,
         }),
       });
 
@@ -181,9 +195,10 @@ export default function ManagementPage() {
     setSelectedApp(app);
     const initialThresholds: Record<string, { value: string; unit: string }> = {};
     app.pollutants.forEach((p) => {
-      initialThresholds[p.name] = {
+      const key = getPollutantKey(p);
+      initialThresholds[key] = {
         value: p.threshold?.toString() || '',
-        unit: p.unit || POLLUTANT_UNITS[p.name] || 'mg/L',
+        unit: p.unit || POLLUTANT_UNITS[getPollutantName(p)] || 'mg/L',
       };
     });
     setThresholds(initialThresholds);
@@ -292,7 +307,7 @@ export default function ManagementPage() {
                         <div className="flex flex-wrap gap-2">
                           {app.pollutants.map((p, idx) => (
                             <Badge key={idx} variant="secondary" className="text-xs">
-                              {p.name}
+                              {getPollutantName(p)}
                             </Badge>
                           ))}
                         </div>
@@ -355,7 +370,7 @@ export default function ManagementPage() {
                           <div className="flex flex-wrap gap-2">
                             {app.pollutants.map((p, idx) => (
                               <Badge key={idx} variant="secondary" className="text-xs">
-                                {p.name}: {p.threshold} {p.unit}
+                                {getPollutantName(p)}: {p.threshold} {p.unit}
                               </Badge>
                             ))}
                           </div>
@@ -382,7 +397,7 @@ export default function ManagementPage() {
                           <div className="flex flex-wrap gap-2">
                             {app.pollutants.map((p, idx) => (
                               <Badge key={idx} variant="secondary" className="text-xs">
-                                {p.name}
+                                {getPollutantName(p)}
                               </Badge>
                             ))}
                           </div>
@@ -429,7 +444,7 @@ export default function ManagementPage() {
               <div className="flex flex-wrap gap-2 mt-2">
                 {selectedApp?.pollutants.map((p, idx) => (
                   <Badge key={idx} variant="secondary" className="px-3 py-1">
-                    {p.name}
+                    {getPollutantName(p)}
                   </Badge>
                 ))}
               </div>
@@ -440,32 +455,35 @@ export default function ManagementPage() {
             <div>
               <Label className="text-sm font-medium mb-3 block">设置阈值</Label>
               <div className="space-y-3">
-                {selectedApp?.pollutants.map((p) => (
-                  <div key={p.name} className="flex items-center gap-3">
-                    <span className="w-32 text-sm">{p.name}</span>
+                {selectedApp?.pollutants.map((p) => {
+                  const key = getPollutantKey(p);
+                  const name = getPollutantName(p);
+                  return (
+                  <div key={key} className="flex items-center gap-3">
+                    <span className="w-32 text-sm">{name}</span>
                     <Input
                       type="number"
                       placeholder="阈值"
-                      value={thresholds[p.name]?.value || ''}
+                      value={thresholds[key]?.value || ''}
                       onChange={(e) =>
                         setThresholds((prev) => ({
                           ...prev,
-                          [p.name]: {
-                            ...prev[p.name],
+                          [key]: {
+                            ...prev[key],
                             value: e.target.value,
-                            unit: prev[p.name]?.unit || POLLUTANT_UNITS[p.name] || 'mg/L',
+                            unit: prev[key]?.unit || POLLUTANT_UNITS[name] || 'mg/L',
                           },
                         }))
                       }
                       className="flex-1"
                     />
                     <Select
-                      value={thresholds[p.name]?.unit || POLLUTANT_UNITS[p.name] || 'mg/L'}
+                      value={thresholds[key]?.unit || POLLUTANT_UNITS[name] || 'mg/L'}
                       onValueChange={(value) =>
                         setThresholds((prev) => ({
                           ...prev,
-                          [p.name]: {
-                            ...prev[p.name],
+                          [key]: {
+                            ...prev[key],
                             unit: value,
                           },
                         }))
@@ -481,7 +499,8 @@ export default function ManagementPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 

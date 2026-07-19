@@ -39,7 +39,7 @@ export async function GET(request: Request) {
       .from('pollutant_applications')
       .select(`
         *,
-        company:profiles!company_id(full_name, company_name, park_name)
+        profiles!company_id(full_name, company_name, park_name)
       `)
       .eq('status', 'pending')
       .order('created_at', { ascending: false });
@@ -54,14 +54,24 @@ export async function GET(request: Request) {
       .from('pollutant_applications')
       .select(`
         *,
-        company:profiles!company_id(full_name, company_name, park_name)
+        profiles!company_id(full_name, company_name, park_name)
       `)
       .in('status', ['approved', 'rejected'])
       .order('approved_at', { ascending: false });
 
+    // 处理数据，将 profiles 展平到顶层
+    const processApplications = (apps: any[]) => {
+      return apps.map(app => ({
+        ...app,
+        company_name: app.profiles?.company_name || app.profiles?.full_name || '未知企业',
+        park_name: app.profiles?.park_name || '',
+        full_name: app.profiles?.full_name || '',
+      }));
+    };
+
     return NextResponse.json({
-      pending: pendingApplications || [],
-      approved: approvedApplications || [],
+      pending: processApplications(pendingApplications || []),
+      approved: processApplications(approvedApplications || []),
     });
   } catch (error) {
     console.error('获取申请列表失败:', error);
