@@ -562,7 +562,7 @@ export default function ManagementPage() {
                           </div>
                           <div className="flex flex-wrap gap-2">
                             {app.pollutants.map((p, idx) => (
-                              <Badge key={idx} variant="secondary" className="text-xs">
+                              <Badge key={`${app.id}-${idx}`} variant="secondary" className="text-xs">
                                 {getPollutantName(p)}: {p.threshold} {p.unit}
                               </Badge>
                             ))}
@@ -589,7 +589,7 @@ export default function ManagementPage() {
                           </div>
                           <div className="flex flex-wrap gap-2">
                             {app.pollutants.map((p, idx) => (
-                              <Badge key={idx} variant="secondary" className="text-xs">
+                              <Badge key={`${app.id}-${idx}`} variant="secondary" className="text-xs">
                                 {getPollutantName(p)}
                               </Badge>
                             ))}
