@@ -502,8 +502,8 @@ export default function EnterpriseHome() {
             </div>
           </div>
         </div>
-      </div>
     </div>
     </div>
+  </div>
   );
 }
