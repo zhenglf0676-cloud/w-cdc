@@ -34,7 +34,18 @@ export function EnterpriseSidebar({ activeItem = 'home' }: EnterpriseSidebarProp
 
   const fetchUnreadCount = async () => {
     try {
-      const res = await fetch('/api/enterprise/notifications');
+      // 获取 session token
+      const { getSupabaseBrowserClient } = await import('@/lib/supabase-browser');
+      const supabase = getSupabaseBrowserClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) return;
+      
+      const res = await fetch('/api/enterprise/notifications', {
+        headers: {
+          'x-session': session.access_token,
+        },
+      });
       if (res.ok) {
         const data = await res.json();
         setUnreadCount(data.unreadCount || 0);

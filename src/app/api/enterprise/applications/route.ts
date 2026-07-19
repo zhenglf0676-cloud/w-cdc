@@ -92,18 +92,20 @@ export async function POST(request: Request) {
     .eq('status', 'approved');
 
   if (approvedApplications && approvedApplications.length > 0) {
-    const approvedPollutantNames = approvedApplications.flatMap((app: any) =>
-      app.pollutants.map((p: any) => p.name)
+    // 获取已通过审批的污染物 ID 列表
+    const approvedPollutantIds = approvedApplications.flatMap((app: any) =>
+      app.pollutants.map((p: any) => p.id || p.name)
     );
 
+    // 检查是否有重复的污染物
     const duplicatePollutants = pollutants.filter((p: any) =>
-      approvedPollutantNames.includes(p.name)
+      approvedPollutantIds.includes(p.id)
     );
 
     if (duplicatePollutants.length > 0) {
       return NextResponse.json(
         {
-          error: `以下污染物已通过审批，不能重复申请：${duplicatePollutants.map((p: any) => p.label).join('、')}`,
+          error: `以下污染物已通过审批，不能重复申请：${duplicatePollutants.map((p: any) => p.label || p.id).join('、')}`,
         },
         { status: 400 }
       );

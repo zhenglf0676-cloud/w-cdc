@@ -68,7 +68,7 @@ export async function POST(request: Request) {
     }
 
     // 创建通知
-    const pollutantNames = thresholds.map((t: any) => t.name).join('、');
+    const pollutantNames = thresholds.map((t: any) => t.label || t.name || t.id).join('、');
     const { error: notificationError } = await db
       .from('notifications')
       .insert({
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
         content: {
           application_id: applicationId,
           pollutants: thresholds,
-          message: `您的 ${pollutantNames} 申请已通过审批。`,
+          message: `您的 ${pollutantNames} 申请已通过审批。阈值标准已由管理员设置，请前往个人中心查看详情。`,
         },
       });
 

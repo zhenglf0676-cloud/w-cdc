@@ -72,12 +72,12 @@ export default function EnterpriseProfilePage() {
   const markAsRead = async (id: string) => {
     try {
       const response = await fetch('/api/enterprise/notifications', {
-        method: 'PATCH',
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'x-session': session?.access_token || '',
         },
-        body: JSON.stringify({ id }),
+        body: JSON.stringify({ notificationId: id }),
       });
 
       if (response.ok) {
@@ -94,7 +94,7 @@ export default function EnterpriseProfilePage() {
   const markAllAsRead = async () => {
     try {
       const response = await fetch('/api/enterprise/notifications', {
-        method: 'PATCH',
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'x-session': session?.access_token || '',
@@ -292,10 +292,10 @@ export default function EnterpriseProfilePage() {
                               </span>
                             </div>
                             <p className="text-sm text-muted-foreground line-clamp-2">
-                              {notification.type === 'approval_approved' &&
-                                `您的污染物申请已通过审批`}
-                              {notification.type === 'approval_rejected' &&
-                                `您的申请未通过${notification.content.reject_reason ? '，原因：' + notification.content.reject_reason : ''}`}
+                              {notification.content?.message || 
+                                (notification.type === 'approval_approved' && '您的污染物申请已通过审批') ||
+                                (notification.type === 'approval_rejected' && `您的申请未通过${notification.content?.reject_reason ? '，原因：' + notification.content.reject_reason : ''}`) ||
+                                '您有一条新消息'}
                             </p>
                           </div>
                           {!notification.is_read && (

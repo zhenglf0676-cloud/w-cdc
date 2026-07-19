@@ -54,6 +54,7 @@ export default function EnterpriseHome() {
   const [otherInput, setOtherInput] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   // 认证检查
@@ -195,6 +196,7 @@ export default function EnterpriseHome() {
   const handleSubmitPollutants = async () => {
     if (selectedPollutants.length === 0) return;
     setSubmitting(true);
+    setSubmitError('');
 
     try {
       // 构建污染物列表
@@ -226,6 +228,8 @@ export default function EnterpriseHome() {
 
       if (!res.ok) {
         const data = await res.json();
+        setSubmitError(data.error || '提交失败');
+        setTimeout(() => setSubmitError(''), 5000);
         throw new Error(data.error || '提交失败');
       }
 
@@ -448,6 +452,14 @@ export default function EnterpriseHome() {
                 )}
                 {submitSuccess ? '提交成功' : '提交申请'}
               </button>
+
+              {/* 错误提示 */}
+              {submitError && (
+                <div className="mt-3 flex items-center gap-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>{submitError}</span>
+                </div>
+              )}
             </div>
 
             {/* Apply Discharge Outlet */}
