@@ -261,17 +261,17 @@ export default function EnterpriseHome() {
     <div className="p-6">
       {/* Top Bar */}
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-white px-6 shadow-sm">
-          <div>
-            <h1 className="text-lg font-semibold text-slate-900">首页（污染物管理）</h1>
-            <p className="text-xs text-slate-500">管理企业污染物与排污口，实时掌握排污情况</p>
+        <div>
+          <h1 className="text-lg font-semibold text-slate-900">首页（污染物管理）</h1>
+          <p className="text-xs text-slate-500">管理企业污染物与排污口，实时掌握排污情况</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-slate-600">{companyName}</span>
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-100 text-sm font-semibold text-sky-700">
+            {companyName.charAt(0)}
           </div>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-slate-600">{companyName}</span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-100 text-sm font-semibold text-sky-700">
-              {companyName.charAt(0)}
-            </div>
-          </div>
-        </header>
+        </div>
+      </header>
 
         {/* Content */}
         <div className="flex gap-4 p-4">
