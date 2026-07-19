@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { MapPin, Building2, AlertCircle } from 'lucide-react';
+import { useAuth } from '@/lib/auth-context';
 
 interface Enterprise {
   user_id: string;
@@ -13,6 +14,7 @@ interface Enterprise {
 }
 
 export default function AdminHome() {
+  const { session } = useAuth();
   const [parkName, setParkName] = useState('');
   const [enterprises, setEnterprises] = useState<Enterprise[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,8 +22,14 @@ export default function AdminHome() {
   const mapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!session) return;
+
     // 加载数据
-    fetch('/api/admin/park-enterprises')
+    fetch('/api/admin/park-enterprises', {
+      headers: {
+        'x-session': session.access_token,
+      },
+    })
       .then((res) => res.json())
       .then((data) => {
         if (data.success) {
@@ -35,7 +43,7 @@ export default function AdminHome() {
         console.error('请求失败:', err);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [session]);
 
   useEffect(() => {
     if (loading || enterprises.length === 0 || !mapRef.current) return;
