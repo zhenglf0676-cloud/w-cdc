@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import LocationPicker from '@/components/location-picker';
+import { LocationPicker } from '@/components/location-picker';
 
 const APP_ICON_URL = 'https://coze-coding-project.tos.coze.site/gen_project_icon/2026-07-19/7664132817533763599_1784448963.png?sign=4906513018-895757e6df-0-736898d83ce3829565980b6ed3d392d92eb800346f56fde50229a2899b5a2cc6';
 const APP_NAME = '地下水监测网站';
@@ -324,13 +324,12 @@ export default function RegisterPage() {
 
                   {/* Location Picker */}
                   <LocationPicker
-                    value={location}
-                    onChange={setLocation}
-                    onConfirm={(loc) => {
+                    value={location ?? undefined}
+                    onChange={(loc) => setLocation({ lat: loc.lat, lng: loc.lng })}
+                    onConfirm={(loc: { lat: number; lng: number; address: string }) => {
                       setLocationConfirmed(true);
                       setLocationAddress(loc.address);
                     }}
-                    disabled={isLoading}
                   />
                 </>
               )}
