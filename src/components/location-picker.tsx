@@ -266,17 +266,30 @@ export function LocationPicker({ value, onChange, confirmed, onConfirm }: Locati
       {value && !confirmed && onConfirm && (
         <button
           type="button"
-          onClick={() => onConfirm({ lat: value.lat, lng: value.lng, address })}
+          onClick={() => {
+            onConfirm({ lat: value.lat, lng: value.lng, address });
+            // 显示确认反馈
+            const btn = document.getElementById('location-confirm-btn');
+            if (btn) {
+              btn.textContent = '✓ 位置已确认';
+              btn.className = 'w-full py-2 bg-green-600 text-white text-sm rounded-md transition-colors';
+              setTimeout(() => {
+                btn.textContent = '确认此位置';
+                btn.className = 'w-full py-2 bg-green-500 text-white text-sm rounded-md hover:bg-green-600 transition-colors';
+              }, 2000);
+            }
+          }}
+          id="location-confirm-btn"
           className="w-full py-2 bg-green-500 text-white text-sm rounded-md hover:bg-green-600 transition-colors"
         >
           确认此位置
         </button>
       )}
 
-      {confirmed && (
-        <div className="flex items-center gap-2 text-sm text-green-600">
+      {confirmed && value && (
+        <div className="flex items-center gap-2 text-sm text-green-600 bg-green-50 px-3 py-2 rounded-md">
           <div className="w-2 h-2 bg-green-500 rounded-full" />
-          位置已确认
+          位置已确认 · {value.lat.toFixed(6)}, {value.lng.toFixed(6)}
         </div>
       )}
     </div>
