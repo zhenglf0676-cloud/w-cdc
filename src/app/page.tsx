@@ -9,10 +9,12 @@ export default function HomeRedirect() {
   const router = useRouter();
   const { isAuthenticated, isLoading, user, session } = useAuth();
   const [role, setRole] = useState<string | null>(null);
+  const [redirecting, setRedirecting] = useState(false);
 
   useEffect(() => {
     // 未登录且加载完成，直接跳转登录页
     if (!isLoading && !isAuthenticated) {
+      setRedirecting(true);
       router.replace('/login');
       return;
     }
@@ -44,13 +46,16 @@ export default function HomeRedirect() {
   // 根据角色跳转
   useEffect(() => {
     if (role === 'admin') {
+      setRedirecting(true);
       router.replace('/admin');
     } else if (role === 'enterprise') {
+      setRedirecting(true);
       router.replace('/enterprise');
     }
   }, [role, router]);
 
-  if (isLoading || !role) {
+  // 跳转中或加载中显示加载动画
+  if (isLoading || (!redirecting && !role)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#F8FAFC]">
         <Loader2 className="h-8 w-8 animate-spin text-[#0EA5E9]" />
