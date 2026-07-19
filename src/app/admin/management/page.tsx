@@ -333,7 +333,6 @@ export default function ManagementPage() {
     outletMarkers.forEach((marker) => marker.setMap(null));
     
     if (displayOutlets.length === 0) {
-      setOutletMarkers([]);
       return;
     }
     
@@ -379,8 +378,6 @@ export default function ManagementPage() {
       map.add(marker);
       return marker;
     });
-    
-    setOutletMarkers(newMarkers);
     
     // Center map on first outlet
     if (displayOutlets.length > 0) {
