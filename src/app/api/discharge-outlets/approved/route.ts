@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getSupabaseCredentials, getSupabaseServiceRoleKey } from '@/storage/database/supabase-client';
 
 // 使用 service role key 绕过 RLS
 function getSupabaseAdmin() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  const { url, anonKey } = getSupabaseCredentials();
+  const serviceRoleKey = getSupabaseServiceRoleKey();
+  return createClient(url, serviceRoleKey || anonKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
 }
 
 // GET /api/discharge-outlets/approved - 获取已审批通过的排污口
