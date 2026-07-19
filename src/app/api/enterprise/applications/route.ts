@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getSupabaseClient, getSupabaseCredentials } from '@/storage/database/supabase-client';
-
+import { getSupabaseClient, getSupabaseCredentials, getSupabaseServiceRoleKey } from '@/storage/database/supabase-client';
+import { createClient } from '@supabase/supabase-js';
 export async function GET(request: Request) {
   const token = request.headers.get('x-session');
   if (!token) {
@@ -19,15 +19,21 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: '认证失败' }, { status: 401 });
   }
 
+  // 使用 service role key 绕过 RLS
+  const serviceRoleKey = getSupabaseServiceRoleKey();
+  const adminClient = createClient(url, serviceRoleKey || anonKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
   // 获取用户信息
-  const { data: profile } = await client.from('profiles').select('*').eq('user_id', user.id).single();
+  const { data: profile } = await adminClient.from('profiles').select('*').eq('user_id', user.id).single();
 
   if (!profile) {
     return NextResponse.json({ error: '用户信息不存在' }, { status: 404 });
   }
 
   // 获取该企业的申请记录
-  const { data: applications, error } = await client
+  const { data: applications, error } = await adminClient
     .from('pollutant_applications')
     .select('*')
     .eq('company_id', profile.id)
@@ -58,8 +64,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: '认证失败' }, { status: 401 });
   }
 
+  // 使用 service role key 绕过 RLS
+  const serviceRoleKey = getSupabaseServiceRoleKey();
+  const adminClient = createClient(url, serviceRoleKey || anonKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
   // 获取用户信息
-  const { data: profile } = await client.from('profiles').select('*').eq('user_id', user.id).single();
+  const { data: profile } = await adminClient.from('profiles').select('*').eq('user_id', user.id).single();
 
   if (!profile) {
     return NextResponse.json({ error: '用户信息不存在' }, { status: 404 });
@@ -73,7 +85,7 @@ export async function POST(request: Request) {
   }
 
   // 检查是否已申请并通过的污染物
-  const { data: approvedApplications } = await client
+  const { data: approvedApplications } = await adminClient
     .from('pollutant_applications')
     .select('pollutants')
     .eq('company_id', profile.id)
@@ -99,7 +111,7 @@ export async function POST(request: Request) {
   }
 
   // 创建申请记录
-  const { data, error } = await client
+  const { data, error } = await adminClient
     .from('pollutant_applications')
     .insert({
       company_id: profile.id,

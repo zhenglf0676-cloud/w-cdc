@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getSupabaseClient, getSupabaseServiceRoleKey } from '@/storage/database/supabase-client';
+import { getSupabaseCredentials, getSupabaseServiceRoleKey } from '@/storage/database/supabase-client';
+import { createClient } from '@supabase/supabase-js';
 
 export async function POST(request: Request) {
   try {
@@ -15,8 +16,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '参数不完整' }, { status: 400 });
     }
 
-    const serviceKey = getSupabaseServiceRoleKey();
-    const db = getSupabaseClient(serviceKey);
+    const { url } = getSupabaseCredentials();
+    const serviceRoleKey = getSupabaseServiceRoleKey();
+    const db = createClient(url, serviceRoleKey!, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
 
     // 验证管理员身份
     const {
