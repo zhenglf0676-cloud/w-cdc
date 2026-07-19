@@ -13,6 +13,7 @@ import {
   Building2,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
+import { useSupabaseConfig } from '@/lib/supabase-config-inject';
 import { cn } from '@/lib/utils';
 
 interface EnterpriseSidebarProps {
@@ -29,10 +30,13 @@ const menuItems = [
 export function EnterpriseSidebar({ activeItem = 'home' }: EnterpriseSidebarProps) {
   const router = useRouter();
   const { user, signOut } = useAuth();
+  const { isReady } = useSupabaseConfig();
   const [collapsed, setCollapsed] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
   const fetchUnreadCount = async () => {
+    if (!isReady) return;
+    
     try {
       // 获取 session token
       const { getSupabaseBrowserClient } = await import('@/lib/supabase-browser');
@@ -57,11 +61,12 @@ export function EnterpriseSidebar({ activeItem = 'home' }: EnterpriseSidebarProp
 
   // 获取未读消息数量
   useEffect(() => {
+    if (!isReady) return;
     fetchUnreadCount();
     // 每 30 秒刷新一次
     const interval = setInterval(fetchUnreadCount, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isReady]);
 
   const handleLogout = async () => {
     await signOut();
