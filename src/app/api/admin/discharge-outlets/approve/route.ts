@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     // 获取排污口信息
     const { data: outlet, error: outletError } = await supabase
       .from('discharge_outlets')
-      .select('*, profiles:user_id (full_name)')
+      .select('*')
       .eq('id', outletId)
       .single();
 
@@ -38,6 +38,13 @@ export async function POST(request: NextRequest) {
         { status: 404 }
       );
     }
+
+    // 获取企业信息
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('user_id', outlet.user_id)
+      .single();
 
     // 更新排污口状态
     const { error: updateError } = await supabase
@@ -57,7 +64,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 获取企业名称
-    const enterpriseName = (outlet.profiles as any)?.full_name || '未知企业';
+    const enterpriseName = profile?.full_name || '未知企业';
 
     // 创建通知
     await supabase

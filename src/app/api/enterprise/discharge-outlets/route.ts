@@ -58,17 +58,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 检查是否已有相同名称的排污口申请
+    // 检查是否已有相同名称的排污口申请（只检查 pending 和 approved 状态）
     const { data: existingOutlet } = await supabase
       .from('discharge_outlets')
-      .select('id')
+      .select('id, status')
       .eq('user_id', user.id)
       .eq('name', name)
+      .in('status', ['pending', 'approved'])
       .single();
 
     if (existingOutlet) {
+      const statusText = existingOutlet.status === 'approved' ? '已通过' : '待审批';
       return NextResponse.json(
-        { error: '已存在相同名称的排污口申请' },
+        { error: `已存在相同名称的排污口（${statusText}），请使用其他名称` },
         { status: 400 }
       );
     }

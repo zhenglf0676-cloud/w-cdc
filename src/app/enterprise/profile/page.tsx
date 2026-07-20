@@ -170,8 +170,10 @@ export default function EnterpriseProfilePage() {
   const getMessageIcon = (type: string) => {
     switch (type) {
       case 'approval_approved':
+      case 'discharge_outlet_approved':
         return <CheckCircle className="h-5 w-5 text-green-600" />;
       case 'approval_rejected':
+      case 'discharge_outlet_rejected':
         return <XCircle className="h-5 w-5 text-red-600" />;
       default:
         return <Bell className="h-5 w-5 text-blue-600" />;
@@ -299,8 +301,8 @@ export default function EnterpriseProfilePage() {
                         <div className="flex items-start gap-3">
                           <div className={cn(
                             'mt-0.5',
-                            notification.type === 'approval_approved' ? 'text-green-600' :
-                            notification.type === 'approval_rejected' ? 'text-red-600' :
+                            notification.type === 'approval_approved' || notification.type === 'discharge_outlet_approved' ? 'text-green-600' :
+                            notification.type === 'approval_rejected' || notification.type === 'discharge_outlet_rejected' ? 'text-red-600' :
                             'text-blue-600'
                           )}>
                             {getMessageIcon(notification.type)}
@@ -321,17 +323,21 @@ export default function EnterpriseProfilePage() {
                               {notification.content?.message || 
                                 (notification.type === 'approval_approved' && '您的污染物申请已通过审批') ||
                                 (notification.type === 'approval_rejected' && `您的申请未通过${notification.content?.reject_reason ? '，原因：' + notification.content.reject_reason : ''}`) ||
+                                (notification.type === 'discharge_outlet_approved' && '您的排污口申请已通过审批') ||
+                                (notification.type === 'discharge_outlet_rejected' && `您的排污口申请未通过${notification.content?.reject_reason ? '，原因：' + notification.content.reject_reason : ''}`) ||
                                 '您有一条新消息'}
                             </p>
                             <div className="flex items-center gap-2 mt-2">
                               <span className={cn(
                                 'text-xs px-2 py-0.5 rounded',
-                                notification.type === 'approval_approved' ? 'bg-green-100 text-green-700' :
-                                notification.type === 'approval_rejected' ? 'bg-red-100 text-red-700' :
+                                notification.type === 'approval_approved' || notification.type === 'discharge_outlet_approved' ? 'bg-green-100 text-green-700' :
+                                notification.type === 'approval_rejected' || notification.type === 'discharge_outlet_rejected' ? 'bg-red-100 text-red-700' :
                                 'bg-blue-100 text-blue-700'
                               )}>
                                 {notification.type === 'approval_approved' ? '审批通过' :
                                  notification.type === 'approval_rejected' ? '审批拒绝' :
+                                 notification.type === 'discharge_outlet_approved' ? '排污口通过' :
+                                 notification.type === 'discharge_outlet_rejected' ? '排污口拒绝' :
                                  '系统通知'}
                               </span>
                               <span className="text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity">
