@@ -87,6 +87,13 @@ export default function AdminHome() {
     const AMap = (window as any).__AMap__ || (window as any).AMap;
     const map = mapRef.current;
 
+    console.log('addMarkersToMap 调用:', {
+      hasAMap: !!AMap,
+      hasMap: !!map,
+      enterpriseCount: enterprises.length,
+      outletCount: dischargeOutletsRef.current.length,
+    });
+
     if (!AMap || !map) return;
 
     // Clear old markers
