@@ -1,89 +1,67 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseClient } from '@/storage/database/supabase-client';
+import { getSupabaseClient, getSupabaseCredentials, getSupabaseServiceRoleKey } from '@/storage/database/supabase-client';
 
-// GET /api/discharge-outlets/approved - 获取已审批通过的排污口
-// 企业用户：只返回自己的排污口
-// 管理员：返回所有排污口
 export async function GET(request: NextRequest) {
   try {
-    // 从请求头获取 token
     const token = request.headers.get('x-session');
     if (!token) {
-      return NextResponse.json(
-        { error: '未登录' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: '未授权' }, { status: 401 });
     }
 
-    const supabase = getSupabaseClient(token);
+    // 使用 service role key 创建 Supabase 客户端（绕过 RLS）
+    const serviceRoleKey = getSupabaseServiceRoleKey();
+    const supabase = getSupabaseClient(serviceRoleKey);
 
-    // 获取当前用户
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    // 验证用户身份
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     if (authError || !user) {
-      return NextResponse.json(
-        { error: '认证失败' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: '认证失败' }, { status: 401 });
     }
 
-    // 获取用户角色
+    // 检查用户角色
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role, park_name')
-      .eq('user_id', user.id)
+      .select('role')
+      .eq('id', user.id)
       .single();
 
-    if (!profile) {
-      return NextResponse.json(
-        { error: '用户信息不存在' },
-        { status: 400 }
-      );
+    if (!profile || profile.role !== 'admin') {
+      return NextResponse.json({ error: '无权限' }, { status: 403 });
     }
 
-    let query = supabase
+    // 获取所有已审批通过的排污口
+    const { data: outlets, error } = await supabase
       .from('discharge_outlets')
       .select('*')
       .eq('status', 'approved');
 
-    // 企业用户只能看到自己的排污口
-    if (profile.role === 'enterprise') {
-      query = query.eq('user_id', user.id);
-    }
-    // 管理员可以看到所有排污口
-
-    const { data: outlets, error } = await query.order('approved_at', { ascending: false });
-
     if (error) {
-      console.error('获取排污口列表失败:', error);
-      return NextResponse.json(
-        { error: '获取排污口列表失败' },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: '获取排污口数据失败' }, { status: 500 });
     }
 
-    // 获取所有用户信息
-    const userIds = [...new Set(outlets?.map(o => o.user_id) || [])];
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('user_id, full_name, company_name')
-      .in('user_id', userIds);
+    // 获取所有企业的完整信息
+    const userIds = [...new Set(outlets?.map((o: { user_id: string }) => o.user_id) || [])];
+    let profiles: { id: string; full_name: string; company_name: string }[] = [];
+    if (userIds.length > 0) {
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('id, full_name, company_name')
+        .in('id', userIds);
+      profiles = profileData || [];
+    }
 
-    // 关联用户信息
-    const profileMap = new Map(profiles?.map(p => [p.user_id, p]) || []);
-    const outletsWithProfiles = outlets?.map(o => ({
-      ...o,
-      profiles: profileMap.get(o.user_id) || null,
-    })) || [];
+    // 关联企业信息
+    const outletsWithProfiles = outlets?.map((o: { user_id: string }) => {
+      const profile = profiles.find((p: { id: string }) => p.id === o.user_id);
+      return {
+        ...o,
+        full_name: profile?.full_name || '',
+        company_name: profile?.company_name || '',
+      };
+    }) || [];
 
-    return NextResponse.json({
-      success: true,
-      data: outletsWithProfiles
-    });
+    return NextResponse.json(outletsWithProfiles);
   } catch (error) {
-    console.error('获取排污口列表异常:', error);
-    return NextResponse.json(
-      { error: '服务器错误' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: '服务器错误' }, { status: 500 });
   }
 }
