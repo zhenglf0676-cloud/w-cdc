@@ -1,67 +1,84 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseClient, getSupabaseCredentials, getSupabaseServiceRoleKey } from '@/storage/database/supabase-client';
+import { createClient } from '@supabase/supabase-js';
+import { getSupabaseServiceRoleKey } from '@/storage/database/supabase-client';
 
 export async function GET(request: NextRequest) {
   try {
-    const token = request.headers.get('x-session');
-    if (!token) {
+    const sessionHeader = request.headers.get('x-session');
+    if (!sessionHeader) {
       return NextResponse.json({ error: '未授权' }, { status: 401 });
     }
 
-    // 使用 service role key 创建 Supabase 客户端（绕过 RLS）
-    const serviceRoleKey = getSupabaseServiceRoleKey();
-    const supabase = getSupabaseClient(serviceRoleKey);
+    const token = sessionHeader;
 
-    // 验证用户身份
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+    const supabaseServiceKey = getSupabaseServiceRoleKey();
+
+    if (!supabaseServiceKey) {
+      return NextResponse.json({ error: '服务配置错误' }, { status: 500 });
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    });
+
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
       return NextResponse.json({ error: '认证失败' }, { status: 401 });
     }
 
-    // 检查用户角色
+    // 获取用户角色
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
-      .eq('id', user.id)
+      .eq('user_id', user.id)
       .single();
 
-    if (!profile || profile.role !== 'admin') {
+    if (!profile) {
       return NextResponse.json({ error: '无权限' }, { status: 403 });
     }
 
-    // 获取所有已审批通过的排污口
-    const { data: outlets, error } = await supabase
-      .from('discharge_outlets')
-      .select('*')
-      .eq('status', 'approved');
+    // 根据角色查询排污口
+    let outlets;
+    if (profile.role === 'admin') {
+      // 管理员获取所有已审批通过的排污口
+      const { data, error } = await supabase
+        .from('discharge_outlets')
+        .select('*')
+        .eq('status', 'approved')
+        .order('created_at', { ascending: false });
 
-    if (error) {
-      return NextResponse.json({ error: '获取排污口数据失败' }, { status: 500 });
+      if (error) {
+        console.error('查询排污口失败:', error);
+        return NextResponse.json({ error: '查询失败' }, { status: 500 });
+      }
+
+      outlets = data || [];
+    } else {
+      // 企业用户获取自己的已审批通过的排污口
+      const { data, error } = await supabase
+        .from('discharge_outlets')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('status', 'approved')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('查询排污口失败:', error);
+        return NextResponse.json({ error: '查询失败' }, { status: 500 });
+      }
+
+      outlets = data || [];
     }
 
-    // 获取所有企业的完整信息
-    const userIds = [...new Set(outlets?.map((o: { user_id: string }) => o.user_id) || [])];
-    let profiles: { id: string; full_name: string; company_name: string }[] = [];
-    if (userIds.length > 0) {
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('id, full_name, company_name')
-        .in('id', userIds);
-      profiles = profileData || [];
-    }
-
-    // 关联企业信息
-    const outletsWithProfiles = outlets?.map((o: { user_id: string }) => {
-      const profile = profiles.find((p: { id: string }) => p.id === o.user_id);
-      return {
-        ...o,
-        full_name: profile?.full_name || '',
-        company_name: profile?.company_name || '',
-      };
-    }) || [];
-
-    return NextResponse.json(outletsWithProfiles);
+    return NextResponse.json(outlets);
   } catch (error) {
+    console.error('获取已审批通过的排污口异常:', error);
     return NextResponse.json({ error: '服务器错误' }, { status: 500 });
   }
 }
