@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import ReactECharts from 'echarts-for-react';
 import {
   Search,
   MapPin,
@@ -63,6 +64,10 @@ export default function MonitoringPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [uploadError, setUploadError] = useState('');
+
+  // 图表相关状态
+  const [timeRange, setTimeRange] = useState<'today' | '7days'>('today');
+  const [chartData, setChartData] = useState<MonitoringRecord[]>([]);
 
   const itemsPerPage = 5;
   const historyPageSize = 5;
@@ -193,6 +198,33 @@ export default function MonitoringPage() {
 
     fetchHistoryData();
   }, [session, selectedOutlet]);
+
+  // 获取图表数据
+  useEffect(() => {
+    if (!session || !selectedOutlet) return;
+
+    const fetchChartData = async () => {
+      try {
+        const days = timeRange === 'today' ? 1 : 7;
+        const res = await fetch(
+          `/api/enterprise/monitoring/history?outletId=${selectedOutlet.id}&days=${days}&pageSize=1000`,
+          {
+            headers: { 'x-session': session.access_token },
+          }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            setChartData(data.data || []);
+          }
+        }
+      } catch (error) {
+        console.error('获取图表数据失败:', error);
+      }
+    };
+
+    fetchChartData();
+  }, [session, selectedOutlet, timeRange]);
 
   // 过滤排污口列表
   const filteredOutlets = outlets.filter(outlet =>
@@ -452,6 +484,44 @@ export default function MonitoringPage() {
                 </div>
               )}
 
+              {/* 趋势图表 */}
+              {approvedPollutants.length > 0 && chartData.length > 0 && (
+                <div className="rounded-lg border bg-white shadow-sm">
+                  <div className="flex items-center justify-between border-b p-4">
+                    <h3 className="font-semibold text-slate-900">监测趋势</h3>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setTimeRange('today')}
+                        className={`rounded px-3 py-1 text-sm ${
+                          timeRange === 'today'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        }`}
+                      >
+                        当天
+                      </button>
+                      <button
+                        onClick={() => setTimeRange('7days')}
+                        className={`rounded px-3 py-1 text-sm ${
+                          timeRange === '7days'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        }`}
+                      >
+                        前七天
+                      </button>
+                    </div>
+                  </div>
+                  <div className="p-4">
+                    <ChartOption
+                      data={chartData}
+                      pollutants={approvedPollutants}
+                      timeRange={timeRange}
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Monitoring Records */}
               <div className="rounded-lg border bg-white shadow-sm">
                 <div className="flex items-center justify-between border-b p-4">
@@ -655,4 +725,88 @@ export default function MonitoringPage() {
       )}
     </div>
   );
+}
+
+// 图表组件
+function ChartOption({
+  data,
+  pollutants,
+  timeRange,
+}: {
+  data: MonitoringRecord[];
+  pollutants: Pollutant[];
+  timeRange: 'today' | '7days';
+}) {
+  // 按时间排序
+  const sortedData = [...data].sort(
+    (a, b) => new Date(a.monitored_at).getTime() - new Date(b.monitored_at).getTime()
+  );
+
+  // 提取时间点
+  const times = Array.from(new Set(sortedData.map(d => d.monitored_at)));
+
+  // 为每个污染物生成系列数据
+  const series = pollutants.map((p) => {
+    const pollutantData = sortedData.filter(d => d.pollutant_type === p.id);
+    const dataMap = new Map(pollutantData.map(d => [d.monitored_at, d.value]));
+
+    return {
+      name: p.label,
+      type: 'line' as const,
+      smooth: true,
+      symbol: 'circle',
+      symbolSize: 6,
+      data: times.map(t => dataMap.get(t) ?? null),
+      lineStyle: { width: 2 },
+    };
+  });
+
+  // 添加标准限值线
+  const markLines = pollutants.map((p) => ({
+    name: `${p.label}限值`,
+    type: 'line' as const,
+    symbol: 'none',
+    lineStyle: { type: 'dashed', color: '#ef4444', width: 1 },
+    label: { formatter: `{c}`, position: 'end' as const },
+    data: [{ yAxis: p.threshold }],
+  }));
+
+  const option = {
+    tooltip: {
+      trigger: 'axis' as const,
+      axisPointer: { type: 'cross' as const },
+    },
+    legend: {
+      data: pollutants.map(p => p.label),
+      bottom: 0,
+    },
+    grid: {
+      left: '3%',
+      right: '4%',
+      bottom: '10%',
+      top: '10%',
+      containLabel: true,
+    },
+    xAxis: {
+      type: 'category' as const,
+      boundaryGap: false,
+      data: times.map(t => {
+        const date = new Date(t);
+        if (timeRange === 'today') {
+          return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+        }
+        return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
+      }),
+    },
+    yAxis: {
+      type: 'value' as const,
+      name: '数值',
+    },
+    series: series.map((s, i) => ({
+      ...s,
+      markLine: i === 0 ? { data: markLines } : undefined,
+    })),
+  };
+
+  return <ReactECharts option={option} style={{ height: '400px' }} />;
 }
