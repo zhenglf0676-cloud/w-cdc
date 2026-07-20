@@ -1,23 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { getSupabaseCredentials, getSupabaseServiceRoleKey } from '@/storage/database/supabase-client';
-
-// 使用 service role key 绕过 RLS
-function getSupabaseAdmin() {
-  const { url, anonKey } = getSupabaseCredentials();
-  const serviceRoleKey = getSupabaseServiceRoleKey();
-  return createClient(url, serviceRoleKey || anonKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
+import { getSupabaseClient } from '@/storage/database/supabase-client';
 
 // GET /api/discharge-outlets/approved - 获取已审批通过的排污口
 // 企业用户：只返回自己的排污口
 // 管理员：返回所有排污口
 export async function GET(request: NextRequest) {
   try {
-    const supabase = getSupabaseAdmin();
-
     // 从请求头获取 token
     const token = request.headers.get('x-session');
     if (!token) {
@@ -26,6 +14,8 @@ export async function GET(request: NextRequest) {
         { status: 401 }
       );
     }
+
+    const supabase = getSupabaseClient(token);
 
     // 获取当前用户
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
