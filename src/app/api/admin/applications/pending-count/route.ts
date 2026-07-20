@@ -4,13 +4,8 @@ import { getSupabaseCredentials, getSupabaseServiceRoleKey } from '@/storage/dat
 
 export async function GET(request: NextRequest) {
   try {
-    const sessionHeader = request.headers.get('x-session');
-    if (!sessionHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    const session = JSON.parse(sessionHeader);
-    if (!session?.access_token) {
+    const token = request.headers.get('x-session');
+    if (!token) {
       return NextResponse.json({ error: '未授权' }, { status: 401 });
     }
 
