@@ -22,7 +22,7 @@ interface EnterpriseSidebarProps {
 
 const menuItems = [
   { id: 'home', label: '首页（污染物管理）', icon: Home, href: '/enterprise' },
-  { id: 'monitor', label: '排污点监测', icon: Radio, href: '/enterprise/monitor' },
+  { id: 'monitor', label: '排污点监测', icon: Radio, href: '/enterprise/monitoring' },
   { id: 'cdc', label: 'CDC 分析', icon: BarChart3, href: '/enterprise/cdc' },
   { id: 'profile', label: '个人中心', icon: User, href: '/enterprise/profile' },
 ];
