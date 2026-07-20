@@ -32,6 +32,8 @@ export default function AdminHome() {
   const [loading, setLoading] = useState(true);
   const [mapError, setMapError] = useState('');
   const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const outletMarkersRef = useRef<any[]>([]);
 
   useEffect(() => {
     if (!session) return;
@@ -105,6 +107,7 @@ export default function AdminHome() {
           center: [centerLng, centerLat],
           mapStyle: 'amap://styles/normal',
         });
+        mapInstanceRef.current = mapInstance;
 
         // 添加企业标记
         enterprises.forEach((enterprise) => {
@@ -137,39 +140,6 @@ export default function AdminHome() {
 
           mapInstance.add(marker);
         });
-
-        // 添加已审批通过的排污口标记
-        dischargeOutlets
-          .filter(outlet => outlet.status === 'approved')
-          .forEach((outlet) => {
-            const marker = new AMap.Marker({
-              position: [outlet.longitude, outlet.latitude],
-              title: outlet.name,
-              label: {
-                content: `<div style="background: #10b981; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px;">${outlet.name}</div>`,
-                direction: 'top',
-              },
-            });
-
-            // 点击标记显示信息窗体
-            marker.on('click', () => {
-              const enterprise = enterprises.find(e => e.user_id === outlet.user_id);
-              const infoWindow = new AMap.InfoWindow({
-                content: `
-                  <div class="info-window">
-                    <h3>${outlet.name}</h3>
-                    <p>所属企业：${enterprise?.company_name || '未知'}</p>
-                    <p>状态：已通过</p>
-                    <p>位置：${outlet.latitude.toFixed(6)}, ${outlet.longitude.toFixed(6)}</p>
-                  </div>
-                `,
-                offset: new AMap.Pixel(0, -30),
-              });
-              infoWindow.open(mapInstance, marker.getPosition());
-            });
-
-            mapInstance.add(marker);
-          });
       })
       .catch((err) => {
         console.error('地图加载失败:', err);
@@ -182,6 +152,51 @@ export default function AdminHome() {
       }
     };
   }, [loading, enterprises]);
+
+  // 当 dischargeOutlets 更新时，更新地图上的排污口标记
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const AMap = (window as any).AMap;
+    if (!map || loading || !AMap) return;
+
+    // 移除旧的排污口标记
+    outletMarkersRef.current.forEach((marker) => map.remove(marker));
+    outletMarkersRef.current = [];
+
+    // 添加新的排污口标记
+    const approvedOutlets = dischargeOutlets.filter(outlet => outlet.status === 'approved');
+    const newMarkers = approvedOutlets.map((outlet) => {
+      const marker = new AMap.Marker({
+        position: [outlet.longitude, outlet.latitude],
+        title: outlet.name,
+        label: {
+          content: `<div style="background: #10b981; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px;">${outlet.name}</div>`,
+          direction: 'top',
+        },
+      });
+
+      // 点击标记显示信息窗体
+      marker.on('click', () => {
+        const enterprise = enterprises.find(e => e.user_id === outlet.user_id);
+        const infoWindow = new AMap.InfoWindow({
+          content: `
+            <div class="info-window">
+              <h3>${outlet.name}</h3>
+              <p>所属企业：${enterprise?.company_name || '未知'}</p>
+              <p>状态：已通过</p>
+              <p>位置：${outlet.latitude.toFixed(6)}, ${outlet.longitude.toFixed(6)}</p>
+            </div>
+          `,
+          offset: new AMap.Pixel(0, -30),
+        });
+        infoWindow.open(map, marker.getPosition());
+      });
+
+      map.add(marker);
+      return marker;
+    });
+    outletMarkersRef.current = newMarkers;
+  }, [dischargeOutlets, loading, enterprises]);
 
   if (loading) {
     return (

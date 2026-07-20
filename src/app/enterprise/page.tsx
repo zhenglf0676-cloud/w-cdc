@@ -69,6 +69,7 @@ export default function EnterpriseHome() {
   const [outletName, setOutletName] = useState('');
   const [selectedOutletLocation, setSelectedOutletLocation] = useState<{ lat: number; lng: number } | null>(null);
   const outletMarkerRef = useRef<any>(null);
+  const approvedOutletMarkersRef = useRef<any[]>([]);
   const [submittingOutlet, setSubmittingOutlet] = useState(false);
   const [outletSuccess, setOutletSuccess] = useState(false);
   const [outletError, setOutletError] = useState('');
@@ -188,21 +189,6 @@ export default function EnterpriseHome() {
         }
       });
 
-      // 添加已审批通过的排污口标记
-      dischargeOutlets
-        .filter((outlet) => outlet.status === 'approved')
-        .forEach((outlet) => {
-          const marker = new AMap.Marker({
-            position: [outlet.longitude, outlet.latitude],
-            title: outlet.name,
-            label: {
-              content: `<div class="outlet-label" style="background: #10b981; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px;">${outlet.name}</div>`,
-              direction: 'top',
-            },
-          });
-          map.add(marker);
-        });
-
       // 添加地图点击事件，用于选择排污口位置
       map.on('click', (e: any) => {
         const lnglat = e.lnglat;
@@ -256,7 +242,34 @@ export default function EnterpriseHome() {
     };
 
     initMap().catch(console.error);
-  }, [enterprises, userLocation, dischargeOutlets]);
+  }, [enterprises, userLocation]);
+
+  // 当 dischargeOutlets 更新时，更新地图上的排污口标记
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const AMap = (window as any).AMap;
+    if (!map || !AMap) return;
+
+    // 移除旧的排污口标记
+    approvedOutletMarkersRef.current.forEach((marker) => map.remove(marker));
+    approvedOutletMarkersRef.current = [];
+
+    // 添加新的排污口标记
+    const approvedOutlets = dischargeOutlets.filter((outlet) => outlet.status === 'approved');
+    const newMarkers = approvedOutlets.map((outlet) => {
+      const marker = new AMap.Marker({
+        position: [outlet.longitude, outlet.latitude],
+        title: outlet.name,
+        label: {
+          content: `<div class="outlet-label" style="background: #10b981; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px;">${outlet.name}</div>`,
+          direction: 'top',
+        },
+      });
+      map.add(marker);
+      return marker;
+    });
+    approvedOutletMarkersRef.current = newMarkers;
+  }, [dischargeOutlets]);
 
   const togglePollutant = (id: string) => {
     setSelectedPollutants((prev) =>
