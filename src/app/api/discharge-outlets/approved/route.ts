@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     const supabase = getSupabaseClient(token);
 
     // 获取当前用户
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json(
         { error: '认证失败' },
