@@ -9,9 +9,10 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
-  RefreshCw,
-  TrendingUp,
-  Table,
+  Upload,
+  X,
+  CheckCircle,
+  AlertCircle,
 } from 'lucide-react';
 
 interface DischargeOutlet {
@@ -27,34 +28,15 @@ interface Pollutant {
   threshold: number;
 }
 
-interface PollutantData {
-  type: string;
-  label: string;
+interface MonitoringRecord {
+  id: string;
+  pollutant_type: string;
   value: number;
   unit: string;
-  standardLimit: number;
+  standard_limit: number;
   status: 'normal' | 'warning';
+  monitored_at: string;
 }
-
-interface HistoryRecord {
-  time: string;
-  [key: string]: number | string;
-}
-
-// Mock 数据
-const MOCK_POLLUTANT_DATA: PollutantData[] = [
-  { type: 'cod', label: 'COD（化学需氧量）', value: 18.6, unit: 'mg/L', standardLimit: 500, status: 'normal' },
-  { type: 'nh3n', label: 'NH₃-N（氨氮）', value: 0.32, unit: 'mg/L', standardLimit: 0.5, status: 'normal' },
-  { type: 'tp', label: 'TP（总磷）', value: 0.23, unit: 'mg/L', standardLimit: 1, status: 'normal' },
-];
-
-const MOCK_HISTORY_DATA: HistoryRecord[] = [
-  { time: '2024-07-18 10:25:00', cod: 18.6, nh3n: 0.32, tp: 0.23, status: 'normal' },
-  { time: '2024-07-18 10:20:00', cod: 18.2, nh3n: 0.31, tp: 0.21, status: 'normal' },
-  { time: '2024-07-18 10:15:00', cod: 17.9, nh3n: 0.29, tp: 0.22, status: 'normal' },
-  { time: '2024-07-18 10:10:00', cod: 18.4, nh3n: 0.30, tp: 0.22, status: 'normal' },
-  { time: '2024-07-18 10:05:00', cod: 18.1, nh3n: 0.28, tp: 0.21, status: 'normal' },
-];
 
 export default function MonitoringPage() {
   const router = useRouter();
@@ -63,13 +45,27 @@ export default function MonitoringPage() {
   const [outlets, setOutlets] = useState<DischargeOutlet[]>([]);
   const [approvedPollutants, setApprovedPollutants] = useState<Pollutant[]>([]);
   const [selectedOutlet, setSelectedOutlet] = useState<DischargeOutlet | null>(null);
-  const [timeRange, setTimeRange] = useState<'today' | '7days'>('today');
+  const [latestData, setLatestData] = useState<Record<string, MonitoringRecord>>({});
+  const [historyData, setHistoryData] = useState<MonitoringRecord[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [redirecting, setRedirecting] = useState(false);
+  
+  // 上传对话框状态
+  const [showUploadDialog, setShowUploadDialog] = useState(false);
+  const [uploadForm, setUploadForm] = useState({
+    outletId: '',
+    monitoredAt: '',
+    values: {} as Record<string, string>,
+    remark: '',
+  });
+  const [uploading, setUploading] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [uploadError, setUploadError] = useState('');
 
   const itemsPerPage = 5;
+  const historyPageSize = 5;
 
   // 认证检查
   useEffect(() => {
@@ -98,7 +94,6 @@ export default function MonitoringPage() {
         if (outletsRes.ok) {
           const outletsData = await outletsRes.json();
           if (outletsData.success) {
-            // 只显示已审批通过的排污口
             const approvedOutlets = (outletsData.data || []).filter(
               (o: DischargeOutlet) => o.status === 'approved'
             );
@@ -119,7 +114,6 @@ export default function MonitoringPage() {
             (app: any) => app.status === 'approved'
           );
           
-          // 合并所有已审批的污染物
           const allPollutants: Pollutant[] = [];
           const pollutantIds = new Set<string>();
           
@@ -151,6 +145,55 @@ export default function MonitoringPage() {
     fetchData();
   }, [session]);
 
+  // 获取实时监测数据
+  useEffect(() => {
+    if (!session || !selectedOutlet) return;
+
+    const fetchRealtimeData = async () => {
+      try {
+        const res = await fetch(`/api/enterprise/monitoring/realtime?outletId=${selectedOutlet.id}`, {
+          headers: { 'x-session': session.access_token },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            setLatestData(data.data || {});
+          }
+        }
+      } catch (error) {
+        console.error('获取实时数据失败:', error);
+      }
+    };
+
+    fetchRealtimeData();
+  }, [session, selectedOutlet]);
+
+  // 获取历史监测数据
+  useEffect(() => {
+    if (!session || !selectedOutlet) return;
+
+    const fetchHistoryData = async () => {
+      try {
+        const res = await fetch(
+          `/api/enterprise/monitoring/history?outletId=${selectedOutlet.id}&page=1&pageSize=${historyPageSize}`,
+          {
+            headers: { 'x-session': session.access_token },
+          }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            setHistoryData(data.data || []);
+          }
+        }
+      } catch (error) {
+        console.error('获取历史数据失败:', error);
+      }
+    };
+
+    fetchHistoryData();
+  }, [session, selectedOutlet]);
+
   // 过滤排污口列表
   const filteredOutlets = outlets.filter(outlet =>
     outlet.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -161,6 +204,74 @@ export default function MonitoringPage() {
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
+
+  // 打开上传对话框
+  const handleOpenUpload = () => {
+    if (!selectedOutlet) return;
+    setUploadForm({
+      outletId: selectedOutlet.id,
+      monitoredAt: new Date().toISOString().slice(0, 16),
+      values: {},
+      remark: '',
+    });
+    setUploadSuccess(false);
+    setUploadError('');
+    setShowUploadDialog(true);
+  };
+
+  // 提交上传
+  const handleUpload = async () => {
+    if (!uploadForm.outletId || !uploadForm.monitoredAt) {
+      setUploadError('请填写完整信息');
+      return;
+    }
+
+    // 检查是否有至少一个污染物数值
+    const hasValues = Object.values(uploadForm.values).some(v => v !== '');
+    if (!hasValues) {
+      setUploadError('请至少填写一个污染物数值');
+      return;
+    }
+
+    setUploading(true);
+    setUploadError('');
+
+    try {
+      const res = await fetch('/api/enterprise/monitoring/upload', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-session': session!.access_token,
+        },
+        body: JSON.stringify({
+          outletId: uploadForm.outletId,
+          monitoredAt: new Date(uploadForm.monitoredAt).toISOString(),
+          values: Object.fromEntries(
+            Object.entries(uploadForm.values)
+              .filter(([_, v]) => v !== '')
+              .map(([k, v]) => [k, parseFloat(v)])
+          ),
+          remark: uploadForm.remark,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setUploadSuccess(true);
+        setTimeout(() => {
+          setShowUploadDialog(false);
+          // 刷新数据
+          window.location.reload();
+        }, 1500);
+      } else {
+        setUploadError(data.error || '上传失败');
+      }
+    } catch (error) {
+      setUploadError('上传失败');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   if (isLoading || loading || redirecting) {
     return (
@@ -220,7 +331,7 @@ export default function MonitoringPage() {
             </div>
           </div>
 
-          <div className="overflow-y-auto" style={{ height: 'calc(100vh - 200px)' }}>
+          <div className="overflow-y-auto" style={{ height: 'calc(100vh - 280px)' }}>
             <div className="p-2">
               {paginatedOutlets.length === 0 ? (
                 <div className="py-8 text-center text-sm text-slate-500">
@@ -269,6 +380,18 @@ export default function MonitoringPage() {
               </button>
             </div>
           )}
+
+          {/* Upload Button */}
+          <div className="border-t p-3">
+            <button
+              onClick={handleOpenUpload}
+              disabled={!selectedOutlet}
+              className="flex w-full items-center justify-center gap-2 rounded-md bg-sky-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky-700 disabled:opacity-50"
+            >
+              <Upload className="h-4 w-4" />
+              上传数据
+            </button>
+          </div>
         </div>
 
         {/* Right Panel - Data Display */}
@@ -279,45 +402,45 @@ export default function MonitoringPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-semibold text-slate-900">{selectedOutlet.name}</h2>
-                  <p className="text-sm text-slate-500">更新时间：2024-07-18 10:25:30</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button className="rounded-md border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">
-                    <MapPin className="mr-1 inline h-4 w-4" />
-                    查看位置
-                  </button>
+                  <p className="text-sm text-slate-500">
+                    更新时间：{Object.values(latestData)[0]?.monitored_at 
+                      ? new Date(Object.values(latestData)[0].monitored_at).toLocaleString('zh-CN')
+                      : '暂无数据'}
+                  </p>
                 </div>
               </div>
 
               {/* Pollutant Cards */}
               {approvedPollutants.length > 0 ? (
-                <div className="grid grid-cols-6 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   {approvedPollutants.map((pollutant) => {
-                    // 查找对应的 mock 数据
-                    const mockData = MOCK_POLLUTANT_DATA.find(p => p.type === pollutant.id);
-                    const value = mockData?.value ?? 0;
-                    const status = value > pollutant.threshold ? 'warning' : 'normal';
+                    const record = latestData[pollutant.id];
+                    const value = record?.value ?? 0;
+                    const status = record?.status ?? 'normal';
                     
                     return (
                       <div
                         key={pollutant.id}
                         className="rounded-lg border bg-white p-4 shadow-sm"
                       >
-                        <div className="mb-2 text-xs text-slate-500">
+                        <div className="mb-2 text-sm text-slate-600">
                           {pollutant.label}
                           <span className="ml-1 text-slate-400">({pollutant.unit})</span>
                         </div>
-                        <div className="mb-2 text-2xl font-semibold text-slate-900">
-                          {value}
+                        <div className="mb-2 flex items-baseline gap-1">
+                          <span className="text-3xl font-semibold text-slate-900">
+                            {value}
+                          </span>
+                          <span className="text-sm text-slate-400">/ {pollutant.threshold}</span>
                         </div>
                         <span
                           className={`inline-block rounded px-2 py-0.5 text-xs ${
                             status === 'normal'
                               ? 'bg-green-100 text-green-700'
-                              : 'bg-amber-100 text-amber-700'
+                              : 'bg-red-100 text-red-700'
                           }`}
                         >
-                          {status === 'normal' ? '正常' : '预警'}
+                          {status === 'normal' ? '正常' : '危险'}
                         </span>
                       </div>
                     );
@@ -329,45 +452,10 @@ export default function MonitoringPage() {
                 </div>
               )}
 
-              {/* Chart Placeholder */}
-              <div className="rounded-lg border bg-white p-6 shadow-sm">
-                <div className="mb-4 flex items-center justify-between">
-                  <h3 className="font-semibold text-slate-900">实时趋势</h3>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setTimeRange('today')}
-                      className={`rounded px-3 py-1 text-xs ${
-                        timeRange === 'today'
-                          ? 'bg-sky-600 text-white'
-                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                      }`}
-                    >
-                      当天
-                    </button>
-                    <button
-                      onClick={() => setTimeRange('7days')}
-                      className={`rounded px-3 py-1 text-xs ${
-                        timeRange === '7days'
-                          ? 'bg-sky-600 text-white'
-                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                      }`}
-                    >
-                      前七天
-                    </button>
-                  </div>
-                </div>
-                <div className="flex h-64 items-center justify-center rounded-md bg-slate-50 text-sm text-slate-500">
-                  图表区域（后续集成 ECharts）
-                </div>
-              </div>
-
               {/* Monitoring Records */}
               <div className="rounded-lg border bg-white shadow-sm">
                 <div className="flex items-center justify-between border-b p-4">
                   <h3 className="font-semibold text-slate-900">监测记录</h3>
-                  <button className="text-sm text-sky-600 hover:text-sky-700">
-                    查看更多 →
-                  </button>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -383,21 +471,51 @@ export default function MonitoringPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {MOCK_HISTORY_DATA.map((record, index) => (
-                        <tr key={index} className="hover:bg-slate-50">
-                          <td className="px-4 py-3 text-slate-600">{record.time}</td>
-                          {approvedPollutants.map((p) => (
-                            <td key={p.id} className="px-4 py-3">
-                              {record[p.id] ?? '-'}
-                            </td>
-                          ))}
-                          <td className="px-4 py-3">
-                            <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-700">
-                              正常
-                            </span>
+                      {historyData.length === 0 ? (
+                        <tr>
+                          <td colSpan={approvedPollutants.length + 2} className="px-4 py-8 text-center text-slate-500">
+                            暂无监测记录
                           </td>
                         </tr>
-                      ))}
+                      ) : (
+                        // 按时间分组显示
+                        Array.from(
+                          historyData.reduce((map, record) => {
+                            const time = record.monitored_at;
+                            if (!map.has(time)) {
+                              map.set(time, []);
+                            }
+                            map.get(time)!.push(record);
+                            return map;
+                          }, new Map<string, MonitoringRecord[]>())
+                        ).map(([time, records]) => {
+                          const hasWarning = records.some(r => r.status === 'warning');
+                          return (
+                            <tr key={time} className="hover:bg-slate-50">
+                              <td className="px-4 py-3 text-slate-600">
+                                {new Date(time).toLocaleString('zh-CN')}
+                              </td>
+                              {approvedPollutants.map((p) => {
+                                const record = records.find(r => r.pollutant_type === p.id);
+                                return (
+                                  <td key={p.id} className="px-4 py-3">
+                                    {record ? record.value : '-'}
+                                  </td>
+                                );
+                              })}
+                              <td className="px-4 py-3">
+                                <span className={`rounded px-2 py-0.5 text-xs ${
+                                  hasWarning
+                                    ? 'bg-red-100 text-red-700'
+                                    : 'bg-green-100 text-green-700'
+                                }`}>
+                                  {hasWarning ? '危险' : '正常'}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -410,6 +528,131 @@ export default function MonitoringPage() {
           )}
         </div>
       </div>
+
+      {/* Upload Dialog */}
+      {showUploadDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b p-4">
+              <h3 className="text-lg font-semibold text-slate-900">上传监测数据</h3>
+              <button
+                onClick={() => setShowUploadDialog(false)}
+                className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4">
+              {/* 排污口选择 */}
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">
+                  排污口 <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={uploadForm.outletId}
+                  onChange={(e) => setUploadForm({ ...uploadForm, outletId: e.target.value })}
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                >
+                  <option value="">请选择排污口</option>
+                  {outlets.map((outlet) => (
+                    <option key={outlet.id} value={outlet.id}>
+                      {outlet.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 监测时间 */}
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">
+                  监测时间 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="datetime-local"
+                  value={uploadForm.monitoredAt}
+                  onChange={(e) => setUploadForm({ ...uploadForm, monitoredAt: e.target.value })}
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                />
+              </div>
+
+              {/* 污染物数值 */}
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">
+                  污染物数值（只填写有数据的项）
+                </label>
+                <div className="space-y-3 max-h-60 overflow-y-auto rounded-md border border-slate-200 p-3">
+                  {approvedPollutants.map((pollutant) => (
+                    <div key={pollutant.id}>
+                      <label className="mb-1 block text-xs text-slate-600">
+                        {pollutant.label} ({pollutant.unit})
+                        <span className="ml-2 text-slate-400">限值：{pollutant.threshold}</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={uploadForm.values[pollutant.id] || ''}
+                        onChange={(e) => setUploadForm({
+                          ...uploadForm,
+                          values: { ...uploadForm.values, [pollutant.id]: e.target.value }
+                        })}
+                        placeholder="请输入数值"
+                        className="w-full rounded-md border border-slate-200 px-3 py-1.5 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 备注 */}
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">
+                  备注（可选）
+                </label>
+                <input
+                  type="text"
+                  value={uploadForm.remark}
+                  onChange={(e) => setUploadForm({ ...uploadForm, remark: e.target.value })}
+                  placeholder="请输入备注"
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                />
+              </div>
+
+              {/* 错误提示 */}
+              {uploadError && (
+                <div className="flex items-center gap-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  <span>{uploadError}</span>
+                </div>
+              )}
+
+              {/* 成功提示 */}
+              {uploadSuccess && (
+                <div className="flex items-center gap-2 rounded-md bg-green-50 border border-green-200 px-3 py-2 text-sm text-green-700">
+                  <CheckCircle className="h-4 w-4 shrink-0" />
+                  <span>上传成功</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 border-t p-4">
+              <button
+                onClick={() => setShowUploadDialog(false)}
+                className="rounded-md border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleUpload}
+                disabled={uploading}
+                className="rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+              >
+                {uploading ? '上传中...' : '提交'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
