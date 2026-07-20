@@ -67,8 +67,23 @@ export default function MonitoringPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [redirecting, setRedirecting] = useState(false);
 
   const itemsPerPage = 5;
+
+  // 认证检查
+  useEffect(() => {
+    if (!isLoading && !user) {
+      setRedirecting(true);
+      router.push('/login');
+      return;
+    }
+    if (!isLoading && user?.user_metadata?.role !== 'enterprise') {
+      setRedirecting(true);
+      router.push('/admin');
+      return;
+    }
+  }, [user, isLoading, router]);
 
   // 获取企业排污口和污染物数据
   useEffect(() => {
@@ -147,7 +162,7 @@ export default function MonitoringPage() {
     currentPage * itemsPerPage
   );
 
-  if (isLoading || loading) {
+  if (isLoading || loading || redirecting) {
     return (
       <div className="flex h-screen items-center justify-center bg-slate-50">
         <Loader2 className="h-8 w-8 animate-spin text-sky-500" />
@@ -155,15 +170,7 @@ export default function MonitoringPage() {
     );
   }
 
-  if (!user) {
-    router.push('/login');
-    return null;
-  }
-
-  if (user.user_metadata?.role !== 'enterprise') {
-    router.push('/admin');
-    return null;
-  }
+  if (!user) return null;
 
   const companyName = user.user_metadata?.company_name || user.user_metadata?.full_name || '企业用户';
 
