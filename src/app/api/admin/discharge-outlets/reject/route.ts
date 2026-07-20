@@ -39,6 +39,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 获取企业信息
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id, full_name')
+      .eq('user_id', outlet.user_id)
+      .single();
+
     // 更新排污口状态
     const { error: updateError } = await supabase
       .from('discharge_outlets')
@@ -56,22 +63,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 创建通知
-    const { error: notificationError } = await supabase
-      .from('notifications')
-      .insert({
-        user_id: outlet.user_id,
-        type: 'discharge_outlet_rejected',
-        title: '排污口申请被拒绝',
-        content: { 
-          message: `您申请的排污口"${outlet.name}"被拒绝`,
-          reject_reason: rejectReason || ''
-        },
-        is_read: false
-      });
+    // 创建通知（使用 profile.id 而不是 outlet.user_id）
+    if (profile?.id) {
+      const { error: notificationError } = await supabase
+        .from('notifications')
+        .insert({
+          user_id: profile.id,
+          type: 'discharge_outlet_rejected',
+          title: '排污口申请被拒绝',
+          content: { 
+            message: `您申请的排污口"${outlet.name}"被拒绝`,
+            reject_reason: rejectReason || ''
+          },
+          is_read: false
+        });
 
-    if (notificationError) {
-      console.error('创建通知失败:', notificationError);
+      if (notificationError) {
+        console.error('创建通知失败:', notificationError);
+      } else {
+        console.log('创建通知成功:', { user_id: profile.id, type: 'discharge_outlet_rejected' });
+      }
     }
 
     return NextResponse.json({
