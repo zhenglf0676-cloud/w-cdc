@@ -26,9 +26,21 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    let user;
+    try {
+      const { data: { user: authUser }, error: userError } = await supabase.auth.getUser();
+      if (userError) {
+        console.error('getUser 错误:', userError.message);
+        return NextResponse.json({ error: '认证失败' }, { status: 401 });
+      }
+      user = authUser;
+    } catch (error: any) {
+      console.error('getUser 异常:', error.message);
+      return NextResponse.json({ error: '认证失败' }, { status: 401 });
+    }
 
-    if (userError || !user) {
+    if (!user) {
+      console.error('用户不存在');
       return NextResponse.json({ error: '认证失败' }, { status: 401 });
     }
 
