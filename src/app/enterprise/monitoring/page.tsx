@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import {
@@ -9,7 +9,6 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
-  Calendar,
   RefreshCw,
   TrendingUp,
   Table,
@@ -18,6 +17,14 @@ import {
 interface DischargeOutlet {
   id: string;
   name: string;
+  status: string;
+}
+
+interface Pollutant {
+  id: string;
+  label: string;
+  unit: string;
+  threshold: number;
 }
 
 interface PollutantData {
@@ -29,80 +36,108 @@ interface PollutantData {
   status: 'normal' | 'warning';
 }
 
-const POLLUTANT_CONFIG = [
-  { type: 'ph', label: 'pH', unit: '无量纲', standardLimit: 9 },
-  { type: 'cod', label: 'COD', unit: 'mg/L', standardLimit: 50 },
-  { type: 'nh3n', label: '氨氮', unit: 'mg/L', standardLimit: 5 },
-  { type: 'tp', label: '总磷', unit: 'mg/L', standardLimit: 0.5 },
-  { type: 'tn', label: '总氮', unit: 'mg/L', standardLimit: 15 },
-  { type: 'heavy_metal', label: '重金属 (Cr⁶⁺)', unit: 'mg/L', standardLimit: 0.05 },
-];
+interface HistoryRecord {
+  time: string;
+  [key: string]: number | string;
+}
 
 // Mock 数据
-const MOCK_OUTLETS: DischargeOutlet[] = [
-  { id: '1', name: '排污口1（总排口）' },
-  { id: '2', name: '排污口2（生产废水排口）' },
-  { id: '3', name: '排污口3（生活污水排口）' },
-  { id: '4', name: '排污口4（冷却水排口）' },
-  { id: '5', name: '排污口5（初期雨水排口）' },
-  { id: '6', name: '排污口6（事故应急排口）' },
-];
-
 const MOCK_POLLUTANT_DATA: PollutantData[] = [
-  { type: 'ph', label: 'pH', value: 7.32, unit: '无量纲', standardLimit: 9, status: 'normal' },
-  { type: 'cod', label: 'COD', value: 18.6, unit: 'mg/L', standardLimit: 50, status: 'normal' },
-  { type: 'nh3n', label: '氨氮', value: 1.12, unit: 'mg/L', standardLimit: 5, status: 'normal' },
-  { type: 'tp', label: '总磷', value: 0.23, unit: 'mg/L', standardLimit: 0.5, status: 'normal' },
-  { type: 'tn', label: '总氮', value: 2.35, unit: 'mg/L', standardLimit: 15, status: 'normal' },
-  { type: 'heavy_metal', label: '重金属 (Cr⁶⁺)', value: 0.006, unit: 'mg/L', standardLimit: 0.05, status: 'normal' },
+  { type: 'cod', label: 'COD（化学需氧量）', value: 18.6, unit: 'mg/L', standardLimit: 500, status: 'normal' },
+  { type: 'nh3n', label: 'NH₃-N（氨氮）', value: 0.32, unit: 'mg/L', standardLimit: 0.5, status: 'normal' },
+  { type: 'tp', label: 'TP（总磷）', value: 0.23, unit: 'mg/L', standardLimit: 1, status: 'normal' },
 ];
 
-const MOCK_HISTORY_DATA = [
-  { time: '2024-07-18 10:25:00', ph: 7.32, cod: 18.6, nh3n: 1.12, tp: 0.23, tn: 2.35, heavy_metal: 0.006, status: 'normal' },
-  { time: '2024-07-18 10:20:00', ph: 7.28, cod: 18.2, nh3n: 1.09, tp: 0.21, tn: 2.31, heavy_metal: 0.006, status: 'normal' },
-  { time: '2024-07-18 10:15:00', ph: 7.31, cod: 17.9, nh3n: 1.07, tp: 0.22, tn: 2.29, heavy_metal: 0.006, status: 'normal' },
-  { time: '2024-07-18 10:10:00', ph: 7.29, cod: 18.4, nh3n: 1.10, tp: 0.22, tn: 2.33, heavy_metal: 0.006, status: 'normal' },
-  { time: '2024-07-18 10:05:00', ph: 7.30, cod: 18.1, nh3n: 1.08, tp: 0.21, tn: 2.30, heavy_metal: 0.006, status: 'normal' },
+const MOCK_HISTORY_DATA: HistoryRecord[] = [
+  { time: '2024-07-18 10:25:00', cod: 18.6, nh3n: 0.32, tp: 0.23, status: 'normal' },
+  { time: '2024-07-18 10:20:00', cod: 18.2, nh3n: 0.31, tp: 0.21, status: 'normal' },
+  { time: '2024-07-18 10:15:00', cod: 17.9, nh3n: 0.29, tp: 0.22, status: 'normal' },
+  { time: '2024-07-18 10:10:00', cod: 18.4, nh3n: 0.30, tp: 0.22, status: 'normal' },
+  { time: '2024-07-18 10:05:00', cod: 18.1, nh3n: 0.28, tp: 0.21, status: 'normal' },
 ];
 
 export default function MonitoringPage() {
   const router = useRouter();
   const { user, session, isLoading } = useAuth();
   
-  const [selectedOutlet, setSelectedOutlet] = useState<DischargeOutlet | null>(MOCK_OUTLETS[0]);
-  const [activeTab, setActiveTab] = useState<'realtime' | 'history'>('realtime');
+  const [outlets, setOutlets] = useState<DischargeOutlet[]>([]);
+  const [approvedPollutants, setApprovedPollutants] = useState<Pollutant[]>([]);
+  const [selectedOutlet, setSelectedOutlet] = useState<DischargeOutlet | null>(null);
   const [timeRange, setTimeRange] = useState<'today' | '7days'>('today');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [redirecting, setRedirecting] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const itemsPerPage = 5;
 
-  // 认证检查
-  if (isLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-slate-50">
-        <Loader2 className="h-8 w-8 animate-spin text-sky-500" />
-      </div>
-    );
-  }
+  // 获取企业排污口和污染物数据
+  useEffect(() => {
+    if (!session) return;
 
-  if (!user) {
-    setRedirecting(true);
-    router.push('/login');
-    return null;
-  }
+    const fetchData = async () => {
+      try {
+        // 获取排污口列表
+        const outletsRes = await fetch('/api/enterprise/discharge-outlets', {
+          headers: { 'x-session': session.access_token },
+        });
+        if (outletsRes.ok) {
+          const outletsData = await outletsRes.json();
+          if (outletsData.success) {
+            // 只显示已审批通过的排污口
+            const approvedOutlets = (outletsData.data || []).filter(
+              (o: DischargeOutlet) => o.status === 'approved'
+            );
+            setOutlets(approvedOutlets);
+            if (approvedOutlets.length > 0) {
+              setSelectedOutlet(approvedOutlets[0]);
+            }
+          }
+        }
 
-  if (user.user_metadata?.role !== 'enterprise') {
-    setRedirecting(true);
-    router.push('/admin');
-    return null;
-  }
+        // 获取审批通过的污染物
+        const applicationsRes = await fetch('/api/enterprise/applications', {
+          headers: { 'x-session': session.access_token },
+        });
+        if (applicationsRes.ok) {
+          const applicationsData = await applicationsRes.json();
+          const approvedApplications = (applicationsData.applications || []).filter(
+            (app: any) => app.status === 'approved'
+          );
+          
+          // 合并所有已审批的污染物
+          const allPollutants: Pollutant[] = [];
+          const pollutantIds = new Set<string>();
+          
+          approvedApplications.forEach((app: any) => {
+            if (app.pollutants && Array.isArray(app.pollutants)) {
+              app.pollutants.forEach((p: any) => {
+                if (!pollutantIds.has(p.id)) {
+                  pollutantIds.add(p.id);
+                  allPollutants.push({
+                    id: p.id,
+                    label: p.label,
+                    unit: p.unit,
+                    threshold: p.threshold,
+                  });
+                }
+              });
+            }
+          });
+          
+          setApprovedPollutants(allPollutants);
+        }
+      } catch (error) {
+        console.error('获取数据失败:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  if (redirecting) return null;
+    fetchData();
+  }, [session]);
 
   // 过滤排污口列表
-  const filteredOutlets = MOCK_OUTLETS.filter(outlet =>
+  const filteredOutlets = outlets.filter(outlet =>
     outlet.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -111,6 +146,24 @@ export default function MonitoringPage() {
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
+
+  if (isLoading || loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-50">
+        <Loader2 className="h-8 w-8 animate-spin text-sky-500" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    router.push('/login');
+    return null;
+  }
+
+  if (user.user_metadata?.role !== 'enterprise') {
+    router.push('/admin');
+    return null;
+  }
 
   const companyName = user.user_metadata?.company_name || user.user_metadata?.full_name || '企业用户';
 
@@ -162,22 +215,28 @@ export default function MonitoringPage() {
 
           <div className="overflow-y-auto" style={{ height: 'calc(100vh - 200px)' }}>
             <div className="p-2">
-              {paginatedOutlets.map((outlet) => (
-                <button
-                  key={outlet.id}
-                  onClick={() => setSelectedOutlet(outlet)}
-                  className={`w-full rounded-md px-3 py-2.5 text-left text-sm transition-colors ${
-                    selectedOutlet?.id === outlet.id
-                      ? 'bg-sky-50 text-sky-700'
-                      : 'text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 shrink-0" />
-                    <span className="truncate">{outlet.name}</span>
-                  </div>
-                </button>
-              ))}
+              {paginatedOutlets.length === 0 ? (
+                <div className="py-8 text-center text-sm text-slate-500">
+                  暂无排污口数据
+                </div>
+              ) : (
+                paginatedOutlets.map((outlet) => (
+                  <button
+                    key={outlet.id}
+                    onClick={() => setSelectedOutlet(outlet)}
+                    className={`w-full rounded-md px-3 py-2.5 text-left text-sm transition-colors ${
+                      selectedOutlet?.id === outlet.id
+                        ? 'bg-sky-50 text-sky-700'
+                        : 'text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4 shrink-0" />
+                      <span className="truncate">{outlet.name}</span>
+                    </div>
+                  </button>
+                ))
+              )}
             </div>
           </div>
 
@@ -223,39 +282,18 @@ export default function MonitoringPage() {
                 </div>
               </div>
 
-              {/* Tab Switch */}
-              <div className="flex items-center gap-4 border-b">
-                <button
-                  onClick={() => setActiveTab('realtime')}
-                  className={`pb-3 text-sm font-medium transition-colors ${
-                    activeTab === 'realtime'
-                      ? 'border-b-2 border-sky-600 text-sky-600'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <TrendingUp className="mr-1 inline h-4 w-4" />
-                  实时数据
-                </button>
-                <button
-                  onClick={() => setActiveTab('history')}
-                  className={`pb-3 text-sm font-medium transition-colors ${
-                    activeTab === 'history'
-                      ? 'border-b-2 border-sky-600 text-sky-600'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  <Table className="mr-1 inline h-4 w-4" />
-                  历史数据
-                </button>
-              </div>
-
-              {activeTab === 'realtime' ? (
-                <div className="space-y-6">
-                  {/* Pollutant Cards */}
-                  <div className="grid grid-cols-6 gap-4">
-                    {MOCK_POLLUTANT_DATA.map((pollutant) => (
+              {/* Pollutant Cards */}
+              {approvedPollutants.length > 0 ? (
+                <div className="grid grid-cols-6 gap-4">
+                  {approvedPollutants.map((pollutant) => {
+                    // 查找对应的 mock 数据
+                    const mockData = MOCK_POLLUTANT_DATA.find(p => p.type === pollutant.id);
+                    const value = mockData?.value ?? 0;
+                    const status = value > pollutant.threshold ? 'warning' : 'normal';
+                    
+                    return (
                       <div
-                        key={pollutant.type}
+                        key={pollutant.id}
                         className="rounded-lg border bg-white p-4 shadow-sm"
                       >
                         <div className="mb-2 text-xs text-slate-500">
@@ -263,164 +301,100 @@ export default function MonitoringPage() {
                           <span className="ml-1 text-slate-400">({pollutant.unit})</span>
                         </div>
                         <div className="mb-2 text-2xl font-semibold text-slate-900">
-                          {pollutant.value}
+                          {value}
                         </div>
                         <span
                           className={`inline-block rounded px-2 py-0.5 text-xs ${
-                            pollutant.status === 'normal'
+                            status === 'normal'
                               ? 'bg-green-100 text-green-700'
                               : 'bg-amber-100 text-amber-700'
                           }`}
                         >
-                          {pollutant.status === 'normal' ? '正常' : '预警'}
+                          {status === 'normal' ? '正常' : '预警'}
                         </span>
                       </div>
-                    ))}
-                  </div>
-
-                  {/* Chart Placeholder */}
-                  <div className="rounded-lg border bg-white p-6 shadow-sm">
-                    <div className="mb-4 flex items-center justify-between">
-                      <h3 className="font-semibold text-slate-900">实时趋势</h3>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setTimeRange('today')}
-                          className={`rounded px-3 py-1 text-xs ${
-                            timeRange === 'today'
-                              ? 'bg-sky-600 text-white'
-                              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                          }`}
-                        >
-                          当天
-                        </button>
-                        <button
-                          onClick={() => setTimeRange('7days')}
-                          className={`rounded px-3 py-1 text-xs ${
-                            timeRange === '7days'
-                              ? 'bg-sky-600 text-white'
-                              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                          }`}
-                        >
-                          前七天
-                        </button>
-                      </div>
-                    </div>
-                    <div className="flex h-64 items-center justify-center rounded-md bg-slate-50 text-sm text-slate-500">
-                      图表区域（后续集成 ECharts）
-                    </div>
-                  </div>
-
-                  {/* Recent Records */}
-                  <div className="rounded-lg border bg-white shadow-sm">
-                    <div className="flex items-center justify-between border-b p-4">
-                      <h3 className="font-semibold text-slate-900">监测记录</h3>
-                      <button className="text-sm text-sky-600 hover:text-sky-700">
-                        查看更多 →
-                      </button>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead className="bg-slate-50">
-                          <tr>
-                            <th className="px-4 py-3 text-left font-medium text-slate-700">时间</th>
-                            <th className="px-4 py-3 text-left font-medium text-slate-700">pH</th>
-                            <th className="px-4 py-3 text-left font-medium text-slate-700">COD (mg/L)</th>
-                            <th className="px-4 py-3 text-left font-medium text-slate-700">氨氮 (mg/L)</th>
-                            <th className="px-4 py-3 text-left font-medium text-slate-700">总磷 (mg/L)</th>
-                            <th className="px-4 py-3 text-left font-medium text-slate-700">总氮 (mg/L)</th>
-                            <th className="px-4 py-3 text-left font-medium text-slate-700">重金属 (mg/L)</th>
-                            <th className="px-4 py-3 text-left font-medium text-slate-700">状态</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y">
-                          {MOCK_HISTORY_DATA.map((record, index) => (
-                            <tr key={index} className="hover:bg-slate-50">
-                              <td className="px-4 py-3 text-slate-600">{record.time}</td>
-                              <td className="px-4 py-3">{record.ph}</td>
-                              <td className="px-4 py-3">{record.cod}</td>
-                              <td className="px-4 py-3">{record.nh3n}</td>
-                              <td className="px-4 py-3">{record.tp}</td>
-                              <td className="px-4 py-3">{record.tn}</td>
-                              <td className="px-4 py-3">{record.heavy_metal}</td>
-                              <td className="px-4 py-3">
-                                <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-700">
-                                  正常
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+                    );
+                  })}
                 </div>
               ) : (
-                /* History Tab */
-                <div className="rounded-lg border bg-white shadow-sm">
-                  <div className="flex items-center justify-between border-b p-4">
-                    <div className="flex items-center gap-4">
-                      <h3 className="font-semibold text-slate-900">历史监测记录</h3>
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-slate-400" />
-                        <select className="rounded-md border border-slate-200 px-3 py-1.5 text-sm focus:border-sky-500 focus:outline-none">
-                          <option>2024-07-18</option>
-                          <option>2024-07-17</option>
-                          <option>2024-07-16</option>
-                        </select>
-                      </div>
-                    </div>
-                    <button className="rounded-md border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">
-                      <RefreshCw className="mr-1 inline h-4 w-4" />
-                      刷新
-                    </button>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="bg-slate-50">
-                        <tr>
-                          <th className="px-4 py-3 text-left font-medium text-slate-700">时间</th>
-                          <th className="px-4 py-3 text-left font-medium text-slate-700">pH</th>
-                          <th className="px-4 py-3 text-left font-medium text-slate-700">COD (mg/L)</th>
-                          <th className="px-4 py-3 text-left font-medium text-slate-700">氨氮 (mg/L)</th>
-                          <th className="px-4 py-3 text-left font-medium text-slate-700">总磷 (mg/L)</th>
-                          <th className="px-4 py-3 text-left font-medium text-slate-700">总氮 (mg/L)</th>
-                          <th className="px-4 py-3 text-left font-medium text-slate-700">重金属 (mg/L)</th>
-                          <th className="px-4 py-3 text-left font-medium text-slate-700">状态</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y">
-                        {MOCK_HISTORY_DATA.map((record, index) => (
-                          <tr key={index} className="hover:bg-slate-50">
-                            <td className="px-4 py-3 text-slate-600">{record.time}</td>
-                            <td className="px-4 py-3">{record.ph}</td>
-                            <td className="px-4 py-3">{record.cod}</td>
-                            <td className="px-4 py-3">{record.nh3n}</td>
-                            <td className="px-4 py-3">{record.tp}</td>
-                            <td className="px-4 py-3">{record.tn}</td>
-                            <td className="px-4 py-3">{record.heavy_metal}</td>
-                            <td className="px-4 py-3">
-                              <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-700">
-                                正常
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="flex items-center justify-between border-t p-4">
-                    <span className="text-sm text-slate-600">共 5 条记录</span>
-                    <div className="flex items-center gap-2">
-                      <button className="rounded border border-slate-200 px-3 py-1 text-sm text-slate-700 hover:bg-slate-50">
-                        上一页
-                      </button>
-                      <button className="rounded border border-slate-200 px-3 py-1 text-sm text-slate-700 hover:bg-slate-50">
-                        下一页
-                      </button>
-                    </div>
-                  </div>
+                <div className="rounded-lg border bg-white p-8 text-center text-slate-500">
+                  暂无审批通过的污染物数据
                 </div>
               )}
+
+              {/* Chart Placeholder */}
+              <div className="rounded-lg border bg-white p-6 shadow-sm">
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="font-semibold text-slate-900">实时趋势</h3>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setTimeRange('today')}
+                      className={`rounded px-3 py-1 text-xs ${
+                        timeRange === 'today'
+                          ? 'bg-sky-600 text-white'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      当天
+                    </button>
+                    <button
+                      onClick={() => setTimeRange('7days')}
+                      className={`rounded px-3 py-1 text-xs ${
+                        timeRange === '7days'
+                          ? 'bg-sky-600 text-white'
+                          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                      }`}
+                    >
+                      前七天
+                    </button>
+                  </div>
+                </div>
+                <div className="flex h-64 items-center justify-center rounded-md bg-slate-50 text-sm text-slate-500">
+                  图表区域（后续集成 ECharts）
+                </div>
+              </div>
+
+              {/* Monitoring Records */}
+              <div className="rounded-lg border bg-white shadow-sm">
+                <div className="flex items-center justify-between border-b p-4">
+                  <h3 className="font-semibold text-slate-900">监测记录</h3>
+                  <button className="text-sm text-sky-600 hover:text-sky-700">
+                    查看更多 →
+                  </button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left font-medium text-slate-700">时间</th>
+                        {approvedPollutants.map((p) => (
+                          <th key={p.id} className="px-4 py-3 text-left font-medium text-slate-700">
+                            {p.label} ({p.unit})
+                          </th>
+                        ))}
+                        <th className="px-4 py-3 text-left font-medium text-slate-700">状态</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {MOCK_HISTORY_DATA.map((record, index) => (
+                        <tr key={index} className="hover:bg-slate-50">
+                          <td className="px-4 py-3 text-slate-600">{record.time}</td>
+                          {approvedPollutants.map((p) => (
+                            <td key={p.id} className="px-4 py-3">
+                              {record[p.id] ?? '-'}
+                            </td>
+                          ))}
+                          <td className="px-4 py-3">
+                            <span className="rounded bg-green-100 px-2 py-0.5 text-xs text-green-700">
+                              正常
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="flex h-full items-center justify-center text-slate-500">
