@@ -242,6 +242,7 @@ export default function MonitoringPage() {
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
+          console.log('获取到的排污口:', data.data);
           setOutlets(data.data || []);
         }
       }

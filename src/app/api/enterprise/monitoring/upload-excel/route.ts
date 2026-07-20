@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     const { data: outlets } = await supabase
       .from('discharge_outlets')
       .select('id, name')
-      .eq('user_id', profile.id)
+      .eq('user_id', user.id)
       .eq('status', 'approved');
 
     if (!outlets || outlets.length === 0) {
