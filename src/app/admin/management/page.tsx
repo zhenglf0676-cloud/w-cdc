@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -117,7 +117,7 @@ export default function ManagementPage() {
   const [dischargeOutlets, setDischargeOutlets] = useState<DischargeOutlet[]>([]);
   const outletMapRef = useRef<any>(null);
   const outletMapContainerRef = useRef<HTMLDivElement>(null);
-  const [outletMarkers, setOutletMarkers] = useState<any[]>([]);
+  const outletMarkersRef = useRef<any[]>([]);
   const [outletDialogOpen, setOutletDialogOpen] = useState(false);
   const [selectedOutlet, setSelectedOutlet] = useState<DischargeOutlet | null>(null);
   const [outletRejectReason, setOutletRejectReason] = useState('');
@@ -319,9 +319,14 @@ export default function ManagementPage() {
   const rejectedApps = applications.filter((a) => a.status === 'rejected');
 
   // Filter discharge outlets (only pending and approved, not rejected)
-  const pendingOutlets = dischargeOutlets.filter((o) => o.status === 'pending');
-  const approvedOutlets = dischargeOutlets.filter((o) => o.status === 'approved');
-  const displayOutlets = [...pendingOutlets, ...approvedOutlets];
+  const displayOutlets = useMemo(() => {
+    const pendingOutlets = dischargeOutlets.filter((o) => o.status === 'pending');
+    const approvedOutlets = dischargeOutlets.filter((o) => o.status === 'approved');
+    return [...pendingOutlets, ...approvedOutlets];
+  }, [dischargeOutlets]);
+
+  const pendingOutlets = displayOutlets.filter((o) => o.status === 'pending');
+  const approvedOutlets = displayOutlets.filter((o) => o.status === 'approved');
 
   // Helper function to add markers to map
   const addMarkersToMap = () => {
@@ -331,15 +336,15 @@ export default function ManagementPage() {
     if (!AMap || !map) return;
     
     // Clear old markers
-    outletMarkers.forEach((marker) => marker.setMap(null));
+    outletMarkersRef.current.forEach((marker) => marker.setMap(null));
     
     if (displayOutlets.length === 0) {
-      setOutletMarkers([]);
+      outletMarkersRef.current = [];
       return;
     }
     
     // Add new markers
-    const newMarkers = displayOutlets.map((outlet) => {
+    const newMarkers = displayOutlets.map((outlet: DischargeOutlet) => {
       const color = outlet.status === 'pending' ? '#F59E0B' : '#10B981';
       const markerContent = document.createElement('div');
       markerContent.style.cssText = `
@@ -381,8 +386,8 @@ export default function ManagementPage() {
       return marker;
     });
     
-    // Update markers state
-    setOutletMarkers(newMarkers);
+    // Update markers ref
+    outletMarkersRef.current = newMarkers;
     
     // Center map on first outlet
     if (displayOutlets.length > 0) {
@@ -693,7 +698,7 @@ export default function ManagementPage() {
                 <p className="text-sm text-gray-400 py-4 text-center">暂无待审批排污口</p>
               ) : (
                 <div className="space-y-2 max-h-[240px] overflow-y-auto">
-                  {pendingOutlets.map((outlet) => (
+                  {pendingOutlets.map((outlet: DischargeOutlet) => (
                     <div
                       key={outlet.id}
                       className="flex items-center justify-between p-3 bg-amber-50 rounded-lg border border-amber-100 cursor-pointer hover:border-amber-300 transition-colors"
@@ -733,7 +738,7 @@ export default function ManagementPage() {
                 <p className="text-sm text-gray-400 py-4 text-center">暂无已通过排污口</p>
               ) : (
                 <div className="space-y-2 max-h-[240px] overflow-y-auto">
-                  {approvedOutlets.map((outlet) => (
+                  {approvedOutlets.map((outlet: DischargeOutlet) => (
                     <div
                       key={outlet.id}
                       className="flex items-center justify-between p-3 bg-emerald-50 rounded-lg border border-emerald-100 cursor-pointer hover:border-emerald-300 transition-colors"
