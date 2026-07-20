@@ -65,8 +65,11 @@ export default function AdminHome() {
         const outletsData = await outletsRes.json();
         if (outletsData.success) {
           const outlets = outletsData.data || [];
+          console.log('获取到排污口数据:', outlets);
           setDischargeOutlets(outlets);
           dischargeOutletsRef.current = outlets;
+        } else {
+          console.error('获取排污口数据失败:', outletsData.error);
         }
       } catch (err) {
         console.error('请求失败:', err);
