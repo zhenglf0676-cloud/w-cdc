@@ -63,7 +63,10 @@ export async function POST(request: NextRequest) {
         user_id: outlet.user_id,
         type: 'discharge_outlet_rejected',
         title: '排污口申请被拒绝',
-        content: `您申请的排污口"${outlet.name}"被拒绝${rejectReason ? `，原因：${rejectReason}` : ''}`,
+        content: { 
+          message: `您申请的排污口"${outlet.name}"被拒绝`,
+          reject_reason: rejectReason || ''
+        },
         is_read: false
       });
 

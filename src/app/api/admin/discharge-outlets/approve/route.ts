@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
         user_id: outlet.user_id,
         type: 'discharge_outlet_approved',
         title: '排污口申请已通过',
-        content: `您申请的排污口"${outlet.name}"已通过审批`,
+        content: { message: `您申请的排污口"${outlet.name}"已通过审批` },
         is_read: false
       });
 

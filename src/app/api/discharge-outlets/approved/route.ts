@@ -43,10 +43,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from('discharge_outlets')
-      .select(`
-        *,
-        profiles:user_id (full_name, company_name)
-      `)
+      .select('*')
       .eq('status', 'approved');
 
     // 企业用户只能看到自己的排污口
@@ -65,9 +62,23 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // 获取所有用户信息
+    const userIds = [...new Set(outlets?.map(o => o.user_id) || [])];
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('user_id, full_name, company_name')
+      .in('user_id', userIds);
+
+    // 关联用户信息
+    const profileMap = new Map(profiles?.map(p => [p.user_id, p]) || []);
+    const outletsWithProfiles = outlets?.map(o => ({
+      ...o,
+      profiles: profileMap.get(o.user_id) || null,
+    })) || [];
+
     return NextResponse.json({
       success: true,
-      data: outlets || []
+      data: outletsWithProfiles
     });
   } catch (error) {
     console.error('获取排污口列表异常:', error);
