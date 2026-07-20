@@ -18,11 +18,20 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = getSupabaseAdmin();
 
-    // 获取当前用户
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    // 从请求头获取 token
+    const token = request.headers.get('x-session');
+    if (!token) {
       return NextResponse.json(
         { error: '未登录' },
+        { status: 401 }
+      );
+    }
+
+    // 获取当前用户
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: '认证失败' },
         { status: 401 }
       );
     }

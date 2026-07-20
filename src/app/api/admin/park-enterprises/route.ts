@@ -50,11 +50,29 @@ export async function GET(request: Request) {
       throw queryError;
     }
 
+    // 为每个企业计算已审批通过的排污口数量
+    const enterprisesWithOutletCount = await Promise.all(
+      (enterprises || []).map(async (enterprise) => {
+        const { count, error: countError } = await supabase
+          .from('discharge_outlets')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', enterprise.user_id)
+          .eq('status', 'approved');
+
+        if (countError) {
+          console.error(`获取企业 ${enterprise.company_name} 的排污口数量失败:`, countError);
+          return { ...enterprise, outlet_count: 0 };
+        }
+
+        return { ...enterprise, outlet_count: count || 0 };
+      })
+    );
+
     return NextResponse.json({
       success: true,
       data: {
         parkName: adminProfile.full_name,
-        enterprises: enterprises || [],
+        enterprises: enterprisesWithOutletCount,
       },
     });
   } catch (error) {
