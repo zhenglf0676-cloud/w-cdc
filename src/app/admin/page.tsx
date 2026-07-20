@@ -260,30 +260,27 @@ export default function AdminHome() {
                     <h2 className="font-medium text-[#0F172A]">企业列表</h2>
                   </div>
                   <div className="divide-y divide-[#E2E8F0]">
-                    {enterprises.map((enterprise) => {
-                      const outletCount = dischargeOutlets.filter(o => o.user_id === enterprise.user_id && o.status === 'approved').length;
-                      return (
-                        <div key={enterprise.user_id} className="p-4 hover:bg-[#F8FAFC]">
-                          <div className="flex items-start gap-3">
-                            <MapPin className="w-5 h-5 text-[#0EA5E9] mt-0.5 flex-shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <h3 className="font-medium text-[#0F172A] truncate">
-                                {enterprise.company_name}
-                              </h3>
-                              <p className="text-sm text-[#64748B] mt-1">
-                                负责人：{enterprise.full_name}
-                              </p>
-                              <p className="text-sm text-[#64748B] mt-1">
-                                排污口：<span className="text-[#0EA5E9] font-medium">{outletCount}</span> 个
-                              </p>
-                              <p className="text-xs text-[#94A3B8] mt-1">
-                                {enterprise.latitude.toFixed(6)}, {enterprise.longitude.toFixed(6)}
-                              </p>
-                            </div>
+                    {enterprises.map((enterprise) => (
+                      <div key={enterprise.user_id} className="p-4 hover:bg-[#F8FAFC]">
+                        <div className="flex items-start gap-3">
+                          <MapPin className="w-5 h-5 text-[#0EA5E9] mt-0.5 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-medium text-[#0F172A] truncate">
+                              {enterprise.company_name}
+                            </h3>
+                            <p className="text-sm text-[#64748B] mt-1">
+                              负责人：{enterprise.full_name}
+                            </p>
+                            <p className="text-sm text-[#64748B] mt-1">
+                              排污口：<span className="text-[#0EA5E9] font-medium">{enterprise.outlet_count || 0}</span> 个
+                            </p>
+                            <p className="text-xs text-[#94A3B8] mt-1">
+                              {enterprise.latitude.toFixed(6)}, {enterprise.longitude.toFixed(6)}
+                            </p>
                           </div>
                         </div>
-                      );
-                    })}
+                      </div>
+                    ))}
                   </div>
                 </div>
 
