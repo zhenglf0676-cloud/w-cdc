@@ -116,6 +116,7 @@ export default function ManagementPage() {
   // Discharge outlets state
   const [dischargeOutlets, setDischargeOutlets] = useState<DischargeOutlet[]>([]);
   const outletMapRef = useRef<any>(null);
+  const outletMapContainerRef = useRef<HTMLDivElement>(null);
   const [outletMarkers, setOutletMarkers] = useState<any[]>([]);
   const [outletDialogOpen, setOutletDialogOpen] = useState(false);
   const [selectedOutlet, setSelectedOutlet] = useState<DischargeOutlet | null>(null);
@@ -333,6 +334,7 @@ export default function ManagementPage() {
     outletMarkers.forEach((marker) => marker.setMap(null));
     
     if (displayOutlets.length === 0) {
+      setOutletMarkers([]);
       return;
     }
     
@@ -379,6 +381,9 @@ export default function ManagementPage() {
       return marker;
     });
     
+    // Update markers state
+    setOutletMarkers(newMarkers);
+    
     // Center map on first outlet
     if (displayOutlets.length > 0) {
       const firstOutlet = displayOutlets[0];
@@ -388,53 +393,57 @@ export default function ManagementPage() {
 
   // Initialize outlet map when tab changes to discharge
   useEffect(() => {
-    if (activeTab !== 'discharge') return;
+    if (activeTab !== 'discharge' || !outletMapContainerRef.current) return;
 
-    // Wait for DOM to be ready
-    const timer = setTimeout(() => {
-      if (typeof window === 'undefined') return;
-      
-      import('@amap/amap-jsapi-loader').then((AMapLoader) => {
+    let mapInstance: any = null;
+
+    // 动态加载高德地图
+    import('@amap/amap-jsapi-loader')
+      .then((AMapLoader) => {
         (window as any)._AMapSecurityConfig = {
           securityJsCode: '0ab574a1c887c61ecaa4af9250d8563d',
         };
+
         return AMapLoader.load({
-          key: '2e7e0b14442f42267a79052677e15dce',
+          key: '7f34d9a440f2d86314844ab310e966fd',
           version: '2.0',
-          plugins: ['AMap.Scale', 'AMap.ToolBar', 'AMap.Marker'],
+          plugins: [],
         });
-      }).then((AMap) => {
-        const container = document.getElementById('outlet-map-container');
-        if (!container) {
-          console.error('Map container not found!');
-          return;
-        }
-        
-        // Destroy existing map if any
+      })
+      .then((AMap: any) => {
+        if (!outletMapContainerRef.current) return;
+
+        // 销毁已存在的地图实例
         if (outletMapRef.current) {
           outletMapRef.current.destroy();
           outletMapRef.current = null;
         }
-        
-        // Create new map instance
-        const mapInstance = new AMap.Map('outlet-map-container', {
+
+        // 创建新的地图实例
+        mapInstance = new AMap.Map(outletMapContainerRef.current, {
           zoom: 13,
           center: [106.3067, 29.5332],
-          resizeEnable: true,
+          mapStyle: 'amap://styles/normal',
         });
         outletMapRef.current = mapInstance;
-        
-        // Store AMap reference for marker updates
-        (window as any).__AMap__ = AMap;
-        
-        // Add markers after map is initialized
-        addMarkersToMap();
-      }).catch((err) => {
-        console.error('Failed to load AMap:', err);
-      });
-    }, 100);
 
-    return () => clearTimeout(timer);
+        // 存储 AMap 引用用于标记更新
+        (window as any).__AMap__ = AMap;
+
+        // 初始化完成后添加标记
+        setTimeout(() => {
+          addMarkersToMap();
+        }, 100);
+      })
+      .catch((err) => {
+        console.error('地图加载失败:', err);
+      });
+
+    return () => {
+      if (mapInstance) {
+        mapInstance.destroy();
+      }
+    };
   }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Update markers when displayOutlets changes
@@ -539,8 +548,8 @@ export default function ManagementPage() {
                           </Badge>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                          {app.pollutants.map((p, idx) => (
-                            <Badge key={`${app.id}-${idx}`} variant="secondary" className="text-xs">
+                          {app.pollutants.map((p) => (
+                            <Badge key={`${app.id}-${getPollutantKey(p)}`} variant="secondary" className="text-xs">
                               {getPollutantName(p)}
                             </Badge>
                           ))}
@@ -602,8 +611,8 @@ export default function ManagementPage() {
                             </Badge>
                           </div>
                           <div className="flex flex-wrap gap-2">
-                            {app.pollutants.map((p, idx) => (
-                              <Badge key={`${app.id}-${idx}`} variant="secondary" className="text-xs">
+                            {app.pollutants.map((p) => (
+                              <Badge key={`${app.id}-${getPollutantKey(p)}`} variant="secondary" className="text-xs">
                                 {getPollutantName(p)}: {p.threshold} {p.unit}
                               </Badge>
                             ))}
@@ -656,7 +665,7 @@ export default function ManagementPage() {
           {/* Left: Map */}
           <div className="flex-1">
             <div className="relative rounded-lg border bg-white shadow-sm">
-              <div id="outlet-map-container" style={{ height: 520, borderRadius: 8 }} />
+              <div ref={outletMapContainerRef} style={{ height: 520, borderRadius: 8 }} />
               <div className="absolute top-3 left-3 z-10 bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-sm">
                 <div className="flex items-center gap-4 text-xs">
                   <div className="flex items-center gap-1.5">
@@ -824,8 +833,8 @@ export default function ManagementPage() {
             <div>
               <Label className="text-sm font-medium">申请污染物</Label>
               <div className="flex flex-wrap gap-2 mt-2">
-                {selectedApp?.pollutants.map((p, idx) => (
-                  <Badge key={`${getPollutantKey(p)}-${idx}-${p.id || 'no-id'}`} variant="secondary" className="px-3 py-1">
+                {selectedApp?.pollutants.map((p) => (
+                  <Badge key={`${getPollutantKey(p)}-${p.id || 'no-id'}`} variant="secondary" className="px-3 py-1">
                     {getPollutantName(p)}
                   </Badge>
                 ))}
@@ -841,7 +850,7 @@ export default function ManagementPage() {
                   const key = getPollutantKey(p);
                   const name = getPollutantName(p);
                   return (
-                  <div key={`${key}-${idx}-${p.id || 'no-id'}`} className="flex items-center gap-3">
+                  <div key={`${key}-${p.id || 'no-id'}`} className="flex items-center gap-3">
                     <span className="w-32 text-sm">{name}</span>
                     <Input
                       type="number"
