@@ -34,6 +34,7 @@ export default function AdminHome() {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const outletMarkersRef = useRef<any[]>([]);
+  const dischargeOutletsRef = useRef<DischargeOutlet[]>([]);
 
   useEffect(() => {
     if (!session) return;
@@ -63,7 +64,9 @@ export default function AdminHome() {
         });
         const outletsData = await outletsRes.json();
         if (outletsData.success) {
-          setDischargeOutlets(outletsData.data || []);
+          const outlets = outletsData.data || [];
+          setDischargeOutlets(outlets);
+          dischargeOutletsRef.current = outlets;
         }
       } catch (err) {
         console.error('请求失败:', err);
@@ -122,7 +125,7 @@ export default function AdminHome() {
 
           // 点击标记显示信息窗体
           marker.on('click', () => {
-            const outletCount = dischargeOutlets.filter(o => o.user_id === enterprise.user_id && o.status === 'approved').length;
+            const outletCount = dischargeOutletsRef.current.filter(o => o.user_id === enterprise.user_id && o.status === 'approved').length;
             const infoWindow = new AMap.InfoWindow({
               content: `
                 <div class="info-window">
