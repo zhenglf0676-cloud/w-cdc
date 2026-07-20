@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 创建通知
-    await supabase
+    const { error: notificationError } = await supabase
       .from('notifications')
       .insert({
         user_id: outlet.user_id,
@@ -69,6 +69,10 @@ export async function POST(request: NextRequest) {
         },
         is_read: false
       });
+
+    if (notificationError) {
+      console.error('创建通知失败:', notificationError);
+    }
 
     return NextResponse.json({
       success: true,
