@@ -251,8 +251,12 @@ export default function AdminHome() {
 
   // Update markers when dischargeOutlets changes
   useEffect(() => {
+    console.log('dischargeOutlets 更新:', dischargeOutlets);
     if (mapRef.current) {
+      console.log('地图已初始化，调用 addMarkersToMap');
       addMarkersToMap();
+    } else {
+      console.log('地图未初始化，等待地图加载');
     }
   }, [dischargeOutlets]); // eslint-disable-line react-hooks/exhaustive-deps
 
