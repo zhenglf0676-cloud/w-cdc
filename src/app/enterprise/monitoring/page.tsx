@@ -55,6 +55,7 @@ export default function MonitoringPage() {
   
   // 上传对话框状态
   const [showUploadDialog, setShowUploadDialog] = useState(false);
+  const [uploadMode, setUploadMode] = useState<'manual' | 'excel'>('manual');
   const [uploadForm, setUploadForm] = useState({
     outletId: '',
     monitoredAt: '',
@@ -64,6 +65,11 @@ export default function MonitoringPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  
+  // Excel 上传状态
+  const [excelFile, setExcelFile] = useState<File | null>(null);
+  const [excelUploading, setExcelUploading] = useState(false);
+  const [excelResult, setExcelResult] = useState<{ success: boolean; count: number; errors: string[]; warnings: string[] } | null>(null);
 
   // 图表相关状态
   const [timeRange, setTimeRange] = useState<'today' | '7days'>('today');
@@ -151,80 +157,98 @@ export default function MonitoringPage() {
   }, [session]);
 
   // 获取实时监测数据
+  const fetchRealtimeData = async (outletId: string) => {
+    if (!session) return;
+    try {
+      const res = await fetch(`/api/enterprise/monitoring/realtime?outletId=${outletId}`, {
+        headers: { 'x-session': session.access_token },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setLatestData(data.data || {});
+        }
+      }
+    } catch (error) {
+      console.error('获取实时数据失败:', error);
+    }
+  };
+
   useEffect(() => {
     if (!session || !selectedOutlet) return;
-
-    const fetchRealtimeData = async () => {
-      try {
-        const res = await fetch(`/api/enterprise/monitoring/realtime?outletId=${selectedOutlet.id}`, {
-          headers: { 'x-session': session.access_token },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success) {
-            setLatestData(data.data || {});
-          }
-        }
-      } catch (error) {
-        console.error('获取实时数据失败:', error);
-      }
-    };
-
-    fetchRealtimeData();
+    fetchRealtimeData(selectedOutlet.id);
   }, [session, selectedOutlet]);
 
   // 获取历史监测数据
+  const fetchHistoryData = async (outletId: string) => {
+    if (!session) return;
+    try {
+      const res = await fetch(
+        `/api/enterprise/monitoring/history?outletId=${outletId}&page=1&pageSize=${historyPageSize}`,
+        {
+          headers: { 'x-session': session.access_token },
+        }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setHistoryData(data.data || []);
+        }
+      }
+    } catch (error) {
+      console.error('获取历史数据失败:', error);
+    }
+  };
+
   useEffect(() => {
     if (!session || !selectedOutlet) return;
-
-    const fetchHistoryData = async () => {
-      try {
-        const res = await fetch(
-          `/api/enterprise/monitoring/history?outletId=${selectedOutlet.id}&page=1&pageSize=${historyPageSize}`,
-          {
-            headers: { 'x-session': session.access_token },
-          }
-        );
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success) {
-            setHistoryData(data.data || []);
-          }
-        }
-      } catch (error) {
-        console.error('获取历史数据失败:', error);
-      }
-    };
-
-    fetchHistoryData();
+    fetchHistoryData(selectedOutlet.id);
   }, [session, selectedOutlet]);
 
   // 获取图表数据
+  const fetchChartData = async (outletId: string, range: 'today' | '7days' = timeRange) => {
+    if (!session) return;
+    try {
+      const days = range === 'today' ? 1 : 7;
+      const res = await fetch(
+        `/api/enterprise/monitoring/history?outletId=${outletId}&days=${days}&pageSize=1000`,
+        {
+          headers: { 'x-session': session.access_token },
+        }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setChartData(data.data || []);
+        }
+      }
+    } catch (error) {
+      console.error('获取图表数据失败:', error);
+    }
+  };
+
   useEffect(() => {
     if (!session || !selectedOutlet) return;
-
-    const fetchChartData = async () => {
-      try {
-        const days = timeRange === 'today' ? 1 : 7;
-        const res = await fetch(
-          `/api/enterprise/monitoring/history?outletId=${selectedOutlet.id}&days=${days}&pageSize=1000`,
-          {
-            headers: { 'x-session': session.access_token },
-          }
-        );
-        if (res.ok) {
-          const data = await res.json();
-          if (data.success) {
-            setChartData(data.data || []);
-          }
-        }
-      } catch (error) {
-        console.error('获取图表数据失败:', error);
-      }
-    };
-
-    fetchChartData();
+    fetchChartData(selectedOutlet.id, timeRange);
   }, [session, selectedOutlet, timeRange]);
+
+  // 获取排污口列表
+  const fetchOutlets = async () => {
+    if (!session) return;
+    try {
+      const res = await fetch('/api/enterprise/discharge-outlets', {
+        headers: { 'x-session': session.access_token },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setOutlets(data.data || []);
+        }
+      }
+    } catch (error) {
+      console.error('获取排污口列表失败:', error);
+    }
+  };
 
   // 过滤排污口列表
   const filteredOutlets = outlets.filter(outlet =>
@@ -249,6 +273,61 @@ export default function MonitoringPage() {
     setUploadSuccess(false);
     setUploadError('');
     setShowUploadDialog(true);
+  };
+
+  // 处理 Excel 上传
+  const handleExcelUpload = async () => {
+    if (!excelFile) {
+      setExcelResult({ success: false, count: 0, errors: ['请选择文件'], warnings: [] });
+      return;
+    }
+
+    setExcelUploading(true);
+    setExcelResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', excelFile);
+
+      const res = await fetch('/api/enterprise/monitoring/upload-excel', {
+        method: 'POST',
+        headers: {
+          'x-session': JSON.stringify(session),
+        },
+        body: formData,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setExcelResult({
+          success: false,
+          count: 0,
+          errors: [data.error || '上传失败'],
+          warnings: [],
+        });
+        return;
+      }
+
+      setExcelResult(data);
+      setExcelFile(null);
+
+      // 刷新数据
+      if (selectedOutlet) {
+        fetchRealtimeData(selectedOutlet.id);
+        fetchChartData(selectedOutlet.id, timeRange);
+      }
+      fetchOutlets();
+    } catch (error: any) {
+      setExcelResult({
+        success: false,
+        count: 0,
+        errors: [error.message || '上传失败'],
+        warnings: [],
+      });
+    } finally {
+      setExcelUploading(false);
+    }
   };
 
   // 提交上传
@@ -606,120 +685,65 @@ export default function MonitoringPage() {
             <div className="flex items-center justify-between border-b p-4">
               <h3 className="text-lg font-semibold text-slate-900">上传监测数据</h3>
               <button
-                onClick={() => setShowUploadDialog(false)}
+                onClick={() => {
+                  setShowUploadDialog(false);
+                  setUploadMode('manual');
+                  setExcelFile(null);
+                  setExcelResult(null);
+                }}
                 className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="p-4 space-y-4">
-              {/* 排污口选择 */}
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">
-                  排污口 <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={uploadForm.outletId}
-                  onChange={(e) => setUploadForm({ ...uploadForm, outletId: e.target.value })}
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                >
-                  <option value="">请选择排污口</option>
-                  {outlets.map((outlet) => (
-                    <option key={outlet.id} value={outlet.id}>
-                      {outlet.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* 监测时间 */}
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">
-                  监测时间 <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="datetime-local"
-                  value={uploadForm.monitoredAt}
-                  onChange={(e) => setUploadForm({ ...uploadForm, monitoredAt: e.target.value })}
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                />
-              </div>
-
-              {/* 污染物数值 */}
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  污染物数值（只填写有数据的项）
-                </label>
-                <div className="space-y-3 max-h-60 overflow-y-auto rounded-md border border-slate-200 p-3">
-                  {approvedPollutants.map((pollutant) => (
-                    <div key={pollutant.id}>
-                      <label className="mb-1 block text-xs text-slate-600">
-                        {pollutant.label} ({pollutant.unit})
-                        <span className="ml-2 text-slate-400">限值：{pollutant.threshold}</span>
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={uploadForm.values[pollutant.id] || ''}
-                        onChange={(e) => setUploadForm({
-                          ...uploadForm,
-                          values: { ...uploadForm.values, [pollutant.id]: e.target.value }
-                        })}
-                        placeholder="请输入数值"
-                        className="w-full rounded-md border border-slate-200 px-3 py-1.5 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* 备注 */}
-              <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">
-                  备注（可选）
-                </label>
-                <input
-                  type="text"
-                  value={uploadForm.remark}
-                  onChange={(e) => setUploadForm({ ...uploadForm, remark: e.target.value })}
-                  placeholder="请输入备注"
-                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                />
-              </div>
-
-              {/* 错误提示 */}
-              {uploadError && (
-                <div className="flex items-center gap-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
-                  <AlertCircle className="h-4 w-4 shrink-0" />
-                  <span>{uploadError}</span>
-                </div>
-              )}
-
-              {/* 成功提示 */}
-              {uploadSuccess && (
-                <div className="flex items-center gap-2 rounded-md bg-green-50 border border-green-200 px-3 py-2 text-sm text-green-700">
-                  <CheckCircle className="h-4 w-4 shrink-0" />
-                  <span>上传成功</span>
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center justify-end gap-3 border-t p-4">
+            {/* 上传模式切换 */}
+            <div className="flex border-b">
               <button
-                onClick={() => setShowUploadDialog(false)}
-                className="rounded-md border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                onClick={() => setUploadMode('manual')}
+                className={`flex-1 py-3 text-sm font-medium transition-colors ${
+                  uploadMode === 'manual'
+                    ? 'border-b-2 border-sky-500 text-sky-600'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
               >
-                取消
+                手动录入
               </button>
               <button
-                onClick={handleUpload}
-                disabled={uploading}
-                className="rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+                onClick={() => setUploadMode('excel')}
+                className={`flex-1 py-3 text-sm font-medium transition-colors ${
+                  uploadMode === 'excel'
+                    ? 'border-b-2 border-sky-500 text-sky-600'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
               >
-                {uploading ? '上传中...' : '提交'}
+                Excel 上传
               </button>
             </div>
+
+            {uploadMode === 'manual' ? (
+              <ManualUploadForm
+                outlets={outlets}
+                approvedPollutants={approvedPollutants}
+                uploadForm={uploadForm}
+                setUploadForm={setUploadForm}
+                uploading={uploading}
+                uploadSuccess={uploadSuccess}
+                uploadError={uploadError}
+                onUpload={handleUpload}
+                onClose={() => setShowUploadDialog(false)}
+              />
+            ) : (
+              <ExcelUploadForm
+                outlets={outlets}
+                excelFile={excelFile}
+                setExcelFile={setExcelFile}
+                excelUploading={excelUploading}
+                excelResult={excelResult}
+                onUpload={handleExcelUpload}
+                onClose={() => setShowUploadDialog(false)}
+              />
+            )}
           </div>
         </div>
       )}
@@ -809,4 +833,269 @@ function ChartOption({
   };
 
   return <ReactECharts option={option} style={{ height: '400px' }} />;
+}
+
+// 手动录入表单组件
+function ManualUploadForm({
+  outlets,
+  approvedPollutants,
+  uploadForm,
+  setUploadForm,
+  uploading,
+  uploadSuccess,
+  uploadError,
+  onUpload,
+  onClose,
+}: {
+  outlets: DischargeOutlet[];
+  approvedPollutants: Pollutant[];
+  uploadForm: {
+    outletId: string;
+    monitoredAt: string;
+    values: Record<string, string>;
+    remark: string;
+  };
+  setUploadForm: React.Dispatch<React.SetStateAction<{
+    outletId: string;
+    monitoredAt: string;
+    values: Record<string, string>;
+    remark: string;
+  }>>;
+  uploading: boolean;
+  uploadSuccess: boolean;
+  uploadError: string;
+  onUpload: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <>
+      <div className="p-4 space-y-4">
+        {/* 排污口选择 */}
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            排污口 <span className="text-red-500">*</span>
+          </label>
+          <select
+            value={uploadForm.outletId}
+            onChange={(e) => setUploadForm({ ...uploadForm, outletId: e.target.value })}
+            className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+          >
+            <option value="">请选择排污口</option>
+            {outlets.map((outlet) => (
+              <option key={outlet.id} value={outlet.id}>
+                {outlet.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* 监测时间 */}
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            监测时间 <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="datetime-local"
+            value={uploadForm.monitoredAt}
+            onChange={(e) => setUploadForm({ ...uploadForm, monitoredAt: e.target.value })}
+            className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+          />
+        </div>
+
+        {/* 污染物数值 */}
+        <div>
+          <label className="mb-2 block text-sm font-medium text-slate-700">
+            污染物数值（只填写有数据的项）
+          </label>
+          <div className="space-y-3 max-h-60 overflow-y-auto rounded-md border border-slate-200 p-3">
+            {approvedPollutants.map((pollutant) => (
+              <div key={pollutant.id}>
+                <label className="mb-1 block text-xs text-slate-600">
+                  {pollutant.label} ({pollutant.unit})
+                  <span className="ml-2 text-slate-400">限值：{pollutant.threshold}</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={uploadForm.values[pollutant.id] || ''}
+                  onChange={(e) => setUploadForm({
+                    ...uploadForm,
+                    values: { ...uploadForm.values, [pollutant.id]: e.target.value }
+                  })}
+                  placeholder="请输入数值"
+                  className="w-full rounded-md border border-slate-200 px-3 py-1.5 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 备注 */}
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            备注（可选）
+          </label>
+          <input
+            type="text"
+            value={uploadForm.remark}
+            onChange={(e) => setUploadForm({ ...uploadForm, remark: e.target.value })}
+            placeholder="请输入备注"
+            className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+          />
+        </div>
+
+        {/* 错误提示 */}
+        {uploadError && (
+          <div className="flex items-center gap-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>{uploadError}</span>
+          </div>
+        )}
+
+        {/* 成功提示 */}
+        {uploadSuccess && (
+          <div className="flex items-center gap-2 rounded-md bg-green-50 border border-green-200 px-3 py-2 text-sm text-green-700">
+            <CheckCircle className="h-4 w-4 shrink-0" />
+            <span>上传成功</span>
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center justify-end gap-3 border-t p-4">
+        <button
+          onClick={onClose}
+          className="rounded-md border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+        >
+          取消
+        </button>
+        <button
+          onClick={onUpload}
+          disabled={uploading}
+          className="rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+        >
+          {uploading ? '上传中...' : '提交'}
+        </button>
+      </div>
+    </>
+  );
+}
+
+// Excel 上传表单组件
+function ExcelUploadForm({
+  outlets,
+  excelFile,
+  setExcelFile,
+  excelUploading,
+  excelResult,
+  onUpload,
+  onClose,
+}: {
+  outlets: DischargeOutlet[];
+  excelFile: File | null;
+  setExcelFile: React.Dispatch<React.SetStateAction<File | null>>;
+  excelUploading: boolean;
+  excelResult: { success: boolean; count: number; errors: string[]; warnings: string[] } | null;
+  onUpload: () => void;
+  onClose: () => void;
+}) {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setExcelFile(file);
+    }
+  };
+
+  return (
+    <>
+      <div className="p-4 space-y-4">
+        {/* 文件选择 */}
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            选择 Excel 文件 <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            onChange={handleFileChange}
+            className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm file:mr-4 file:rounded-md file:border-0 file:bg-sky-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-sky-700 hover:file:bg-sky-100"
+          />
+          {excelFile && (
+            <p className="mt-2 text-xs text-slate-500">已选择：{excelFile.name}</p>
+          )}
+        </div>
+
+        {/* 格式说明 */}
+        <div className="rounded-md bg-slate-50 p-3">
+          <p className="mb-2 text-xs font-medium text-slate-700">Excel 格式要求：</p>
+          <ul className="text-xs text-slate-600 space-y-1">
+            <li>• 第一行必须是表头</li>
+            <li>• 必需字段：排污口、时间</li>
+            <li>• 污染物字段：COD、NH3-N、TP、TN、pH、重金属</li>
+            <li>• 排污口名称必须与系统中已审批通过的排污口名称一致</li>
+          </ul>
+        </div>
+
+        {/* 示例表格 */}
+        <div className="rounded-md border border-slate-200 overflow-hidden">
+          <table className="w-full text-xs">
+            <thead className="bg-slate-50">
+              <tr>
+                <th className="px-2 py-1 text-left">排污口</th>
+                <th className="px-2 py-1 text-left">时间</th>
+                <th className="px-2 py-1 text-left">COD</th>
+                <th className="px-2 py-1 text-left">NH3-N</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="px-2 py-1 border-t">排污口 1</td>
+                <td className="px-2 py-1 border-t">2024-07-18 10:30</td>
+                <td className="px-2 py-1 border-t">18.6</td>
+                <td className="px-2 py-1 border-t">0.32</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* 错误提示 */}
+        {excelResult?.errors && excelResult.errors.length > 0 && (
+          <div className="rounded-md bg-red-50 border border-red-200 p-3">
+            <p className="mb-1 text-sm font-medium text-red-700">上传失败：</p>
+            <ul className="text-xs text-red-600 space-y-1">
+              {excelResult.errors.map((error, i) => (
+                <li key={i}>{error}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* 成功提示 */}
+        {excelResult?.success && (
+          <div className="rounded-md bg-green-50 border border-green-200 p-3">
+            <p className="text-sm font-medium text-green-700">上传成功</p>
+            <p className="text-xs text-green-600 mt-1">成功插入 {excelResult.count} 条记录</p>
+            {excelResult.warnings.length > 0 && (
+              <p className="text-xs text-amber-600 mt-1">预警污染物：{excelResult.warnings.join(', ')}</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center justify-end gap-3 border-t p-4">
+        <button
+          onClick={onClose}
+          className="rounded-md border border-slate-200 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+        >
+          取消
+        </button>
+        <button
+          onClick={onUpload}
+          disabled={excelUploading || !excelFile}
+          className="rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+        >
+          {excelUploading ? '上传中...' : '上传'}
+        </button>
+      </div>
+    </>
+  );
 }
