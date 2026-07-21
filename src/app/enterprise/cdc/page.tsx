@@ -208,7 +208,6 @@ export default function CDCPage() {
       symbol: 'circle',
       symbolSize: 6,
       lineStyle: {
-        color: '#3B82F6',
         width: 2.5,
       },
       itemStyle: {
@@ -422,18 +421,14 @@ export default function CDCPage() {
           <CardContent>
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-bold text-orange-600">
-                {cdcData?.currentCDC.toFixed(2) || '0.00'}
+                {(cdcData?.currentCDC || 0).toFixed(2)}
               </span>
               <Badge className={getRiskColor(cdcData?.riskLevel || '中风险')}>
                 {cdcData?.riskLevel || '中风险'}
               </Badge>
             </div>
             <div className="mt-2 text-xs text-gray-500">
-              <div>评估时间：{cdcData?.evaluatedAt ? (() => {
-                const date = new Date(cdcData.evaluatedAt);
-                const localDate = new Date(date.getTime() + 8 * 60 * 60 * 1000);
-                return localDate.toISOString().slice(0, 16).replace('T', ' ');
-              })() : '暂无数据'}</div>
+              <div>评估时间：{cdcData?.evaluatedAt ? new Date(new Date(cdcData.evaluatedAt).getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 16).replace('T', ' ') : '暂无数据'}</div>
               <div className="flex items-center gap-1 mt-1">
                 <span>较上周期：</span>
                 {getChangeIcon(cdcData?.changeFromLastPeriod || 0)}
@@ -545,17 +540,17 @@ export default function CDCPage() {
                   {cdcData?.indicators?.map((p) => (
                     <tr key={p.pollutantId} className="border-b border-gray-100">
                       <td className="py-3 px-4 text-sm text-gray-900">{p.name}</td>
-                      <td className="py-3 px-4 text-sm text-right text-gray-900 font-medium">{p.cdc.toFixed(2)}</td>
-                      <td className="py-3 px-4 text-sm text-right text-gray-500">{p.av.toFixed(2)}</td>
-                      <td className="py-3 px-4 text-sm text-right text-gray-500">{p.ad.toFixed(2)}</td>
-                      <td className="py-3 px-4 text-sm text-right text-gray-500">{p.cv.toFixed(2)}</td>
-                      <td className="py-3 px-4 text-sm text-right text-gray-500">{p.skew.toFixed(2)}</td>
+                      <td className="py-3 px-4 text-sm text-right text-gray-900 font-medium">{(p.cdc || 0).toFixed(2)}</td>
+                      <td className="py-3 px-4 text-sm text-right text-gray-500">{(p.av || 0).toFixed(2)}</td>
+                      <td className="py-3 px-4 text-sm text-right text-gray-500">{(p.ad || 0).toFixed(2)}</td>
+                      <td className="py-3 px-4 text-sm text-right text-gray-500">{(p.cv || 0).toFixed(2)}</td>
+                      <td className="py-3 px-4 text-sm text-right text-gray-500">{(p.skew || 0).toFixed(2)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
               <div className="mt-4 text-xs text-gray-500 text-right">
-                * 综合 CDC = 所有污染物 CDC 的平均值 = {cdcData?.currentCDC.toFixed(2) || '0.00'}
+                * 综合 CDC = 所有污染物 CDC 的平均值 = {(cdcData?.currentCDC || 0).toFixed(2)}
               </div>
             </div>
           </div>
