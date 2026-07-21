@@ -11,7 +11,7 @@ import ReactECharts from 'echarts-for-react';
 
 interface CDCData {
   currentCDC: number;
-  riskLevel: string;
+  riskLevel: { level: string; color: string };
   evaluatedAt: string;
   changeFromLastPeriod: number;
   maxCDC: number;
@@ -423,8 +423,8 @@ export default function CDCPage() {
               <span className="text-3xl font-bold text-orange-600">
                 {(cdcData?.currentCDC || 0).toFixed(2)}
               </span>
-              <Badge className={getRiskColor(cdcData?.riskLevel || '中风险')}>
-                {cdcData?.riskLevel || '中风险'}
+              <Badge className={getRiskColor(cdcData?.riskLevel?.level || '中风险')}>
+                {cdcData?.riskLevel?.level || '中风险'}
               </Badge>
             </div>
             <div className="mt-2 text-xs text-gray-500">
@@ -450,7 +450,7 @@ export default function CDCPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-orange-600 mt-2">
-              {cdcData?.riskLevel || '中风险'}
+              {cdcData?.riskLevel?.level || '中风险'}
             </div>
             <div className="mt-2 text-xs text-gray-500">
               风险范围：0.5 ≤ CDC &lt; 1.5
