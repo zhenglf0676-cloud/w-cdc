@@ -17,12 +17,15 @@ interface CDCData {
   maxCDC: number;
   changeFromMax: number;
   lastWeekCDC: number;
-  indicators: {
-    AV: { current: number; lastPeriod: number; change: number };
-    AD: { current: number; lastPeriod: number; change: number };
-    CV: { current: number; lastPeriod: number; change: number };
-    SKEW: { current: number; lastPeriod: number; change: number };
-  };
+  indicators: Array<{
+    pollutantId: string;
+    name: string;
+    cdc: number;
+    av: number;
+    ad: number;
+    cv: number;
+    skew: number;
+  }>;
   trend: any[];
   pollutants: { id: string; name: string }[];
 }
@@ -97,7 +100,7 @@ export default function CDCPage() {
 
   // 雷达图配置
   const radarOption = useMemo(() => {
-    if (!cdcData?.indicators || cdcData.indicators.length === 0) return {};
+    if (!cdcData?.indicators || !Array.isArray(cdcData.indicators) || cdcData.indicators.length === 0) return {};
 
     const indicators = [
       { name: 'AV（平均值）', max: 1 },
