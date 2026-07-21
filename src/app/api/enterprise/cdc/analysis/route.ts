@@ -13,6 +13,7 @@ function getSupabaseAdmin() {
 
 // 标准差计算
 function calculateSD(values: number[], avg: number): number {
+  if (values.length === 0) return 0;
   const squaredDiffs = values.map(v => Math.pow(v - avg, 2));
   const avgSquaredDiff = squaredDiffs.reduce((a, b) => a + b, 0) / values.length;
   return Math.sqrt(avgSquaredDiff);
@@ -20,7 +21,7 @@ function calculateSD(values: number[], avg: number): number {
 
 // 偏度计算
 function calculateSkew(values: number[], avg: number, sd: number): number {
-  if (sd === 0) return 0;
+  if (sd === 0 || values.length < 3) return 0;
   const n = values.length;
   const cubedDiffs = values.map(v => Math.pow((v - avg) / sd, 3));
   const sum = cubedDiffs.reduce((a, b) => a + b, 0);
@@ -30,35 +31,8 @@ function calculateSkew(values: number[], avg: number, sd: number): number {
 // 归一化
 function normalize(value: number, min: number, max: number): number {
   if (max === min) return 0;
-  return (value - min) / (max - min);
-}
-
-// 计算单个污染物的 CDC
-function calculatePollutantCDC(dailyValues: number[], historicalStats: {
-  adMin: number; adMax: number;
-  cvMin: number; cvMax: number;
-  skewMin: number; skewMax: number;
-}) {
-  if (dailyValues.length === 0) return null;
-
-  const n = dailyValues.length;
-  
-  // 计算基础统计指标
-  const av = dailyValues.reduce((a, b) => a + b, 0) / n;
-  const ad = dailyValues.reduce((a, b) => a + Math.abs(b - av), 0) / n;
-  const sd = calculateSD(dailyValues, av);
-  const cv = av !== 0 ? sd / av : 0;
-  const skew = calculateSkew(dailyValues, av, sd);
-
-  // 归一化
-  const norAD = normalize(ad, historicalStats.adMin, historicalStats.adMax);
-  const norCV = normalize(cv, historicalStats.cvMin, historicalStats.cvMax);
-  const norSkew = normalize(skew, historicalStats.skewMin, historicalStats.skewMax);
-
-  // 计算 CDC
-  const cdc = Math.pow(norAD, 2) + Math.pow(norCV, 2) + Math.pow(norSkew, 2);
-
-  return { av, ad, cv, skew, cdc };
+  const result = (value - min) / (max - min);
+  return Math.max(0, Math.min(1, result)); // 限制在 0-1 之间
 }
 
 // 获取风险等级
@@ -90,7 +64,6 @@ export async function GET(request: NextRequest) {
 
     // 获取查询参数
     const searchParams = request.nextUrl.searchParams;
-    const days = parseInt(searchParams.get('days') || '7');
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
@@ -105,11 +78,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '用户信息获取失败' }, { status: 400 });
     }
 
-    // 使用 profile.id 作为 company_id
     const companyId = profile.id;
-    const parkName = profile.park_name;
+    const parkName = profile.park_name || '未知园区';
+    const enterpriseName = profile.username || profile.email || '未知企业';
 
-    // 获取企业已审批的排污口（使用 user_id）
+    // 获取企业已审批的排污口
     const { data: outlets, error: outletsError } = await supabase
       .from('discharge_outlets')
       .select('id, name')
@@ -120,13 +93,22 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ 
         success: true, 
         data: {
-          currentCDC: 0,
+          enterpriseId: companyId,
+          enterpriseName,
+          parkName,
+          analysisPeriod: { days: 0, startDate: '', endDate: '' },
+          totalOutlets: 0,
+          totalPollutants: 0,
+          overallCDC: 0,
           riskLevel: '低风险',
-          cdcMax: 0,
-          lastWeekCDC: 0,
-          indicators: [],
-          trendData: [],
+          riskColor: 'green',
           pollutants: [],
+          indicators: {
+            av: { current: 0, normalized: 0 },
+            ad: { current: 0, normalized: 0 },
+            cv: { current: 0, normalized: 0 },
+            skew: { current: 0, normalized: 0 }
+          }
         }
       });
     }
@@ -144,18 +126,27 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ 
         success: true, 
         data: {
-          currentCDC: 0,
+          enterpriseId: companyId,
+          enterpriseName,
+          parkName,
+          analysisPeriod: { days: 0, startDate: '', endDate: '' },
+          totalOutlets: outlets.length,
+          totalPollutants: 0,
+          overallCDC: 0,
           riskLevel: '低风险',
-          cdcMax: 0,
-          lastWeekCDC: 0,
-          indicators: [],
-          trendData: [],
+          riskColor: 'green',
           pollutants: [],
+          indicators: {
+            av: { current: 0, normalized: 0 },
+            ad: { current: 0, normalized: 0 },
+            cv: { current: 0, normalized: 0 },
+            skew: { current: 0, normalized: 0 }
+          }
         }
       });
     }
 
-    // 解析污染物列表（pollutants 字段是数组）
+    // 解析污染物列表
     const pollutantList: { id: string; name: string; unit: string; threshold: number }[] = [];
     pollutants.forEach(app => {
       if (Array.isArray(app.pollutants)) {
@@ -173,10 +164,12 @@ export async function GET(request: NextRequest) {
     // 计算时间范围
     let fromDate: Date;
     let toDate: Date;
+    let days = 7;
 
     if (startDate && endDate) {
       fromDate = new Date(startDate);
       toDate = new Date(endDate);
+      days = Math.ceil((toDate.getTime() - fromDate.getTime()) / (24 * 60 * 60 * 1000));
     } else {
       toDate = new Date();
       fromDate = new Date(toDate.getTime() - days * 24 * 60 * 60 * 1000);
@@ -196,218 +189,195 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '数据获取失败' }, { status: 500 });
     }
 
-    // 按污染物类型分组
-    const pollutantData: Record<string, any[]> = {};
-    pollutantList.forEach(p => {
-      pollutantData[p.id] = [];
-    });
-
-    monitoringData?.forEach(record => {
-      if (pollutantData[record.pollutant_type]) {
-        pollutantData[record.pollutant_type].push(record);
-      }
-    });
-
-    // 计算每日企业监测值（所有排污口最新监测值的累计值）
-    const dailyValues: Record<string, number> = {};
-
-    monitoringData?.forEach(record => {
-      const date = new Date(record.monitored_at).toISOString().split('T')[0];
-      if (!dailyValues[date]) {
-        dailyValues[date] = 0;
-      }
-      dailyValues[date] += record.value;
-    });
-
-    // 获取日期列表
-    const dates = Object.keys(dailyValues).sort();
-
-    // 计算基础统计指标（7 天数据）
-    const recentDates = dates.slice(-7); // 最近 7 天
-    const recentValues = recentDates.map(d => dailyValues[d]);
-
-    if (recentValues.length === 0) {
+    // 如果没有监测数据，返回空结果
+    if (!monitoringData || monitoringData.length === 0) {
       return NextResponse.json({
         success: true,
         data: {
-          currentCDC: 0,
+          enterpriseId: companyId,
+          enterpriseName,
+          parkName,
+          analysisPeriod: { days, startDate: fromDate.toISOString(), endDate: toDate.toISOString() },
+          totalOutlets: outlets.length,
+          totalPollutants: pollutantList.length,
+          overallCDC: 0,
           riskLevel: '低风险',
-          indicators: null,
-          trend: []
+          riskColor: 'green',
+          pollutants: [],
+          indicators: {
+            av: { current: 0, normalized: 0 },
+            ad: { current: 0, normalized: 0 },
+            cv: { current: 0, normalized: 0 },
+            skew: { current: 0, normalized: 0 }
+          }
         }
       });
     }
 
-    const n = recentValues.length;
-    const av = recentValues.reduce((a, b) => a + b, 0) / n;
-    const ad = recentValues.reduce((a, b) => a + Math.abs(b - av), 0) / n;
-    const sd = calculateSD(recentValues, av);
-    const cv = av !== 0 ? sd / av : 0;
-    const skew = calculateSkew(recentValues, av, sd);
+    // 按污染物类型分组
+    const pollutantDataMap: Record<string, number[]> = {};
+    pollutantList.forEach(p => {
+      pollutantDataMap[p.id] = [];
+    });
 
-    // 计算历史统计值（用于归一化）- 使用所有历史数据
-    const allValues = dates.map(d => dailyValues[d]);
-    const allAV = allValues.reduce((a, b) => a + b, 0) / allValues.length;
-    const allAD = allValues.reduce((a, b) => a + Math.abs(b - allAV), 0) / allValues.length;
-    const allSD = calculateSD(allValues, allAV);
-    const allCV = allAV !== 0 ? allSD / allAV : 0;
-    const allSkew = calculateSkew(allValues, allAV, allSD);
+    monitoringData.forEach(record => {
+      if (pollutantDataMap[record.pollutant_type]) {
+        pollutantDataMap[record.pollutant_type].push(record.value);
+      }
+    });
 
-    // 归一化（使用历史数据的 min/max）
-    const norAD = normalize(ad, 0, allAD * 2);
-    const norCV = normalize(cv, 0, allCV * 2);
-    const norSkew = normalize(skew, -1, 1);
+    // 计算每个污染物的 CDC
+    const pollutantCDCs: any[] = [];
+    let totalWeightedCDC = 0;
+    let totalWeight = 0;
 
     // 获取园区内所有企业的数据（用于计算权重）
-    const { data: allOutlets, error: allOutletsError } = await supabase
+    const { data: allParkOutlets } = await supabase
       .from('discharge_outlets')
       .select('id, user_id')
       .eq('park_name', parkName)
       .eq('status', 'approved');
 
-    if (allOutletsError) {
-      console.error('获取园区排污口失败:', allOutletsError);
-    }
+    const allCompanyIds = [...new Set(allParkOutlets?.map(o => o.user_id) || [])];
+    const m = allCompanyIds.length;
 
     // 计算每个企业的 AV 值（用于权重计算）
     const companyAVMap: Record<string, number> = {};
-    const allCompanyIds = [...new Set(allOutlets?.map(o => o.user_id) || [])];
 
-    for (const companyId of allCompanyIds) {
-      const { data: companyOutlets } = await supabase
+    for (const compId of allCompanyIds) {
+      const { data: compOutlets } = await supabase
         .from('discharge_outlets')
         .select('id')
-        .eq('user_id', companyId)
+        .eq('user_id', compId)
         .eq('status', 'approved');
 
-      if (companyOutlets && companyOutlets.length > 0) {
-        const companyOutletIds = companyOutlets.map(o => o.id);
-        const { data: companyMonitoringData } = await supabase
+      if (compOutlets && compOutlets.length > 0) {
+        const compOutletIds = compOutlets.map(o => o.id);
+        const { data: compMonitoringData } = await supabase
           .from('monitoring_data')
-          .select('pollutant_type, value, monitored_at')
-          .in('outlet_id', companyOutletIds)
+          .select('value, monitored_at')
+          .in('outlet_id', compOutletIds)
           .gte('monitored_at', fromDate.toISOString())
           .lte('monitored_at', toDate.toISOString());
 
-        if (companyMonitoringData && companyMonitoringData.length > 0) {
+        if (compMonitoringData && compMonitoringData.length > 0) {
           // 计算每日累计值
-          const companyDailyValues: Record<string, number> = {};
-          companyMonitoringData.forEach(record => {
+          const dailyValues: Record<string, number> = {};
+          compMonitoringData.forEach(record => {
             const date = new Date(record.monitored_at).toISOString().split('T')[0];
-            if (!companyDailyValues[date]) {
-              companyDailyValues[date] = 0;
-            }
-            companyDailyValues[date] += record.value;
+            if (!dailyValues[date]) dailyValues[date] = 0;
+            dailyValues[date] += record.value;
           });
 
-          // 计算 AV
-          const values = Object.values(companyDailyValues);
+          const values = Object.values(dailyValues);
           if (values.length > 0) {
-            companyAVMap[companyId] = values.reduce((a, b) => a + b, 0) / values.length;
+            companyAVMap[compId] = values.reduce((a, b) => a + b, 0) / values.length;
           }
         }
       }
     }
 
     // 计算权重 DML(Mi) = m × Wi / ΣWi
-    const m = allCompanyIds.length;
     const sumWi = Object.values(companyAVMap).reduce((a, b) => a + b, 0);
-    const weight = sumWi > 0 ? (m * companyAVMap[companyId]) / sumWi : 1;
+    const weight = sumWi > 0 ? (m * (companyAVMap[companyId] || 0)) / sumWi : 1;
 
-    // 计算 CDC 值
-    // CDC = [m × Wi / ΣWi] × [Nor(AD)² + Nor(CV)² + Nor(SKEW)²]
-    const currentCDC = weight * (norAD ** 2 + norCV ** 2 + norSkew ** 2);
-    const riskLevel = getRiskLevel(currentCDC);
+    // 计算所有污染物的历史统计值（用于归一化）
+    const allPollutantValues = monitoringData.map(r => r.value);
+    const globalAV = allPollutantValues.reduce((a, b) => a + b, 0) / allPollutantValues.length;
+    const globalAD = allPollutantValues.reduce((a, b) => a + Math.abs(b - globalAV), 0) / allPollutantValues.length;
+    const globalSD = calculateSD(allPollutantValues, globalAV);
+    const globalCV = globalAV !== 0 ? globalSD / globalAV : 0;
+    const globalSkew = calculateSkew(allPollutantValues, globalAV, globalSD);
 
-    // 计算上周 CDC（前 7 天的数据）
-    const lastWeekDates = dates.slice(-14, -7);
-    const lastWeekValues = lastWeekDates.map(d => dailyValues[d]);
-    let lastWeekCDC = 0;
+    // 计算每个污染物的 CDC
+    for (const pollutant of pollutantList) {
+      const values = pollutantDataMap[pollutant.id];
+      if (!values || values.length === 0) continue;
 
-    if (lastWeekValues.length >= 3) {
-      const lwN = lastWeekValues.length;
-      const lwAV = lastWeekValues.reduce((a, b) => a + b, 0) / lwN;
-      const lwAD = lastWeekValues.reduce((a, b) => a + Math.abs(b - lwAV), 0) / lwN;
-      const lwSD = calculateSD(lastWeekValues, lwAV);
-      const lwCV = lwAV !== 0 ? lwSD / lwAV : 0;
-      const lwSkew = calculateSkew(lastWeekValues, lwAV, lwSD);
+      const n = values.length;
+      const av = values.reduce((a, b) => a + b, 0) / n;
+      const ad = values.reduce((a, b) => a + Math.abs(b - av), 0) / n;
+      const sd = calculateSD(values, av);
+      const cv = av !== 0 ? sd / av : 0;
+      const skew = calculateSkew(values, av, sd);
 
-      const lwNorAD = normalize(lwAD, 0, allAD * 2);
-      const lwNorCV = normalize(lwCV, 0, allCV * 2);
-      const lwNorSkew = normalize(lwSkew, -1, 1);
+      // 归一化（使用全局统计值）
+      const norAD = normalize(ad, 0, globalAD * 2 || 1);
+      const norCV = normalize(cv, 0, globalCV * 2 || 1);
+      const norSkew = normalize(skew, -1, 1);
 
-      lastWeekCDC = weight * (lwNorAD ** 2 + lwNorCV ** 2 + lwNorSkew ** 2);
+      // 计算 CDC = [m × Wi / ΣWi] × [Nor(AD)² + Nor(CV)² + Nor(SKEW)²]
+      const cdc = weight * (Math.pow(norAD, 2) + Math.pow(norCV, 2) + Math.pow(norSkew, 2));
+      const riskInfo = getRiskLevel(cdc);
+
+      pollutantCDCs.push({
+        pollutantId: pollutant.id,
+        pollutantName: pollutant.name,
+        av: parseFloat(av.toFixed(4)),
+        ad: parseFloat(ad.toFixed(4)),
+        cv: parseFloat(cv.toFixed(4)),
+        skew: parseFloat(skew.toFixed(4)),
+        cdc: parseFloat(cdc.toFixed(4)),
+        weight: parseFloat(weight.toFixed(4)),
+        riskLevel: riskInfo.level,
+        riskColor: riskInfo.color
+      });
+
+      totalWeightedCDC += cdc;
+      totalWeight += weight;
     }
 
-    // 计算历史最大 CDC
-    let maxCDC = currentCDC;
-    for (let i = 7; i <= dates.length; i++) {
-      const periodDates = dates.slice(Math.max(0, i - 7), i);
-      const periodValues = periodDates.map(d => dailyValues[d]);
+    // 计算综合 CDC
+    const overallCDC = totalWeight > 0 ? totalWeightedCDC / totalWeight : 0;
+    const overallRisk = getRiskLevel(overallCDC);
 
-      if (periodValues.length >= 3) {
-        const pN = periodValues.length;
-        const pAV = periodValues.reduce((a, b) => a + b, 0) / pN;
-        const pAD = periodValues.reduce((a, b) => a + Math.abs(b - pAV), 0) / pN;
-        const pSD = calculateSD(periodValues, pAV);
-        const pCV = pAV !== 0 ? pSD / pAV : 0;
-        const pSkew = calculateSkew(periodValues, pAV, pSD);
+    // 计算归一化指标
+    const currentAV = monitoringData.reduce((a, b) => a + b.value, 0) / monitoringData.length;
+    const currentAD = monitoringData.reduce((a, b) => a + Math.abs(b.value - currentAV), 0) / monitoringData.length;
+    const currentSD = calculateSD(monitoringData.map(m => m.value), currentAV);
+    const currentCV = currentAV !== 0 ? currentSD / currentAV : 0;
+    const currentSkew = calculateSkew(monitoringData.map(m => m.value), currentAV, currentSD);
 
-        const pNorAD = normalize(pAD, 0, allAD * 2);
-        const pNorCV = normalize(pCV, 0, allCV * 2);
-        const pNorSkew = normalize(pSkew, -1, 1);
+    const norAV = normalize(currentAV, 0, globalAV * 2 || 1);
+    const norAD = normalize(currentAD, 0, globalAD * 2 || 1);
+    const norCV = normalize(currentCV, 0, globalCV * 2 || 1);
+    const norSkew = normalize(currentSkew, -1, 1);
 
-        const periodCDC = weight * (pNorAD ** 2 + pNorCV ** 2 + pNorSkew ** 2);
-        if (periodCDC > maxCDC) {
-          maxCDC = periodCDC;
-        }
-      }
-    }
-
-    // 计算 CDC 趋势（每天往前推 7 天）
-    const trendData: Record<string, any>[] = [];
-    for (let i = 7; i <= dates.length; i++) {
-      const periodDates = dates.slice(Math.max(0, i - 7), i);
-      const periodValues = periodDates.map(d => dailyValues[d]);
-
-      if (periodValues.length >= 3) {
-        const pN = periodValues.length;
-        const pAV = periodValues.reduce((a, b) => a + b, 0) / pN;
-        const pAD = periodValues.reduce((a, b) => a + Math.abs(b - pAV), 0) / pN;
-        const pSD = calculateSD(periodValues, pAV);
-        const pCV = pAV !== 0 ? pSD / pAV : 0;
-        const pSkew = calculateSkew(periodValues, pAV, pSD);
-
-        const pNorAD = normalize(pAD, 0, allAD * 2);
-        const pNorCV = normalize(pCV, 0, allCV * 2);
-        const pNorSkew = normalize(pSkew, -1, 1);
-
-        const periodCDC = weight * (pNorAD ** 2 + pNorCV ** 2 + pNorSkew ** 2);
-
-        trendData.push({
-          date: periodDates[periodDates.length - 1],
-          '综合': periodCDC
-        });
-      }
-    }
-    // 返回结果
     return NextResponse.json({
       success: true,
       data: {
-        currentCDC: parseFloat(currentCDC.toFixed(4)),
-        riskLevel,
-        indicators: {
-          av: parseFloat(av.toFixed(4)),
-          ad: parseFloat(ad.toFixed(4)),
-          cv: parseFloat(cv.toFixed(4)),
-          skew: parseFloat(skew.toFixed(4))
+        enterpriseId: companyId,
+        enterpriseName,
+        parkName,
+        analysisPeriod: { 
+          days, 
+          startDate: fromDate.toISOString(), 
+          endDate: toDate.toISOString() 
         },
-        changeFromLastPeriod: parseFloat((currentCDC - lastWeekCDC).toFixed(4)),
-        lastWeekCDC: parseFloat(lastWeekCDC.toFixed(4)),
-        maxCDC: parseFloat(maxCDC.toFixed(4)),
-        changeFromMax: parseFloat((currentCDC - maxCDC).toFixed(4)),
-        trend: trendData,
-        evaluatedAt: new Date().toISOString()
+        totalOutlets: outlets.length,
+        totalPollutants: pollutantList.length,
+        overallCDC: parseFloat(overallCDC.toFixed(4)),
+        riskLevel: overallRisk.level,
+        riskColor: overallRisk.color,
+        pollutants: pollutantCDCs,
+        indicators: {
+          av: { 
+            current: parseFloat(currentAV.toFixed(4)), 
+            normalized: parseFloat(norAV.toFixed(4)) 
+          },
+          ad: { 
+            current: parseFloat(currentAD.toFixed(4)), 
+            normalized: parseFloat(norAD.toFixed(4)) 
+          },
+          cv: { 
+            current: parseFloat(currentCV.toFixed(4)), 
+            normalized: parseFloat(norCV.toFixed(4)) 
+          },
+          skew: { 
+            current: parseFloat(currentSkew.toFixed(4)), 
+            normalized: parseFloat(norSkew.toFixed(4)) 
+          }
+        }
       }
     });
 
