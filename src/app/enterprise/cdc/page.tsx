@@ -11,21 +11,18 @@ import ReactECharts from 'echarts-for-react';
 
 interface CDCData {
   currentCDC: number;
-  riskLevel: { level: string; color: string };
+  riskLevel: string;
   evaluatedAt: string;
   changeFromLastPeriod: number;
   maxCDC: number;
   changeFromMax: number;
   lastWeekCDC: number;
-  indicators: Array<{
-    pollutantId: string;
-    name: string;
-    cdc: number;
-    av: number;
-    ad: number;
-    cv: number;
-    skew: number;
-  }>;
+  indicators: {
+    AV: { current: number; lastPeriod: number; change: number };
+    AD: { current: number; lastPeriod: number; change: number };
+    CV: { current: number; lastPeriod: number; change: number };
+    SKEW: { current: number; lastPeriod: number; change: number };
+  };
   trend: any[];
   pollutants: { id: string; name: string }[];
 }
@@ -100,7 +97,7 @@ export default function CDCPage() {
 
   // 雷达图配置
   const radarOption = useMemo(() => {
-    if (!cdcData?.indicators || !Array.isArray(cdcData.indicators) || cdcData.indicators.length === 0) return {};
+    if (!cdcData?.indicators) return {};
 
     const indicators = [
       { name: 'AV（平均值）', max: 1 },
@@ -109,16 +106,10 @@ export default function CDCPage() {
       { name: 'SKEW（偏态）', max: 1 },
     ];
 
-    // 计算所有污染物的平均统计指标
-    const avgAV = cdcData.indicators.reduce((sum, p) => sum + (p.av || 0), 0) / cdcData.indicators.length;
-    const avgAD = cdcData.indicators.reduce((sum, p) => sum + (p.ad || 0), 0) / cdcData.indicators.length;
-    const avgCV = cdcData.indicators.reduce((sum, p) => sum + (p.cv || 0), 0) / cdcData.indicators.length;
-    const avgSKEW = cdcData.indicators.reduce((sum, p) => sum + (p.skew || 0), 0) / cdcData.indicators.length;
-
     return {
       tooltip: {},
       legend: {
-        data: ['本周期'],
+        data: ['本周期', '上周期'],
         bottom: 0,
       },
       radar: {
@@ -139,7 +130,12 @@ export default function CDCPage() {
           type: 'radar',
           data: [
             {
-              value: [avgAV, avgAD, avgCV, avgSKEW],
+              value: [
+                cdcData.indicators.AV.current,
+                cdcData.indicators.AD.current,
+                cdcData.indicators.CV.current,
+                cdcData.indicators.SKEW.current,
+              ],
               name: '本周期',
               areaStyle: {
                 color: 'rgba(59, 130, 246, 0.3)',
@@ -149,6 +145,25 @@ export default function CDCPage() {
               },
               itemStyle: {
                 color: '#3B82F6',
+              },
+            },
+            {
+              value: [
+                cdcData.indicators.AV.lastPeriod,
+                cdcData.indicators.AD.lastPeriod,
+                cdcData.indicators.CV.lastPeriod,
+                cdcData.indicators.SKEW.lastPeriod,
+              ],
+              name: '上周期',
+              areaStyle: {
+                color: 'rgba(34, 197, 94, 0.1)',
+              },
+              lineStyle: {
+                color: '#22C55E',
+                type: 'dashed',
+              },
+              itemStyle: {
+                color: '#22C55E',
               },
             },
           ],
@@ -208,6 +223,7 @@ export default function CDCPage() {
       symbol: 'circle',
       symbolSize: 6,
       lineStyle: {
+        color: '#3B82F6',
         width: 2.5,
       },
       itemStyle: {
@@ -421,14 +437,18 @@ export default function CDCPage() {
           <CardContent>
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-bold text-orange-600">
-                {(cdcData?.currentCDC || 0).toFixed(2)}
+                {cdcData?.currentCDC.toFixed(2) || '0.00'}
               </span>
-              <Badge className={getRiskColor(cdcData?.riskLevel?.level || '中风险')}>
-                {cdcData?.riskLevel?.level || '中风险'}
+              <Badge className={getRiskColor(cdcData?.riskLevel || '中风险')}>
+                {cdcData?.riskLevel || '中风险'}
               </Badge>
             </div>
             <div className="mt-2 text-xs text-gray-500">
-              <div>评估时间：{cdcData?.evaluatedAt ? new Date(new Date(cdcData.evaluatedAt).getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 16).replace('T', ' ') : '暂无数据'}</div>
+              <div>评估时间：{cdcData?.evaluatedAt ? (() => {
+                const date = new Date(cdcData.evaluatedAt);
+                const localDate = new Date(date.getTime() + 8 * 60 * 60 * 1000);
+                return localDate.toISOString().slice(0, 16).replace('T', ' ');
+              })() : '暂无数据'}</div>
               <div className="flex items-center gap-1 mt-1">
                 <span>较上周期：</span>
                 {getChangeIcon(cdcData?.changeFromLastPeriod || 0)}
@@ -450,7 +470,7 @@ export default function CDCPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-orange-600 mt-2">
-              {cdcData?.riskLevel?.level || '中风险'}
+              {cdcData?.riskLevel || '中风险'}
             </div>
             <div className="mt-2 text-xs text-gray-500">
               风险范围：0.5 ≤ CDC &lt; 1.5
@@ -528,29 +548,35 @@ export default function CDCPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200">
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">污染物</th>
-                    <th className="text-right py-3 px-4 text-sm font-medium text-gray-600">CDC 值</th>
-                    <th className="text-right py-3 px-4 text-sm font-medium text-gray-600">AV</th>
-                    <th className="text-right py-3 px-4 text-sm font-medium text-gray-600">AD</th>
-                    <th className="text-right py-3 px-4 text-sm font-medium text-gray-600">CV</th>
-                    <th className="text-right py-3 px-4 text-sm font-medium text-gray-600">SKEW</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-600">指标</th>
+                    <th className="text-right py-3 px-4 text-sm font-medium text-gray-600">本周期值</th>
+                    <th className="text-right py-3 px-4 text-sm font-medium text-gray-600">上周期值</th>
+                    <th className="text-right py-3 px-4 text-sm font-medium text-gray-600">变化</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {cdcData?.indicators?.map((p) => (
-                    <tr key={p.pollutantId} className="border-b border-gray-100">
-                      <td className="py-3 px-4 text-sm text-gray-900">{p.name}</td>
-                      <td className="py-3 px-4 text-sm text-right text-gray-900 font-medium">{(p.cdc || 0).toFixed(2)}</td>
-                      <td className="py-3 px-4 text-sm text-right text-gray-500">{(p.av || 0).toFixed(2)}</td>
-                      <td className="py-3 px-4 text-sm text-right text-gray-500">{(p.ad || 0).toFixed(2)}</td>
-                      <td className="py-3 px-4 text-sm text-right text-gray-500">{(p.cv || 0).toFixed(2)}</td>
-                      <td className="py-3 px-4 text-sm text-right text-gray-500">{(p.skew || 0).toFixed(2)}</td>
+                  {cdcData?.indicators && Object.entries(cdcData.indicators).map(([key, data]) => (
+                    <tr key={key} className="border-b border-gray-100">
+                      <td className="py-3 px-4 text-sm text-gray-900">
+                        {key === 'AV' && 'AV（平均值）'}
+                        {key === 'AD' && 'AD（均差）'}
+                        {key === 'CV' && 'CV（变异性）'}
+                        {key === 'SKEW' && 'SKEW（偏态）'}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-right text-gray-900">{data.current.toFixed(2)}</td>
+                      <td className="py-3 px-4 text-sm text-right text-gray-500">{data.lastPeriod.toFixed(2)}</td>
+                      <td className="py-3 px-4 text-sm text-right flex items-center justify-end gap-1">
+                        {getChangeIcon(data.change)}
+                        <span className={getChangeColor(data.change)}>
+                          {data.change > 0 ? '↑' : '↓'} {Math.abs(data.change).toFixed(2)}
+                        </span>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
               <div className="mt-4 text-xs text-gray-500 text-right">
-                * 综合 CDC = 所有污染物 CDC 的平均值 = {(cdcData?.currentCDC || 0).toFixed(2)}
+                * CDC = Nor(AD)² + Nor(CV)² + Nor(SKEW)² = {cdcData?.currentCDC.toFixed(2) || '0.00'}
               </div>
             </div>
           </div>
