@@ -154,6 +154,21 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // 解析污染物列表（pollutants 字段是数组）
+    const pollutantList: { id: string; name: string; unit: string; threshold: number }[] = [];
+    pollutants.forEach(app => {
+      if (Array.isArray(app.pollutants)) {
+        app.pollutants.forEach((p: any) => {
+          pollutantList.push({
+            id: p.id,
+            name: p.label || p.id,
+            unit: p.unit || '',
+            threshold: p.threshold || 0
+          });
+        });
+      }
+    });
+
     // 计算时间范围
     let fromDate: Date;
     let toDate: Date;
@@ -182,11 +197,11 @@ export async function GET(request: NextRequest) {
 
     // 按污染物类型分组
     const pollutantData: Record<string, any[]> = {};
-    pollutants.forEach(p => {
+    pollutantList.forEach(p => {
       pollutantData[p.id] = [];
     });
 
-    monitoringData.forEach(record => {
+    monitoringData?.forEach(record => {
       if (pollutantData[record.pollutant_type]) {
         pollutantData[record.pollutant_type].push(record);
       }
@@ -219,7 +234,7 @@ export async function GET(request: NextRequest) {
     // 计算历史统计值（用于归一化）
     const historicalStats: Record<string, { adMin: number; adMax: number; cvMin: number; cvMax: number; skewMin: number; skewMax: number }> = {};
     
-    pollutants.forEach(pollutant => {
+    pollutantList.forEach(pollutant => {
       const dailyValues = Object.values(dailyValuesByPollutant[pollutant.id] || {});
       if (dailyValues.length === 0) return;
 
@@ -238,7 +253,7 @@ export async function GET(request: NextRequest) {
     });
 
     // 计算每个污染物的 CDC
-    pollutants.forEach(pollutant => {
+    pollutantList.forEach(pollutant => {
       const dailyValues = Object.values(dailyValuesByPollutant[pollutant.id] || {});
       if (dailyValues.length === 0) return;
 
@@ -263,7 +278,7 @@ export async function GET(request: NextRequest) {
       let totalCDC = 0;
       let count = 0;
 
-      pollutants.forEach(pollutant => {
+      pollutantList.forEach(pollutant => {
         const dailyVal = dailyValuesByPollutant[pollutant.id]?.[date];
         if (dailyVal !== undefined) {
           // 简化：这里应该用滚动窗口计算，暂时用单天值
@@ -294,7 +309,7 @@ export async function GET(request: NextRequest) {
           SKEW: { current: 0.86, lastPeriod: 0.80, change: 0.06 }
         },
         trend: trendData,
-        pollutants: pollutants.map(p => ({ id: p.id, name: p.name }))
+        pollutants: pollutantList.map(p => ({ id: p.id, name: p.name }))
       }
     });
 
