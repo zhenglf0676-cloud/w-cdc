@@ -194,7 +194,7 @@ export default function CDCPage() {
     };
   };
 
-  // CDC 趋势图配置（显示每日 CDC 值变化）
+  // CDC 趋势图配置（显示每日 CDC 值变化，带风险等级背景色带）
   const lineOption = useMemo(() => {
     if (!cdcData || !cdcData.pollutants || cdcData.pollutants.length === 0 || !cdcData.dailyPollutantCDC) {
       return {
@@ -211,6 +211,13 @@ export default function CDCPage() {
       const date = new Date(dateStr);
       return `${date.getMonth() + 1}/${date.getDate()}`;
     };
+
+    // 计算 Y 轴最大值（至少显示到 2.0，以便显示所有风险等级）
+    const allCDCValues = dates.flatMap(date => 
+      cdcData.pollutants.map(p => cdcData.dailyPollutantCDC[date]?.[p.pollutantId] || 0)
+    );
+    const maxCDC = Math.max(...allCDCValues, 2.0);
+    const yMax = Math.ceil(maxCDC * 1.2);
 
     return {
       tooltip: {
@@ -229,26 +236,118 @@ export default function CDCPage() {
         data: cdcData.pollutants.map(p => p.pollutantName),
         bottom: 0
       },
+      grid: {
+        left: 60,
+        right: 20,
+        top: 40,
+        bottom: 60
+      },
       xAxis: {
         type: 'category',
         data: dates.map(formatDate),
-        name: '日期'
+        name: '日期',
+        nameLocation: 'middle',
+        nameGap: 30
       },
       yAxis: {
         type: 'value',
-        name: 'CDC 值'
-      },
-      series: cdcData.pollutants.map(pollutant => ({
-        name: pollutant.pollutantName,
-        type: 'line',
-        data: dates.map(date => cdcData.dailyPollutantCDC[date]?.[pollutant.pollutantId] || 0),
-        smooth: true,
-        lineStyle: { width: 2 },
-        itemStyle: { 
-          color: pollutant.riskColor === 'green' ? '#10B981' : 
-                 pollutant.riskColor === 'orange' ? '#F59E0B' : '#EF4444'
+        name: 'CDC 值',
+        min: 0,
+        max: yMax,
+        splitLine: {
+          lineStyle: {
+            type: 'dashed',
+            color: '#E2E8F0'
+          }
         }
-      }))
+      },
+      // 背景色带（风险等级区域）
+      series: [
+        // 低风险区域（0-0.5）- 绿色
+        {
+          type: 'line',
+          markArea: {
+            silent: true,
+            itemStyle: {
+              color: 'rgba(16, 185, 129, 0.08)'
+            },
+            data: [[{ yAxis: 0 }, { yAxis: 0.5 }]]
+          },
+          data: []
+        },
+        // 中风险区域（0.5-1.5）- 橙色
+        {
+          type: 'line',
+          markArea: {
+            silent: true,
+            itemStyle: {
+              color: 'rgba(245, 158, 11, 0.08)'
+            },
+            data: [[{ yAxis: 0.5 }, { yAxis: 1.5 }]]
+          },
+          data: []
+        },
+        // 高风险区域（1.5+）- 红色
+        {
+          type: 'line',
+          markArea: {
+            silent: true,
+            itemStyle: {
+              color: 'rgba(239, 68, 68, 0.08)'
+            },
+            data: [[{ yAxis: 1.5 }, { yAxis: yMax }]]
+          },
+          data: []
+        },
+        // 分级线
+        {
+          type: 'line',
+          markLine: {
+            silent: true,
+            symbol: 'none',
+            lineStyle: {
+              type: 'dashed',
+              width: 1.5
+            },
+            label: {
+              position: 'end',
+              formatter: '{b}',
+              fontSize: 11,
+              color: '#64748B'
+            },
+            data: [
+              {
+                yAxis: 0.5,
+                name: '低风险/中风险 (0.5)',
+                lineStyle: { color: '#F59E0B' }
+              },
+              {
+                yAxis: 1.5,
+                name: '中风险/高风险 (1.5)',
+                lineStyle: { color: '#EF4444' }
+              }
+            ]
+          },
+          data: []
+        },
+        // 各污染物的 CDC 趋势线
+        ...cdcData.pollutants.map(pollutant => ({
+          name: pollutant.pollutantName,
+          type: 'line',
+          data: dates.map(date => cdcData.dailyPollutantCDC[date]?.[pollutant.pollutantId] || 0),
+          smooth: true,
+          lineStyle: { width: 2.5 },
+          symbol: 'circle',
+          symbolSize: 6,
+          itemStyle: { 
+            color: pollutant.riskColor === 'green' ? '#10B981' : 
+                   pollutant.riskColor === 'orange' ? '#F59E0B' : '#EF4444'
+          },
+          emphasis: {
+            focus: 'series'
+          }
+        }))
+      ]
     };
   }, [cdcData]);
 
