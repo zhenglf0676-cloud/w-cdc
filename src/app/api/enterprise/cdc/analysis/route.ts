@@ -107,6 +107,7 @@ export async function GET(request: NextRequest) {
 
     // 使用 profile.id 作为 company_id
     const companyId = profile.id;
+    const parkName = profile.park_name;
 
     // 获取企业已审批的排污口（使用 user_id）
     const { data: outlets, error: outletsError } = await supabase
