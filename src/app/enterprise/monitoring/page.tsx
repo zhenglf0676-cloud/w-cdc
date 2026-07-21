@@ -796,6 +796,13 @@ function ChartOption({
 
   // 提取时间点
   const times = Array.from(new Set(sortedData.map(d => d.monitored_at)));
+  
+  console.log('图表数据调试:');
+  console.log('- 总数据量:', data.length);
+  console.log('- 排序后数据量:', sortedData.length);
+  console.log('- 唯一时间点数量:', times.length);
+  console.log('- 前5个时间点:', times.slice(0, 5));
+  console.log('- 污染物列表:', pollutants.map(p => p.id));
 
   // 为每个污染物分配固定颜色
   const colors = ['#0ea5e9', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#6366f1'];
