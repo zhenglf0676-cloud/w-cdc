@@ -61,27 +61,27 @@ function getRiskLevel(cdc: number): { level: string; color: string } {
 export async function GET(request: NextRequest) {
   try {
     // 获取认证信息
-    const authHeader = request.headers.get('x-session');
-    if (!authHeader) {
+    const token = request.headers.get('x-auth-token');
+    if (!token) {
       return NextResponse.json({ error: '未认证' }, { status: 401 });
     }
 
-    let userId: string;
-    try {
-      const session = JSON.parse(authHeader);
-      userId = session.sub;
-    } catch {
-      userId = authHeader;
+    // 创建 Supabase 客户端
+    const supabase = getSupabaseClient(token);
+
+    // 获取当前用户信息
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      return NextResponse.json({ error: '认证失败' }, { status: 401 });
     }
+
+    const userId = user.id;
 
     // 获取查询参数
     const searchParams = request.nextUrl.searchParams;
     const days = parseInt(searchParams.get('days') || '7');
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
-
-    // 创建 Supabase 客户端（使用 service role key）
-    const supabase = getSupabaseClient();
 
     // 获取企业信息
     const { data: profile, error: profileError } = await supabase
