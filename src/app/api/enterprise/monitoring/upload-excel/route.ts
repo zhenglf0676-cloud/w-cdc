@@ -136,17 +136,23 @@ export async function POST(request: NextRequest) {
     }
 
     const approvedPollutantIds = new Set<string>();
+    const pollutantThresholds = new Map<string, number>(); // 污染物 ID -> 阈值
     if (applications && applications.length > 0) {
       for (const app of applications) {
         const pollutants = app.pollutants as any[];
         if (Array.isArray(pollutants)) {
           for (const p of pollutants) {
             approvedPollutantIds.add(p.id);
+            // 保存阈值，如果没有则使用默认值
+            if (p.threshold !== undefined && p.threshold !== null) {
+              pollutantThresholds.set(p.id, Number(p.threshold));
+            }
           }
         }
       }
     }
     console.log('已审批污染物:', Array.from(approvedPollutantIds));
+    console.log('污染物阈值:', Object.fromEntries(pollutantThresholds));
 
     // 8. 解析数据
     const records: any[] = [];
@@ -217,13 +223,18 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
+        // 获取企业特定的阈值，如果没有则使用默认值
+        const threshold = pollutantThresholds.has(col.dbId) 
+          ? pollutantThresholds.get(col.dbId)! 
+          : col.threshold;
+
         records.push({
           outlet_id: outletMap.get(outletName),
           pollutant_type: col.dbId,
           value: numValue,
           unit: col.unit,
-          standard_limit: col.threshold,
-          status: numValue > col.threshold ? 'warning' : 'normal',
+          standard_limit: threshold,
+          status: numValue > threshold ? 'warning' : 'normal',
           monitored_at: monitoredAt.toISOString(),
         });
       }
