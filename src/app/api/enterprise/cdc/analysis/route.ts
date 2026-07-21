@@ -315,9 +315,11 @@ export async function GET(request: NextRequest) {
       pollutantList.forEach(pollutant => {
         const dailyVal = dailyValuesByPollutant[pollutant.id]?.[date];
         if (dailyVal !== undefined) {
-          // 简化：这里应该用滚动窗口计算，暂时用单天值
-          dayCDC[pollutant.id] = dailyVal;
-          totalCDC += dailyVal;
+          // 计算该污染物的 CDC 值（简化版：使用当日值/阈值）
+          const threshold = pollutant.threshold || 1;
+          const normalizedValue = dailyVal / threshold;
+          dayCDC[pollutant.id] = normalizedValue;
+          totalCDC += normalizedValue;
           count++;
         }
       });

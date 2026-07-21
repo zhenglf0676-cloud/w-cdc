@@ -177,18 +177,90 @@ export default function CDCPage() {
     if (!cdcData?.trend || cdcData.trend.length === 0) return {};
 
     const dates = cdcData.trend.map(item => item.date);
+
+    // 为每个污染物创建一条线
+    const series = cdcData.trend[0] ? Object.keys(cdcData.trend[0])
+      .filter(key => key !== 'date' && key !== '综合')
+      .map(pollutantId => {
+        const pollutant = pollutantList.find(p => p.id === pollutantId);
+        return {
+          name: pollutant?.name || pollutantId,
+          type: 'line',
+          data: cdcData.trend.map(item => item[pollutantId] || 0),
+          smooth: true,
+          symbol: 'circle',
+          symbolSize: 4,
+          lineStyle: {
+            width: 1.5,
+          },
+          itemStyle: {
+            color: '#3B82F6',
+          },
+          areaStyle: {
+            color: {
+              type: 'linear',
+              x: 0,
+              y: 0,
+              x2: 0,
+              y2: 1,
+              colorStops: [
+                { offset: 0, color: 'rgba(59, 130, 246, 0.15)' },
+                { offset: 1, color: 'rgba(59, 130, 246, 0)' },
+              ],
+            },
+          },
+        };
+      }) : [];
+
+    // 添加综合线
     const cdcValues = cdcData.trend.map(item => item['综合'] || 0);
+    series.push({
+      name: '综合 CDC',
+      type: 'line',
+      data: cdcValues,
+      smooth: true,
+      symbol: 'circle',
+      symbolSize: 6,
+      lineStyle: {
+        color: '#3B82F6',
+        width: 2.5,
+      },
+      itemStyle: {
+        color: '#3B82F6',
+      },
+      areaStyle: {
+        color: {
+          type: 'linear',
+          x: 0,
+          y: 0,
+          x2: 0,
+          y2: 1,
+          colorStops: [
+            { offset: 0, color: 'rgba(59, 130, 246, 0.2)' },
+            { offset: 1, color: 'rgba(59, 130, 246, 0)' },
+          ],
+        },
+      },
+    });
 
     return {
       tooltip: {
         trigger: 'axis',
         formatter: (params: any) => {
           if (!params || params.length === 0) return '';
-          const data = Array.isArray(params) ? params[0] : params;
-          if (!data || data.value === undefined || data.value === null) return '';
-          const date = new Date(data.name);
+          const date = new Date(params[0].name);
           const dateStr = `${date.getMonth() + 1}/${date.getDate()}`;
-          return `${dateStr}<br/>CDC 值：${Number(data.value).toFixed(3)}`;
+          let result = `<div style="font-weight: 600; margin-bottom: 8px;">${dateStr}</div>`;
+          params.forEach((p: any) => {
+            if (p.value !== undefined && p.value !== null) {
+              result += `<div style="display: flex; align-items: center; margin-bottom: 4px;">
+                ${p.marker}
+                <span style="margin-left: 4px;">${p.seriesName}：</span>
+                <span style="margin-left: auto; font-weight: 600;">${Number(p.value).toFixed(3)}</span>
+              </div>`;
+            }
+          });
+          return result;
         },
       },
       grid: {
