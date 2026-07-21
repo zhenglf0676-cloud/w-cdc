@@ -68,20 +68,34 @@ export async function POST(request: NextRequest) {
 
     // 创建通知（使用 profile.id 而不是 outlet.user_id）
     if (profile?.id) {
-      const { error: notificationError } = await supabase
+      // 检查是否已经存在相同的通知（防重复）
+      const { data: existingNotifications } = await supabase
         .from('notifications')
-        .insert({
-          user_id: profile.id,
-          type: 'discharge_outlet_approved',
-          title: '排污口申请已通过',
-          content: { message: `您申请的排污口"${outlet.name}"已通过审批` },
-          is_read: false
-        });
+        .select('id')
+        .eq('user_id', profile.id)
+        .eq('type', 'discharge_outlet_approved')
+        .eq('content->>message', `您申请的排污口"${outlet.name}"已通过审批`)
+        .limit(1);
 
-      if (notificationError) {
-        console.error('创建通知失败:', notificationError);
+      // 只有在不存在相同通知时才创建
+      if (!existingNotifications || existingNotifications.length === 0) {
+        const { error: notificationError } = await supabase
+          .from('notifications')
+          .insert({
+            user_id: profile.id,
+            type: 'discharge_outlet_approved',
+            title: '排污口申请已通过',
+            content: { message: `您申请的排污口"${outlet.name}"已通过审批` },
+            is_read: false
+          });
+
+        if (notificationError) {
+          console.error('创建通知失败:', notificationError);
+        } else {
+          console.log('创建通知成功:', { user_id: profile.id, type: 'discharge_outlet_approved' });
+        }
       } else {
-        console.log('创建通知成功:', { user_id: profile.id, type: 'discharge_outlet_approved' });
+        console.log('通知已存在，跳过创建:', { user_id: profile.id, type: 'discharge_outlet_approved' });
       }
     }
 

@@ -78,21 +78,37 @@ export async function POST(request: Request) {
       return `${name}：${threshold}${unit}`;
     }).join('；');
     
-    const { error: notificationError } = await db
+    const messageContent = `【${companyName}】您好，您提交的${pollutantNames}污染物排放申请已审核通过！\n该污染物许可排放阈值：${pollutantDetails}，请严格按限值规范排污。`;
+    
+    // 检查是否已经存在相同的通知（防重复）
+    const { data: existingNotifications } = await db
       .from('notifications')
-      .insert({
-        user_id: application.company_id,
-        type: 'approval_approved',
-        title: '污染物审批通过',
-        content: {
-          application_id: applicationId,
-          pollutants: thresholds,
-          message: `【${companyName}】您好，您提交的${pollutantNames}污染物排放申请已审核通过！\n该污染物许可排放阈值：${pollutantDetails}，请严格按限值规范排污。`,
-        },
-      });
+      .select('id')
+      .eq('user_id', application.company_id)
+      .eq('type', 'approval_approved')
+      .eq('content->>message', messageContent)
+      .limit(1);
 
-    if (notificationError) {
-      console.error('创建通知失败:', notificationError);
+    // 只有在不存在相同通知时才创建
+    if (!existingNotifications || existingNotifications.length === 0) {
+      const { error: notificationError } = await db
+        .from('notifications')
+        .insert({
+          user_id: application.company_id,
+          type: 'approval_approved',
+          title: '污染物审批通过',
+          content: {
+            application_id: applicationId,
+            pollutants: thresholds,
+            message: messageContent,
+          },
+        });
+
+      if (notificationError) {
+        console.error('创建通知失败:', notificationError);
+      }
+    } else {
+      console.log('通知已存在，跳过创建:', { user_id: application.company_id, type: 'approval_approved' });
     }
 
     return NextResponse.json({ success: true });
