@@ -131,10 +131,10 @@ export default function CDCPage() {
           data: [
             {
               value: [
-                cdcData.indicators.AV.current,
-                cdcData.indicators.AD.current,
-                cdcData.indicators.CV.current,
-                cdcData.indicators.SKEW.current,
+                cdcData.indicators?.av || 0,
+                cdcData.indicators?.ad || 0,
+                cdcData.indicators?.cv || 0,
+                cdcData.indicators?.skew || 0,
               ],
               name: '本周期',
               areaStyle: {
@@ -149,10 +149,10 @@ export default function CDCPage() {
             },
             {
               value: [
-                cdcData.indicators.AV.lastPeriod,
-                cdcData.indicators.AD.lastPeriod,
-                cdcData.indicators.CV.lastPeriod,
-                cdcData.indicators.SKEW.lastPeriod,
+                cdcData.indicators?.av || 0,
+                cdcData.indicators?.ad || 0,
+                cdcData.indicators?.cv || 0,
+                cdcData.indicators?.skew || 0,
               ],
               name: '上周期',
               areaStyle: {
@@ -555,18 +555,35 @@ export default function CDCPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {cdcData?.indicators && Object.entries(cdcData.indicators).map(([key, data]) => (
-                    <tr key={key} className="border-b border-gray-100">
-                      <td className="py-3 px-4 text-sm text-gray-900">
-                        {key === 'AV' && 'AV（平均值）'}
-                        {key === 'AD' && 'AD（均差）'}
-                        {key === 'CV' && 'CV（变异性）'}
-                        {key === 'SKEW' && 'SKEW（偏态）'}
-                      </td>
-                      <td className="py-3 px-4 text-sm text-right text-gray-900">{data.current.toFixed(2)}</td>
-                      <td className="py-3 px-4 text-sm text-right text-gray-500">{data.lastPeriod.toFixed(2)}</td>
-                      <td className="py-3 px-4 text-sm text-right flex items-center justify-end gap-1">
-                        {getChangeIcon(data.change)}
+                  {cdcData?.indicators ? (
+                    <>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-3 px-4 text-sm text-gray-900">AV（平均值）</td>
+                        <td className="py-3 px-4 text-sm text-right text-gray-900">{(cdcData.indicators.av || 0).toFixed(4)}</td>
+                        <td className="py-3 px-4 text-sm text-right text-gray-500">-</td>
+                        <td className="py-3 px-4 text-sm text-right">-</td>
+                      </tr>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-3 px-4 text-sm text-gray-900">AD（均差）</td>
+                        <td className="py-3 px-4 text-sm text-right text-gray-900">{(cdcData.indicators.ad || 0).toFixed(4)}</td>
+                        <td className="py-3 px-4 text-sm text-right text-gray-500">-</td>
+                        <td className="py-3 px-4 text-sm text-right">-</td>
+                      </tr>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-3 px-4 text-sm text-gray-900">CV（变异性）</td>
+                        <td className="py-3 px-4 text-sm text-right text-gray-900">{(cdcData.indicators.cv || 0).toFixed(4)}</td>
+                        <td className="py-3 px-4 text-sm text-right text-gray-500">-</td>
+                        <td className="py-3 px-4 text-sm text-right">-</td>
+                      </tr>
+                      <tr className="border-b border-gray-100">
+                        <td className="py-3 px-4 text-sm text-gray-900">SKEW（偏态）</td>
+                        <td className="py-3 px-4 text-sm text-right text-gray-900">{(cdcData.indicators.skew || 0).toFixed(4)}</td>
+                        <td className="py-3 px-4 text-sm text-right text-gray-500">-</td>
+                        <td className="py-3 px-4 text-sm text-right">-</td>
+                      </tr>
+                    </>
+                  ) : null}
+                </tbody>
                         <span className={getChangeColor(data.change)}>
                           {data.change > 0 ? '↑' : '↓'} {Math.abs(data.change).toFixed(2)}
                         </span>
