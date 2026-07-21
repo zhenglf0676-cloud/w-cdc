@@ -344,45 +344,7 @@ export async function GET(request: NextRequest) {
     const cvRange = calculateNormalizationRange(allCVValues);
     const skewRange = calculateNormalizationRange(allSkewValues);
 
-    // 计算每个污染物的 CDC（使用整个周期的数据）
-    for (const pollutant of pollutantList) {
-      const values = pollutantDataMap[pollutant.id];
-      if (!values || values.length === 0) continue;
-
-      const n = values.length;
-      const av = values.reduce((a, b) => a + b, 0) / n;
-      const ad = values.reduce((a, b) => a + Math.abs(b - av), 0) / n;
-      const sd = calculateSD(values, av);
-      const cv = av !== 0 ? sd / av : 0;
-      const skew = calculateSkew(values, av, sd);
-
-      // 归一化（使用所有污染物的指标范围）
-      const norAD = normalize(ad, adRange.min, adRange.max);
-      const norCV = normalize(cv, cvRange.min, cvRange.max);
-      const norSkew = normalize(skew, skewRange.min, skewRange.max);
-
-      // 计算 CDC = [m × Wi / ΣWi] × [Nor(AD)² + Nor(CV)² + Nor(SKEW)²]
-      const cdc = weight * (Math.pow(norAD, 2) + Math.pow(norCV, 2) + Math.pow(norSkew, 2));
-      const riskInfo = getRiskLevel(cdc);
-
-      pollutantCDCs.push({
-        pollutantId: pollutant.id,
-        pollutantName: pollutant.name,
-        av: parseFloat(av.toFixed(4)),
-        ad: parseFloat(ad.toFixed(4)),
-        cv: parseFloat(cv.toFixed(4)),
-        skew: parseFloat(skew.toFixed(4)),
-        cdc: parseFloat(cdc.toFixed(4)),
-        weight: parseFloat(weight.toFixed(4)),
-        riskLevel: riskInfo.level,
-        riskColor: riskInfo.color
-      });
-
-      totalWeightedCDC += cdc;
-      totalWeight += weight;
-    }
-
-    // 计算每日各污染物的 CDC 值（用于趋势图）
+    // 先计算每日各污染物的 CDC 值（用于趋势图和最后一天的 CDC）
     const dailyPollutantCDC: Record<string, Record<string, number>> = {};
     
     for (const date of allDates) {
@@ -423,6 +385,86 @@ export async function GET(request: NextRequest) {
       }
 
       dailyPollutantCDC[date] = dayCDCs;
+    }
+
+    // 获取最后一天的日期和数据
+    const lastDate = allDates[allDates.length - 1];
+    const lastDayData = dailyMonitoringData[lastDate] || [];
+    const lastDayPollutantData: Record<string, number[]> = {};
+    pollutantList.forEach(p => {
+      lastDayPollutantData[p.id] = [];
+    });
+    lastDayData.forEach(record => {
+      if (lastDayPollutantData[record.pollutant_type]) {
+        lastDayPollutantData[record.pollutant_type].push(record.value);
+      }
+    });
+
+    // 计算每个污染物的 CDC（使用整个周期的数据）
+    for (const pollutant of pollutantList) {
+      const values = pollutantDataMap[pollutant.id];
+      if (!values || values.length === 0) continue;
+
+      const n = values.length;
+      const av = values.reduce((a, b) => a + b, 0) / n;
+      const ad = values.reduce((a, b) => a + Math.abs(b - av), 0) / n;
+      const sd = calculateSD(values, av);
+      const cv = av !== 0 ? sd / av : 0;
+      const skew = calculateSkew(values, av, sd);
+
+      // 归一化（使用所有污染物的指标范围）
+      const norAD = normalize(ad, adRange.min, adRange.max);
+      const norCV = normalize(cv, cvRange.min, cvRange.max);
+      const norSkew = normalize(skew, skewRange.min, skewRange.max);
+
+      // 计算 CDC = [m × Wi / ΣWi] × [Nor(AD)² + Nor(CV)² + Nor(SKEW)²]
+      const cdc = weight * (Math.pow(norAD, 2) + Math.pow(norCV, 2) + Math.pow(norSkew, 2));
+      const riskInfo = getRiskLevel(cdc);
+
+      // 计算最后一天的指标（用于雷达图展示）
+      const lastDayValues = lastDayPollutantData[pollutant.id];
+      let lastDayAv = av, lastDayAd = ad, lastDayCv = cv, lastDaySkew = skew;
+      let lastDayNorAv = 0, lastDayNorAd = norAD, lastDayNorCv = norCV, lastDayNorSkew = norSkew;
+      
+      if (lastDayValues && lastDayValues.length > 0) {
+        const lastN = lastDayValues.length;
+        lastDayAv = lastDayValues.reduce((a, b) => a + b, 0) / lastN;
+        lastDayAd = lastDayValues.reduce((a, b) => a + Math.abs(b - lastDayAv), 0) / lastN;
+        const lastDaySd = calculateSD(lastDayValues, lastDayAv);
+        lastDayCv = lastDayAv !== 0 ? lastDaySd / lastDayAv : 0;
+        lastDaySkew = calculateSkew(lastDayValues, lastDayAv, lastDaySd);
+        
+        lastDayNorAv = normalize(lastDayAv, 0, globalAV * 2 || 1);
+        lastDayNorAd = normalize(lastDayAd, adRange.min, adRange.max);
+        lastDayNorCv = normalize(lastDayCv, cvRange.min, cvRange.max);
+        lastDayNorSkew = normalize(lastDaySkew, skewRange.min, skewRange.max);
+      }
+
+      pollutantCDCs.push({
+        pollutantId: pollutant.id,
+        pollutantName: pollutant.name,
+        av: parseFloat(av.toFixed(4)),
+        ad: parseFloat(ad.toFixed(4)),
+        cv: parseFloat(cv.toFixed(4)),
+        skew: parseFloat(skew.toFixed(4)),
+        cdc: parseFloat(cdc.toFixed(4)),
+        weight: parseFloat(weight.toFixed(4)),
+        riskLevel: riskInfo.level,
+        riskColor: riskInfo.color,
+        // 最后一天的指标（用于雷达图展示）
+        lastDayAv: parseFloat(lastDayAv.toFixed(4)),
+        lastDayAd: parseFloat(lastDayAd.toFixed(4)),
+        lastDayCv: parseFloat(lastDayCv.toFixed(4)),
+        lastDaySkew: parseFloat(lastDaySkew.toFixed(4)),
+        lastDayNorAv: parseFloat(lastDayNorAv.toFixed(4)),
+        lastDayNorAd: parseFloat(lastDayNorAd.toFixed(4)),
+        lastDayNorCv: parseFloat(lastDayNorCv.toFixed(4)),
+        lastDayNorSkew: parseFloat(lastDayNorSkew.toFixed(4)),
+        lastDayCDC: parseFloat((dailyPollutantCDC[lastDate]?.[pollutant.id] || 0).toFixed(4))
+      });
+
+      totalWeightedCDC += cdc;
+      totalWeight += weight;
     }
 
     // 计算综合 CDC

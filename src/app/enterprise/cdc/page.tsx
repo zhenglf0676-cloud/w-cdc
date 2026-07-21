@@ -27,6 +27,16 @@ interface PollutantCDC {
   weight: number;
   riskLevel: string;
   riskColor: string;
+  // 最后一天的指标（用于雷达图展示）
+  lastDayAv?: number;
+  lastDayAd?: number;
+  lastDayCv?: number;
+  lastDaySkew?: number;
+  lastDayNorAv?: number;
+  lastDayNorAd?: number;
+  lastDayNorCv?: number;
+  lastDayNorSkew?: number;
+  lastDayCDC?: number;
 }
 
 interface CDCAnalysisData {
@@ -124,15 +134,17 @@ export default function CDCPage() {
     }
   }, [session, dateRange]);
 
-  // 为每个污染物生成雷达图配置（使用当天的数据）
+  // 为每个污染物生成雷达图配置（使用最后一天的数据）
   const getPollutantRadarOption = (pollutant: PollutantCDC) => {
-    // 获取最后一天的 CDC 数据
-    const dates = Object.keys(cdcData?.dailyPollutantCDC || {}).sort();
-    const lastDate = dates[dates.length - 1];
-    const lastDayCDC = cdcData?.dailyPollutantCDC?.[lastDate]?.[pollutant.pollutantId] || 0;
+    // 使用最后一天的归一化指标值
+    const avValue = pollutant.lastDayNorAv ?? 0;
+    const adValue = pollutant.lastDayNorAd ?? 0;
+    const cvValue = pollutant.lastDayNorCv ?? 0;
+    const skewValue = pollutant.lastDayNorSkew ?? 0;
     
-    // 使用整个周期的平均值作为雷达图数据（因为当天可能没有足够数据计算四个指标）
-    // 但 CDC 值使用当天的
+    // 使用最后一天的 CDC 值
+    const lastDayCDC = pollutant.lastDayCDC ?? pollutant.cdc;
+    
     return {
       radar: {
         indicator: [
@@ -147,35 +159,36 @@ export default function CDCPage() {
       series: [{
         type: 'radar',
         data: [{
-          value: [
-            pollutant.av / 10 || 0.5,
-            pollutant.ad / 10 || 0.5,
-            pollutant.cv / 10 || 0.5,
-            pollutant.skew / 10 || 0.5
-          ],
+          value: [avValue, adValue, cvValue, skewValue],
           name: pollutant.pollutantName,
           areaStyle: { 
-            color: pollutant.riskColor === 'green' ? 'rgba(16, 185, 129, 0.2)' :
-                   pollutant.riskColor === 'orange' ? 'rgba(245, 158, 11, 0.2)' :
-                   'rgba(239, 68, 68, 0.2)'
+            color: pollutant.riskColor === 'green' ? 'rgba(16, 185, 129, 0.2)' : 
+                   pollutant.riskColor === 'orange' ? 'rgba(245, 158, 11, 0.2)' : 'rgba(239, 68, 68, 0.2)'
           },
           lineStyle: { 
-            color: pollutant.riskColor === 'green' ? '#10B981' :
+            color: pollutant.riskColor === 'green' ? '#10B981' : 
                    pollutant.riskColor === 'orange' ? '#F59E0B' : '#EF4444',
             width: 2 
           },
           itemStyle: { 
-            color: pollutant.riskColor === 'green' ? '#10B981' :
+            color: pollutant.riskColor === 'green' ? '#10B981' : 
                    pollutant.riskColor === 'orange' ? '#F59E0B' : '#EF4444'
           }
         }]
       }],
       tooltip: {
         trigger: 'item',
-        formatter: (params: any) => {
-          if (!params || !params.value) return '';
-          const value = lastDayCDC.toFixed(4);
-          return `${pollutant.pollutantName}<br/>CDC: ${value}`;
+        formatter: () => {
+          return `
+            <div style="padding: 8px;">
+              <div style="font-weight: bold; margin-bottom: 8px;">${pollutant.pollutantName}</div>
+              <div>AV (均值): ${pollutant.lastDayAv?.toFixed(4) ?? pollutant.av.toFixed(4)}</div>
+              <div>AD (离差): ${pollutant.lastDayAd?.toFixed(4) ?? pollutant.ad.toFixed(4)}</div>
+              <div>CV (变异系数): ${pollutant.lastDayCv?.toFixed(4) ?? pollutant.cv.toFixed(4)}</div>
+              <div>SKEW (偏度): ${pollutant.lastDaySkew?.toFixed(4) ?? pollutant.skew.toFixed(4)}</div>
+              <div style="margin-top: 8px; font-weight: bold;">CDC (最后一天): ${lastDayCDC.toFixed(4)}</div>
+            </div>
+          `;
         }
       }
     };
