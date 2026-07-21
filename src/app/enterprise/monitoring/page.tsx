@@ -191,6 +191,7 @@ export default function MonitoringPage() {
       );
       if (res.ok) {
         const data = await res.json();
+        console.log('监测记录 API 返回:', data);
         if (data.success) {
           setHistoryData(data.data || []);
         }

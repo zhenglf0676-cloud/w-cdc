@@ -175,13 +175,23 @@ export async function POST(request: NextRequest) {
         // Excel 日期格式
         monitoredAt = new Date((timeStr - 25569) * 86400 * 1000);
       } else {
-        monitoredAt = new Date(timeStr);
+        // 字符串格式：确保作为本地时间解析
+        // 如果格式是 "2026-07-21 08:00"，需要添加时区信息
+        const str = String(timeStr);
+        if (str.match(/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}$/)) {
+          // 格式：YYYY-MM-DD HH:mm，作为本地时间处理
+          monitoredAt = new Date(str.replace(' ', 'T'));
+        } else {
+          monitoredAt = new Date(str);
+        }
       }
       
       if (isNaN(monitoredAt.getTime())) {
         errors.push(`第${rowNum}行：时间格式错误`);
         continue;
       }
+
+      console.log(`第${rowNum}行时间：原始="${timeStr}", 解析后="${monitoredAt.toISOString()}"`);
 
       // 解析污染物数据
       for (const col of POLLUTANT_COLUMNS) {
