@@ -439,8 +439,8 @@ export default function CDCPage() {
               <span className="text-3xl font-bold text-orange-600">
                 {cdcData?.currentCDC.toFixed(2) || '0.00'}
               </span>
-              <Badge className={getRiskColor(cdcData?.riskLevel || '中风险')}>
-                {cdcData?.riskLevel || '中风险'}
+              <Badge className={getRiskColor(cdcData?.riskLevel || '低风险')}>
+                {cdcData?.riskLevel || '低风险'}
               </Badge>
             </div>
             <div className="mt-2 text-xs text-gray-500">
