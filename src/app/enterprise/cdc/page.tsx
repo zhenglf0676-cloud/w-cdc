@@ -123,45 +123,50 @@ export default function CDCPage() {
     }
   }, [session, dateRange]);
 
-  // 雷达图配置
-  const radarOption = useMemo(() => {
-    if (!cdcData || !cdcData.indicators) {
-      return {
-        radar: { indicator: [] },
-        series: [{ data: [] }]
-      };
-    }
-
+  // 为每个污染物生成雷达图配置
+  const getPollutantRadarOption = (pollutant: PollutantCDC) => {
     return {
       radar: {
         indicator: [
-          { name: 'AV (均值)', max: 1 },
-          { name: 'AD (离差)', max: 1 },
-          { name: 'CV (变异系数)', max: 1 },
-          { name: 'SKEW (偏度)', max: 1 }
+          { name: 'AV', max: 1 },
+          { name: 'AD', max: 1 },
+          { name: 'CV', max: 1 },
+          { name: 'SKEW', max: 1 }
         ],
-        radius: '65%'
+        radius: '60%',
+        center: ['50%', '50%']
       },
       series: [{
         type: 'radar',
         data: [{
           value: [
-            cdcData.indicators.av.normalized,
-            cdcData.indicators.ad.normalized,
-            cdcData.indicators.cv.normalized,
-            cdcData.indicators.skew.normalized
+            pollutant.av / 10 || 0.5, // 归一化到 0-1
+            pollutant.ad / 10 || 0.5,
+            pollutant.cv / 10 || 0.5,
+            pollutant.skew / 10 || 0.5
           ],
-          name: '当前指标',
-          areaStyle: { color: 'rgba(14, 165, 233, 0.2)' },
-          lineStyle: { color: '#0EA5E9', width: 2 },
-          itemStyle: { color: '#0EA5E9' }
+          name: pollutant.pollutantName,
+          areaStyle: { 
+            color: pollutant.riskColor === 'green' ? 'rgba(16, 185, 129, 0.2)' :
+                   pollutant.riskColor === 'orange' ? 'rgba(245, 158, 11, 0.2)' :
+                   'rgba(239, 68, 68, 0.2)'
+          },
+          lineStyle: { 
+            color: pollutant.riskColor === 'green' ? '#10B981' :
+                   pollutant.riskColor === 'orange' ? '#F59E0B' : '#EF4444',
+            width: 2 
+          },
+          itemStyle: { 
+            color: pollutant.riskColor === 'green' ? '#10B981' :
+                   pollutant.riskColor === 'orange' ? '#F59E0B' : '#EF4444'
+          }
         }]
       }],
       tooltip: {
         trigger: 'item'
       }
     };
-  }, [cdcData]);
+  };
 
   // CDC 趋势图配置
   const lineOption = useMemo(() => {
@@ -382,68 +387,56 @@ export default function CDCPage() {
               </div>
             </div>
 
-            {/* 核心指标雷达图 */}
-            <div className="mb-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-              <h3 className="mb-4 font-semibold text-slate-900">核心指标雷达图</h3>
-              <ReactECharts option={radarOption} style={{ height: '350px' }} />
-            </div>
-
-            {/* 各污染物 CDC 分析表格 */}
-            <div className="mb-6 rounded-lg border border-slate-200 bg-white shadow-sm">
-              <div className="border-b border-slate-200 p-4">
-                <h3 className="font-semibold text-slate-900">各污染物 CDC 分析</h3>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">污染物</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">AV (均值)</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">AD (离差)</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">CV (变异系数)</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">SKEW (偏度)</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">权重</th>
-                      <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">CDC 值</th>
-                      <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-500">风险等级</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200">
-                    {cdcData.pollutants.map((pollutant, index) => (
-                      <tr key={index} className="hover:bg-slate-50">
-                        <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-slate-900">
-                          {pollutant.pollutantName}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-mono text-slate-600">
-                          {pollutant.av.toFixed(4)}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-mono text-slate-600">
-                          {pollutant.ad.toFixed(4)}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-mono text-slate-600">
-                          {pollutant.cv.toFixed(4)}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-mono text-slate-600">
-                          {pollutant.skew.toFixed(4)}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-mono text-slate-600">
-                          {(pollutant.weight * 100).toFixed(1)}%
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-mono font-semibold text-slate-900">
-                          {pollutant.cdc.toFixed(2)}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-center">
-                          <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${
-                            getRiskColor(pollutant.riskColor).bg
-                          } ${getRiskColor(pollutant.riskColor).text} ${
-                            getRiskColor(pollutant.riskColor).border
-                          }`}>
-                            {pollutant.riskLevel}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            {/* 各污染物 CDC 雷达图 */}
+            <div className="mb-6">
+              <h3 className="mb-4 font-semibold text-slate-900">各污染物 CDC 分析</h3>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {cdcData.pollutants.map((pollutant, index) => (
+                  <div key={index} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="mb-3 flex items-center justify-between">
+                      <h4 className="font-medium text-slate-900">{pollutant.pollutantName}</h4>
+                      <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${
+                        getRiskColor(pollutant.riskColor).bg
+                      } ${getRiskColor(pollutant.riskColor).text} ${
+                        getRiskColor(pollutant.riskColor).border
+                      }`}>
+                        {pollutant.riskLevel}
+                      </span>
+                    </div>
+                    <ReactECharts 
+                      option={getPollutantRadarOption(pollutant)} 
+                      style={{ height: '220px' }}
+                    />
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                      <div className="rounded bg-slate-50 p-2">
+                        <div className="text-slate-500">AV (均值)</div>
+                        <div className="font-mono font-medium text-slate-900">{pollutant.av.toFixed(4)}</div>
+                      </div>
+                      <div className="rounded bg-slate-50 p-2">
+                        <div className="text-slate-500">AD (离差)</div>
+                        <div className="font-mono font-medium text-slate-900">{pollutant.ad.toFixed(4)}</div>
+                      </div>
+                      <div className="rounded bg-slate-50 p-2">
+                        <div className="text-slate-500">CV (变异系数)</div>
+                        <div className="font-mono font-medium text-slate-900">{pollutant.cv.toFixed(4)}</div>
+                      </div>
+                      <div className="rounded bg-slate-50 p-2">
+                        <div className="text-slate-500">SKEW (偏度)</div>
+                        <div className="font-mono font-medium text-slate-900">{pollutant.skew.toFixed(4)}</div>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3">
+                      <div>
+                        <div className="text-xs text-slate-500">CDC 值</div>
+                        <div className="text-lg font-bold text-slate-900">{pollutant.cdc.toFixed(2)}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs text-slate-500">权重</div>
+                        <div className="text-sm font-medium text-slate-700">{(pollutant.weight * 100).toFixed(1)}%</div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
