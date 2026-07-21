@@ -1,5 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import { getSupabaseCredentials, getSupabaseServiceRoleKey, getSupabaseClient } from '@/storage/database/supabase-client';
+
+// 使用 service role key 绕过 RLS
+function getSupabaseAdmin() {
+  const { url, anonKey } = getSupabaseCredentials();
+  const serviceRoleKey = getSupabaseServiceRoleKey();
+  return createClient(url, serviceRoleKey || anonKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
 
 // 标准差计算
 function calculateSD(values: number[], avg: number): number {
@@ -66,16 +76,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '未认证' }, { status: 401 });
     }
 
-    // 创建 Supabase 客户端
-    const supabase = getSupabaseClient(token);
-
-    // 获取当前用户信息
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    // 使用 token 验证用户身份
+    const client = getSupabaseClient(token);
+    const { data: { user }, error: userError } = await client.auth.getUser();
     if (userError || !user) {
-      return NextResponse.json({ error: '认证失败' }, { status: 401 });
+      return NextResponse.json({ error: '用户信息获取失败' }, { status: 400 });
     }
 
     const userId = user.id;
+    
+    // 使用 service role key 进行后续操作
+    const supabase = getSupabaseAdmin();
 
     // 获取查询参数
     const searchParams = request.nextUrl.searchParams;
@@ -87,15 +98,15 @@ export async function GET(request: NextRequest) {
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('*')
-      .eq('sub', userId)
+      .eq('user_id', userId)
       .single();
 
     if (profileError || !profile) {
-      console.log('CDC API: 用户信息获取失败', profileError);
       return NextResponse.json({ error: '用户信息获取失败' }, { status: 400 });
     }
 
-    const companyId = profile.sub;
+    // 使用 profile.id 作为 company_id
+    const companyId = profile.id;
 
     // 获取企业已审批的排污口（使用 user_id）
     const { data: outlets, error: outletsError } = await supabase
@@ -105,7 +116,6 @@ export async function GET(request: NextRequest) {
       .eq('status', 'approved');
 
     if (outletsError || !outlets || outlets.length === 0) {
-      console.log('CDC API: 未找到已审批的排污口，userId:', userId);
       return NextResponse.json({ 
         success: true, 
         data: {
@@ -119,8 +129,6 @@ export async function GET(request: NextRequest) {
         }
       });
     }
-
-    console.log('CDC API: 找到', outlets.length, '个排污口');
 
     const outletIds = outlets.map(o => o.id);
 
@@ -132,7 +140,6 @@ export async function GET(request: NextRequest) {
       .eq('status', 'approved');
 
     if (pollutantsError || !pollutants || pollutants.length === 0) {
-      console.log('CDC API: 未找到已审批的污染物，companyId:', companyId);
       return NextResponse.json({ 
         success: true, 
         data: {
@@ -146,8 +153,6 @@ export async function GET(request: NextRequest) {
         }
       });
     }
-
-    console.log('CDC API: 找到', pollutants.length, '个污染物');
 
     // 计算时间范围
     let fromDate: Date;
