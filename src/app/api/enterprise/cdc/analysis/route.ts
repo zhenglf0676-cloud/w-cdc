@@ -229,13 +229,17 @@ export async function GET(request: NextRequest) {
     // 计算每个污染物的 CDC
     const cdcResults: Record<string, any> = {};
     const trendData: Record<string, number>[] = [];
-    const dates = Object.keys(dailyValuesByPollutant[pollutants[0].id] || {}).sort();
+    const dates = Object.keys(dailyValuesByPollutant[pollutantList[0]?.id] || {}).sort();
+
+    console.log(`[CDC] 日期列表:`, dates);
+    console.log(`[CDC] dailyValuesByPollutant keys:`, Object.keys(dailyValuesByPollutant));
 
     // 计算历史统计值（用于归一化）
     const historicalStats: Record<string, { adMin: number; adMax: number; cvMin: number; cvMax: number; skewMin: number; skewMax: number }> = {};
     
     pollutantList.forEach(pollutant => {
       const dailyValues = Object.values(dailyValuesByPollutant[pollutant.id] || {});
+      console.log(`[CDC] ${pollutant.id} dailyValues:`, dailyValues);
       if (dailyValues.length === 0) return;
 
       const n = dailyValues.length;
@@ -252,12 +256,18 @@ export async function GET(request: NextRequest) {
       };
     });
 
+    console.log(`[CDC] historicalStats:`, Object.keys(historicalStats));
+
     // 计算每个污染物的 CDC
     pollutantList.forEach(pollutant => {
       const dailyValues = Object.values(dailyValuesByPollutant[pollutant.id] || {});
-      if (dailyValues.length === 0) return;
+      if (dailyValues.length === 0) {
+        console.log(`[CDC] ${pollutant.id} 没有数据`);
+        return;
+      }
 
       const result = calculatePollutantCDC(dailyValues, historicalStats[pollutant.id]);
+      console.log(`[CDC] ${pollutant.id} CDC result:`, result);
       if (result) {
         cdcResults[pollutant.id] = {
           ...result,
@@ -267,10 +277,34 @@ export async function GET(request: NextRequest) {
       }
     });
 
+    console.log(`[CDC] cdcResults:`, Object.keys(cdcResults));
+
     // 计算综合 CDC（所有污染物的平均值）
     const cdcValues = Object.values(cdcResults).map(r => r.cdc);
     const currentCDC = cdcValues.length > 0 ? cdcValues.reduce((a, b) => a + b, 0) / cdcValues.length : 0;
     const riskLevel = getRiskLevel(currentCDC);
+
+    // 计算上周 CDC（前 7 天的数据）
+    const lastWeekDates = dates.slice(-14, -7); // 倒数第 8-14 天
+    let lastWeekTotal = 0;
+    let lastWeekCount = 0;
+    lastWeekDates.forEach(date => {
+      pollutantList.forEach(pollutant => {
+        const dailyVal = dailyValuesByPollutant[pollutant.id]?.[date];
+        if (dailyVal !== undefined) {
+          lastWeekTotal += dailyVal;
+          lastWeekCount++;
+        }
+      });
+    });
+    const lastWeekCDC = lastWeekCount > 0 ? lastWeekTotal / lastWeekCount : 0;
+
+    // 计算变化值
+    const changeFromLastPeriod = currentCDC - lastWeekCDC;
+
+    // 计算最大 CDC
+    const maxCDC = cdcValues.length > 0 ? Math.max(...cdcValues) : 0;
+    const changeFromMax = currentCDC - maxCDC;
 
     // 计算趋势数据
     dates.forEach(date => {
@@ -298,10 +332,10 @@ export async function GET(request: NextRequest) {
         currentCDC,
         riskLevel: riskLevel.level,
         evaluatedAt: new Date().toISOString(),
-        changeFromLastPeriod: 0.07, // 示例数据
-        maxCDC: 0.92, // 示例数据
-        changeFromMax: -0.10, // 示例数据
-        lastWeekCDC: 0.75, // 示例数据
+        changeFromLastPeriod,
+        maxCDC,
+        changeFromMax,
+        lastWeekCDC,
         indicators: {
           AV: { current: 0.72, lastPeriod: 0.68, change: 0.04 },
           AD: { current: 0.81, lastPeriod: 0.74, change: 0.07 },
