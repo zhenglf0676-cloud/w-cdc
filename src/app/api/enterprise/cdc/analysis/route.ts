@@ -286,8 +286,8 @@ export async function GET(request: NextRequest) {
           .from('monitoring_data')
           .select('pollutant_type, value, monitored_at')
           .in('outlet_id', companyOutletIds)
-          .gte('monitored_at', startDate.toISOString())
-          .lte('endDate.toISOString()');
+          .gte('monitored_at', fromDate.toISOString())
+          .lte('monitored_at', toDate.toISOString());
 
         if (companyMonitoringData && companyMonitoringData.length > 0) {
           // 计算每日累计值
