@@ -178,39 +178,40 @@ export default function CDCPage() {
 
     const dates = cdcData.trend.map(item => item.date);
 
+    // 从 trend 数据中提取污染物 ID
+    const pollutantIds = cdcData.trend[0] ? Object.keys(cdcData.trend[0])
+      .filter(key => key !== 'date' && key !== '综合') : [];
+
     // 为每个污染物创建一条线
-    const series = cdcData.trend[0] ? Object.keys(cdcData.trend[0])
-      .filter(key => key !== 'date' && key !== '综合')
-      .map(pollutantId => {
-        const pollutant = pollutantList.find(p => p.id === pollutantId);
-        return {
-          name: pollutant?.name || pollutantId,
-          type: 'line',
-          data: cdcData.trend.map(item => item[pollutantId] || 0),
-          smooth: true,
-          symbol: 'circle',
-          symbolSize: 4,
-          lineStyle: {
-            width: 1.5,
+    const series = pollutantIds.map(pollutantId => {
+      return {
+        name: pollutantId.toUpperCase(),
+        type: 'line',
+        data: cdcData.trend.map(item => item[pollutantId] || 0),
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 4,
+        lineStyle: {
+          width: 1.5,
+        },
+        itemStyle: {
+          color: '#3B82F6',
+        },
+        areaStyle: {
+          color: {
+            type: 'linear',
+            x: 0,
+            y: 0,
+            x2: 0,
+            y2: 1,
+            colorStops: [
+              { offset: 0, color: 'rgba(59, 130, 246, 0.15)' },
+              { offset: 1, color: 'rgba(59, 130, 246, 0)' },
+            ],
           },
-          itemStyle: {
-            color: '#3B82F6',
-          },
-          areaStyle: {
-            color: {
-              type: 'linear',
-              x: 0,
-              y: 0,
-              x2: 0,
-              y2: 1,
-              colorStops: [
-                { offset: 0, color: 'rgba(59, 130, 246, 0.15)' },
-                { offset: 1, color: 'rgba(59, 130, 246, 0)' },
-              ],
-            },
-          },
-        };
-      }) : [];
+        },
+      };
+    });
 
     // 添加综合线
     const cdcValues = cdcData.trend.map(item => item['综合'] || 0);
