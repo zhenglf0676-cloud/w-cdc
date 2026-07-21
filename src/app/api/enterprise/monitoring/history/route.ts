@@ -57,7 +57,16 @@ export async function GET(request: NextRequest) {
 
     // 计算时间范围
     const now = new Date();
-    const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+    let startDate: Date;
+    
+    if (days === 1) {
+      // 当天：从今天 00:00:00 开始
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    } else {
+      // 前 N 天：从 N 天前的 00:00:00 开始
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - days + 1);
+    }
+    
     const startDateStr = startDate.toISOString();
 
     // 获取历史数据

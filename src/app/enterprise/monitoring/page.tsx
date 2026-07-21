@@ -770,8 +770,11 @@ function ChartOption({
   // 提取时间点
   const times = Array.from(new Set(sortedData.map(d => d.monitored_at)));
 
+  // 为每个污染物分配固定颜色
+  const colors = ['#0ea5e9', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#6366f1'];
+
   // 为每个污染物生成系列数据
-  const series = pollutants.map((p) => {
+  const series = pollutants.map((p, index) => {
     const pollutantData = sortedData.filter(d => d.pollutant_type === p.id);
     const dataMap = new Map(pollutantData.map(d => [d.monitored_at, d]));
 
@@ -787,13 +790,7 @@ function ChartOption({
       }),
       lineStyle: { width: 2 },
       itemStyle: {
-        color: (params: any) => {
-          const record = dataMap.get(times[params.dataIndex]);
-          if (record && record.status === 'warning') {
-            return '#ef4444'; // 红色 - 危险
-          }
-          return '#0ea5e9'; // 蓝色 - 正常
-        },
+        color: colors[index % colors.length],
       },
     };
   });
