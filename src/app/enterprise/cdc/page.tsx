@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { TrendingUp, TrendingDown, Info, Calendar } from 'lucide-react';
+import ReactECharts from 'echarts-for-react';
 
 interface CDCData {
   currentCDC: number;
@@ -28,7 +28,7 @@ interface CDCData {
 }
 
 export default function CDCPage() {
-  const { session, loading } = useAuth();
+  const { session, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const [timeRange, setTimeRange] = useState<string>('30');
   const [cdcData, setCdcData] = useState<CDCData | null>(null);
@@ -36,10 +36,10 @@ export default function CDCPage() {
 
   // 认证检查
   useEffect(() => {
-    if (!loading && !session) {
+    if (!authLoading && !session) {
       router.push('/login');
     }
-  }, [session, loading, router]);
+  }, [session, authLoading, router]);
 
   // 获取 CDC 数据
   useEffect(() => {
@@ -89,7 +89,201 @@ export default function CDCPage() {
     return 'text-gray-500';
   };
 
-  if (loading || !session) {
+  // 雷达图配置
+  const radarOption = useMemo(() => {
+    if (!cdcData?.indicators) return {};
+
+    const indicators = [
+      { name: 'AV（平均值）', max: 1 },
+      { name: 'AD（均差）', max: 1 },
+      { name: 'CV（变异性）', max: 1 },
+      { name: 'SKEW（偏态）', max: 1 },
+    ];
+
+    return {
+      tooltip: {},
+      legend: {
+        data: ['本周期', '上周期'],
+        bottom: 0,
+      },
+      radar: {
+        indicator: indicators,
+        shape: 'polygon',
+        splitNumber: 4,
+        axisName: {
+          color: '#666',
+        },
+        splitArea: {
+          areaStyle: {
+            color: ['rgba(59, 130, 246, 0.05)', 'rgba(59, 130, 246, 0.1)', 'rgba(59, 130, 246, 0.15)', 'rgba(59, 130, 246, 0.2)'],
+          },
+        },
+      },
+      series: [
+        {
+          type: 'radar',
+          data: [
+            {
+              value: [
+                cdcData.indicators.AV.current,
+                cdcData.indicators.AD.current,
+                cdcData.indicators.CV.current,
+                cdcData.indicators.SKEW.current,
+              ],
+              name: '本周期',
+              areaStyle: {
+                color: 'rgba(59, 130, 246, 0.3)',
+              },
+              lineStyle: {
+                color: '#3B82F6',
+              },
+              itemStyle: {
+                color: '#3B82F6',
+              },
+            },
+            {
+              value: [
+                cdcData.indicators.AV.lastPeriod,
+                cdcData.indicators.AD.lastPeriod,
+                cdcData.indicators.CV.lastPeriod,
+                cdcData.indicators.SKEW.lastPeriod,
+              ],
+              name: '上周期',
+              areaStyle: {
+                color: 'rgba(34, 197, 94, 0.1)',
+              },
+              lineStyle: {
+                color: '#22C55E',
+                type: 'dashed',
+              },
+              itemStyle: {
+                color: '#22C55E',
+              },
+            },
+          ],
+        },
+      ],
+    };
+  }, [cdcData]);
+
+  // 折线图配置
+  const lineOption = useMemo(() => {
+    if (!cdcData?.trend || cdcData.trend.length === 0) return {};
+
+    const dates = cdcData.trend.map(item => item.date);
+    const cdcValues = cdcData.trend.map(item => item.cdc);
+
+    return {
+      tooltip: {
+        trigger: 'axis',
+        formatter: (params: any) => {
+          const data = params[0];
+          return `${data.name}<br/>CDC 值：${data.value.toFixed(3)}`;
+        },
+      },
+      grid: {
+        left: '3%',
+        right: '4%',
+        bottom: '10%',
+        top: '10%',
+        containLabel: true,
+      },
+      xAxis: {
+        type: 'category',
+        data: dates,
+        boundaryGap: false,
+        axisLine: {
+          lineStyle: {
+            color: '#e5e7eb',
+          },
+        },
+        axisLabel: {
+          color: '#6b7280',
+          fontSize: 11,
+        },
+      },
+      yAxis: {
+        type: 'value',
+        min: 0,
+        max: 2,
+        axisLine: {
+          lineStyle: {
+            color: '#e5e7eb',
+          },
+        },
+        axisLabel: {
+          color: '#6b7280',
+          fontSize: 11,
+        },
+        splitLine: {
+          lineStyle: {
+            color: '#f3f4f6',
+          },
+        },
+      },
+      series: [
+        {
+          name: 'CDC 值',
+          type: 'line',
+          data: cdcValues,
+          smooth: true,
+          symbol: 'circle',
+          symbolSize: 6,
+          lineStyle: {
+            color: '#3B82F6',
+            width: 2,
+          },
+          itemStyle: {
+            color: '#3B82F6',
+          },
+          areaStyle: {
+            color: {
+              type: 'linear',
+              x: 0,
+              y: 0,
+              x2: 0,
+              y2: 1,
+              colorStops: [
+                { offset: 0, color: 'rgba(59, 130, 246, 0.3)' },
+                { offset: 1, color: 'rgba(59, 130, 246, 0.05)' },
+              ],
+            },
+          },
+          markLine: {
+            silent: true,
+            symbol: 'none',
+            lineStyle: {
+              type: 'dashed',
+            },
+            data: [
+              {
+                yAxis: 0.5,
+                lineStyle: { color: '#22C55E' },
+                label: {
+                  formatter: '低风险 (0.5)',
+                  position: 'insideEndTop',
+                  color: '#22C55E',
+                  fontSize: 11,
+                },
+              },
+              {
+                yAxis: 1.5,
+                lineStyle: { color: '#EF4444' },
+                label: {
+                  formatter: '高风险 (1.5)',
+                  position: 'insideEndTop',
+                  color: '#EF4444',
+                  fontSize: 11,
+                },
+              },
+            ],
+          },
+        },
+      ],
+    };
+  }, [cdcData]);
+
+  if (authLoading || !session) {
     return <div className="flex items-center justify-center h-screen">加载中...</div>;
   }
 
@@ -172,7 +366,7 @@ export default function CDCPage() {
                 <span>较上周期：</span>
                 {getChangeIcon(cdcData?.changeFromLastPeriod || 0)}
                 <span className={getChangeColor(cdcData?.changeFromLastPeriod || 0)}>
-                  {cdcData?.changeFromLastPeriod > 0 ? '↑' : '↓'} {Math.abs(cdcData?.changeFromLastPeriod || 0).toFixed(2)}
+                  {(cdcData?.changeFromLastPeriod || 0) > 0 ? '↑' : '↓'} {Math.abs(cdcData?.changeFromLastPeriod || 0).toFixed(2)}
                 </span>
               </div>
             </div>
@@ -204,13 +398,13 @@ export default function CDCPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-blue-600 mt-2">
-              {cdcData?.maxCDC.toFixed(2) || '0.00'}
+              {(cdcData?.maxCDC || 0).toFixed(2)}
             </div>
             <div className="mt-2 text-xs text-gray-500 flex items-center gap-1">
               <span>较最高值：</span>
               {getChangeIcon(cdcData?.changeFromMax || 0)}
               <span className={getChangeColor(cdcData?.changeFromMax || 0)}>
-                {cdcData?.changeFromMax > 0 ? '↑' : '↓'} {Math.abs(cdcData?.changeFromMax || 0).toFixed(2)}
+                {(cdcData?.changeFromMax || 0) > 0 ? '↑' : '↓'} {Math.abs(cdcData?.changeFromMax || 0).toFixed(2)}
               </span>
             </div>
           </CardContent>
@@ -223,7 +417,7 @@ export default function CDCPage() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-green-600 mt-2">
-              {cdcData?.lastWeekCDC.toFixed(2) || '0.00'}
+              {(cdcData?.lastWeekCDC || 0).toFixed(2)}
             </div>
             <div className="mt-2 text-xs text-gray-500 flex items-center gap-1">
               <span>较上周期：</span>
@@ -247,22 +441,19 @@ export default function CDCPage() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* 左侧：雷达图占位 */}
-            <div className="border border-gray-200 rounded-lg p-6 flex items-center justify-center min-h-[300px]">
-              <div className="text-center text-gray-500">
-                <div className="text-sm mb-2">雷达图</div>
-                <div className="text-xs">AV、AD、CV、SKEW 四维度对比</div>
-                <div className="mt-4 flex justify-center gap-4 text-xs">
-                  <span className="flex items-center gap-1">
-                    <span className="w-3 h-3 bg-blue-500 rounded-full"></span>
-                    本周期
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="w-3 h-3 bg-green-500 rounded-full border border-dashed"></span>
-                    上周期
-                  </span>
+            {/* 左侧：雷达图 */}
+            <div className="border border-gray-200 rounded-lg p-4">
+              {cdcData?.indicators ? (
+                <ReactECharts
+                  option={radarOption}
+                  style={{ height: '300px' }}
+                  opts={{ renderer: 'svg' }}
+                />
+              ) : (
+                <div className="h-[300px] flex items-center justify-center text-gray-500 text-sm">
+                  暂无数据
                 </div>
-              </div>
+              )}
             </div>
 
             {/* 右侧：数据表格 */}
@@ -311,37 +502,30 @@ export default function CDCPage() {
           <CardTitle className="text-base font-semibold">CDC 变化趋势</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="border border-gray-200 rounded-lg p-6 min-h-[300px] flex items-center justify-center">
-            <div className="text-center text-gray-500">
-              <div className="text-sm mb-2">折线图</div>
-              <div className="text-xs">显示各污染物 CDC 值随时间变化</div>
-              <div className="mt-4 flex justify-center gap-4 text-xs flex-wrap">
-                <span className="flex items-center gap-1">
-                  <span className="w-3 h-0.5 bg-blue-500"></span>
-                  综合 CDC
-                </span>
-                {cdcData?.pollutants.map(p => (
-                  <span key={p.id} className="flex items-center gap-1">
-                    <span className="w-3 h-0.5 bg-gray-400"></span>
-                    {p.name}
-                  </span>
-                ))}
-              </div>
-              <div className="mt-4 flex justify-center gap-4 text-xs">
-                <span className="flex items-center gap-1">
-                  <span className="w-3 h-3 bg-red-100 border border-red-300"></span>
-                  高风险 (≥1.5)
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-3 h-3 bg-orange-100 border border-orange-300"></span>
-                  中风险 (0.5~1.5)
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-3 h-3 bg-green-100 border border-green-300"></span>
-                  低风险 (≤0.5)
-                </span>
-              </div>
+          {cdcData?.trend && cdcData.trend.length > 0 ? (
+            <ReactECharts
+              option={lineOption}
+              style={{ height: '350px' }}
+              opts={{ renderer: 'svg' }}
+            />
+          ) : (
+            <div className="h-[350px] flex items-center justify-center text-gray-500 text-sm">
+              暂无数据
             </div>
+          )}
+          <div className="mt-4 flex justify-center gap-6 text-xs">
+            <span className="flex items-center gap-1">
+              <span className="w-3 h-0.5 bg-green-500"></span>
+              低风险 (≤0.5)
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-3 h-0.5 bg-orange-500"></span>
+              中风险 (0.5~1.5)
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="w-3 h-0.5 bg-red-500"></span>
+              高风险 (≥1.5)
+            </span>
           </div>
         </CardContent>
       </Card>

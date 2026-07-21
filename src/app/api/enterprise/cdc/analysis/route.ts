@@ -80,10 +80,8 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
-    // 创建 Supabase 客户端
-    const credentials = await getSupabaseCredentials();
-    const serviceRoleKey = await getSupabaseServiceRoleKey();
-    const supabase = getSupabaseClient(credentials.url, serviceRoleKey);
+    // 创建 Supabase 客户端（使用 service role key）
+    const supabase = getSupabaseClient();
 
     // 获取企业信息
     const { data: profile, error: profileError } = await supabase
