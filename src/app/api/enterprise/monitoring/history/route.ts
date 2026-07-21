@@ -55,16 +55,31 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // 计算时间范围
+    // 计算时间范围（使用中国时区 UTC+8）
     const now = new Date();
+    const nowInChina = new Date(now.getTime() + 8 * 60 * 60 * 1000);
     let startDate: Date;
     
     if (days === 1) {
-      // 当天：从今天 00:00:00 开始
-      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      // 当天：从今天 00:00:00（中国时间）开始
+      startDate = new Date(Date.UTC(
+        nowInChina.getFullYear(),
+        nowInChina.getMonth(),
+        nowInChina.getDate(),
+        0, 0, 0
+      ));
+      // 转换回 UTC 时间用于查询
+      startDate = new Date(startDate.getTime() - 8 * 60 * 60 * 1000);
     } else {
-      // 前 N 天：从 N 天前的 00:00:00 开始
-      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - days + 1);
+      // 前 N 天：从 N 天前的 00:00:00（中国时间）开始
+      startDate = new Date(Date.UTC(
+        nowInChina.getFullYear(),
+        nowInChina.getMonth(),
+        nowInChina.getDate() - days + 1,
+        0, 0, 0
+      ));
+      // 转换回 UTC 时间用于查询
+      startDate = new Date(startDate.getTime() - 8 * 60 * 60 * 1000);
     }
     
     const startDateStr = startDate.toISOString();

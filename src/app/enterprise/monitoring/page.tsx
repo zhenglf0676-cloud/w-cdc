@@ -269,9 +269,14 @@ export default function MonitoringPage() {
   // 打开上传对话框
   const handleOpenUpload = () => {
     if (!selectedOutlet) return;
+    // 生成中国本地时间字符串（YYYY-MM-DDTHH:mm）
+    const now = new Date();
+    const localTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+    const localTimeString = localTime.toISOString().slice(0, 16);
+    
     setUploadForm({
       outletId: selectedOutlet.id,
-      monitoredAt: new Date().toISOString().slice(0, 16),
+      monitoredAt: localTimeString,
       values: {},
       remark: '',
     });
@@ -543,7 +548,11 @@ export default function MonitoringPage() {
                   <h2 className="text-xl font-semibold text-slate-900">{selectedOutlet.name}</h2>
                   <p className="text-sm text-slate-500">
                     更新时间：{Object.values(latestData)[0]?.monitored_at 
-                      ? new Date(Object.values(latestData)[0].monitored_at).toLocaleString('zh-CN')
+                      ? (() => {
+                          const date = new Date(Object.values(latestData)[0].monitored_at);
+                          const localDate = new Date(date.getTime() + 8 * 60 * 60 * 1000);
+                          return localDate.toLocaleString('zh-CN');
+                        })()
                       : '暂无数据'}
                   </p>
                 </div>

@@ -175,12 +175,15 @@ export async function POST(request: NextRequest) {
         // Excel 日期格式
         monitoredAt = new Date((timeStr - 25569) * 86400 * 1000);
       } else {
-        // 字符串格式：确保作为本地时间解析
-        // 如果格式是 "2026-07-21 08:00"，需要添加时区信息
+        // 字符串格式：确保作为中国本地时间（CST，UTC+8）解析
         const str = String(timeStr);
         if (str.match(/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}$/)) {
-          // 格式：YYYY-MM-DD HH:mm，作为本地时间处理
-          monitoredAt = new Date(str.replace(' ', 'T'));
+          // 格式：YYYY-MM-DD HH:mm，作为中国本地时间处理
+          // 手动添加 8 小时偏移，转换为 UTC 时间存储
+          const [datePart, timePart] = str.split(' ');
+          const [year, month, day] = datePart.split('-').map(Number);
+          const [hour, minute] = timePart.split(':').map(Number);
+          monitoredAt = new Date(Date.UTC(year, month - 1, day, hour - 8, minute));
         } else {
           monitoredAt = new Date(str);
         }

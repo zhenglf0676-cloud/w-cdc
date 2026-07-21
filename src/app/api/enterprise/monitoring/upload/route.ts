@@ -37,6 +37,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 解析时间：确保作为中国本地时间（CST，UTC+8）处理
+    let monitoredAtDate: Date;
+    if (typeof monitoredAt === 'string' && monitoredAt.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)) {
+      // 格式：YYYY-MM-DDTHH:mm，作为中国本地时间处理
+      const [datePart, timePart] = monitoredAt.split('T');
+      const [year, month, day] = datePart.split('-').map(Number);
+      const [hour, minute] = timePart.split(':').map(Number);
+      monitoredAtDate = new Date(Date.UTC(year, month - 1, day, hour - 8, minute));
+    } else {
+      monitoredAtDate = new Date(monitoredAt);
+    }
+
     // 验证排污口是否属于当前企业
     const { data: outlet } = await supabase
       .from('discharge_outlets')
@@ -124,7 +136,7 @@ export async function POST(request: NextRequest) {
         unit: pollutant.unit,
         standard_limit: pollutant.threshold,
         status,
-        monitored_at: monitoredAt,
+        monitored_at: monitoredAtDate,
         remark: remark || null,
       });
     }
