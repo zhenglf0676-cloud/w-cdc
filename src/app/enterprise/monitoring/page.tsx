@@ -76,7 +76,7 @@ export default function MonitoringPage() {
   const [chartData, setChartData] = useState<MonitoringRecord[]>([]);
 
   const itemsPerPage = 5;
-  const historyPageSize = 5;
+  const historyPageSize = 100;
 
   // 认证检查
   useEffect(() => {
