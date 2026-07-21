@@ -91,21 +91,36 @@ export async function GET(request: NextRequest) {
       .single();
 
     if (profileError || !profile) {
+      console.log('CDC API: 用户信息获取失败', profileError);
       return NextResponse.json({ error: '用户信息获取失败' }, { status: 400 });
     }
 
     const companyId = profile.sub;
 
-    // 获取企业已审批的排污口
+    // 获取企业已审批的排污口（使用 user_id）
     const { data: outlets, error: outletsError } = await supabase
       .from('discharge_outlets')
       .select('id, name')
-      .eq('company_id', companyId)
+      .eq('user_id', userId)
       .eq('status', 'approved');
 
     if (outletsError || !outlets || outlets.length === 0) {
-      return NextResponse.json({ error: '未找到已审批的排污口' }, { status: 400 });
+      console.log('CDC API: 未找到已审批的排污口，userId:', userId);
+      return NextResponse.json({ 
+        success: true, 
+        data: {
+          currentCDC: 0,
+          riskLevel: '低风险',
+          cdcMax: 0,
+          lastWeekCDC: 0,
+          indicators: [],
+          trendData: [],
+          pollutants: [],
+        }
+      });
     }
+
+    console.log('CDC API: 找到', outlets.length, '个排污口');
 
     const outletIds = outlets.map(o => o.id);
 
@@ -117,8 +132,22 @@ export async function GET(request: NextRequest) {
       .eq('status', 'approved');
 
     if (pollutantsError || !pollutants || pollutants.length === 0) {
-      return NextResponse.json({ error: '未找到已审批的污染物' }, { status: 400 });
+      console.log('CDC API: 未找到已审批的污染物，companyId:', companyId);
+      return NextResponse.json({ 
+        success: true, 
+        data: {
+          currentCDC: 0,
+          riskLevel: '低风险',
+          cdcMax: 0,
+          lastWeekCDC: 0,
+          indicators: [],
+          trendData: [],
+          pollutants: [],
+        }
+      });
     }
+
+    console.log('CDC API: 找到', pollutants.length, '个污染物');
 
     // 计算时间范围
     let fromDate: Date;

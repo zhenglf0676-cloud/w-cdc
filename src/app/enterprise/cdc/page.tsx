@@ -53,13 +53,19 @@ export default function CDCPage() {
     try {
       const response = await fetch(`/api/enterprise/cdc/analysis?days=${timeRange}`, {
         headers: {
-          'x-session': JSON.stringify(session),
+          'x-auth-token': session!.access_token,
         },
       });
 
+      console.log('CDC API 响应状态:', response.status);
+      
       if (response.ok) {
         const result = await response.json();
+        console.log('CDC API 返回数据:', result);
         setCdcData(result.data);
+      } else {
+        const errorText = await response.text();
+        console.error('CDC API 错误:', response.status, errorText);
       }
     } catch (error) {
       console.error('获取 CDC 数据失败:', error);
