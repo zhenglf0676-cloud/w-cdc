@@ -3,13 +3,13 @@ import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
 
 // 污染物配置
-const POLLUTANT_CONFIG: Record<string, { unit: string; threshold: number }> = {
-  'COD': { unit: 'mg/L', threshold: 500 },
-  'NH3-N': { unit: 'mg/L', threshold: 0.5 },
-  'TP': { unit: 'mg/L', threshold: 1.0 },
-  'TN': { unit: 'mg/L', threshold: 15.0 },
-  'pH': { unit: '无量纲', threshold: 9.0 },
-  '重金属': { unit: 'mg/L', threshold: 0.05 },
+const POLLUTANT_CONFIG: Record<string, { id: string; unit: string; threshold: number }> = {
+  'COD':    { id: 'cod',         unit: 'mg/L',    threshold: 500 },
+  'NH3-N':  { id: 'nh3n',        unit: 'mg/L',    threshold: 0.5 },
+  'TP':     { id: 'tp',          unit: 'mg/L',    threshold: 1.0 },
+  'TN':     { id: 'tn',          unit: 'mg/L',    threshold: 15.0 },
+  'pH':     { id: 'ph',          unit: '无量纲',  threshold: 9.0 },
+  '重金属': { id: 'heavy_metal', unit: 'mg/L',    threshold: 0.05 },
 };
 
 export async function POST(request: NextRequest) {
@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
         const value = row[pollutantType];
         if (value !== undefined && value !== null && value !== '') {
           // 验证污染物是否已审批通过
-          if (!approvedPollutantIds.has(pollutantType.toLowerCase())) {
+          if (!approvedPollutantIds.has(config.id)) {
             errors.push(`第${rowNum}行：${pollutantType}未申请或未审批通过`);
             continue;
           }
@@ -149,7 +149,7 @@ export async function POST(request: NextRequest) {
 
           records.push({
             outlet_id: outletMap.get(outletName),
-            pollutant_type: pollutantType.toLowerCase(),
+            pollutant_type: config.id,
             value: numValue,
             unit: config.unit,
             standard_limit: config.threshold,
