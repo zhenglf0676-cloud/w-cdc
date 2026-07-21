@@ -174,10 +174,10 @@ export default function CDCAnalysisPage() {
           </CardContent>
         </Card>
 
-        {/* 状态（S）- CDC 历史最高值 */}
+        {/* CDC 最大值 */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">状态（S）</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-600">CDC 最大值</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-baseline gap-2">
@@ -192,10 +192,10 @@ export default function CDCAnalysisPage() {
           </CardContent>
         </Card>
 
-        {/* 动作（A）- 上周 CDC 值 */}
+        {/* 上周 CDC 值 */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600">动作（A）</CardTitle>
+            <CardTitle className="text-sm font-medium text-gray-600">上周 CDC 值</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-green-600">0.75</div>
