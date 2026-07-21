@@ -42,6 +42,7 @@ interface CDCAnalysisData {
   riskLevel: string;
   riskColor: string;
   pollutants: PollutantCDC[];
+  dailyPollutantCDC: Record<string, Record<string, number>>;
   indicators: {
     av: { current: number; normalized: number };
     ad: { current: number; normalized: number };
@@ -123,8 +124,15 @@ export default function CDCPage() {
     }
   }, [session, dateRange]);
 
-  // 为每个污染物生成雷达图配置
+  // 为每个污染物生成雷达图配置（使用当天的数据）
   const getPollutantRadarOption = (pollutant: PollutantCDC) => {
+    // 获取最后一天的 CDC 数据
+    const dates = Object.keys(cdcData?.dailyPollutantCDC || {}).sort();
+    const lastDate = dates[dates.length - 1];
+    const lastDayCDC = cdcData?.dailyPollutantCDC?.[lastDate]?.[pollutant.pollutantId] || 0;
+    
+    // 使用整个周期的平均值作为雷达图数据（因为当天可能没有足够数据计算四个指标）
+    // 但 CDC 值使用当天的
     return {
       radar: {
         indicator: [
@@ -140,7 +148,7 @@ export default function CDCPage() {
         type: 'radar',
         data: [{
           value: [
-            pollutant.av / 10 || 0.5, // 归一化到 0-1
+            pollutant.av / 10 || 0.5,
             pollutant.ad / 10 || 0.5,
             pollutant.cv / 10 || 0.5,
             pollutant.skew / 10 || 0.5
@@ -163,19 +171,33 @@ export default function CDCPage() {
         }]
       }],
       tooltip: {
-        trigger: 'item'
+        trigger: 'item',
+        formatter: (params: any) => {
+          if (!params || !params.value) return '';
+          const value = lastDayCDC.toFixed(4);
+          return `${pollutant.pollutantName}<br/>CDC: ${value}`;
+        }
       }
     };
   };
 
-  // CDC 趋势图配置
+  // CDC 趋势图配置（显示每日 CDC 值变化）
   const lineOption = useMemo(() => {
-    if (!cdcData || !cdcData.pollutants || cdcData.pollutants.length === 0) {
+    if (!cdcData || !cdcData.pollutants || cdcData.pollutants.length === 0 || !cdcData.dailyPollutantCDC) {
       return {
         xAxis: { data: [] },
         series: []
       };
     }
+
+    // 获取所有日期并排序
+    const dates = Object.keys(cdcData.dailyPollutantCDC).sort();
+    
+    // 格式化日期显示
+    const formatDate = (dateStr: string) => {
+      const date = new Date(dateStr);
+      return `${date.getMonth() + 1}/${date.getDate()}`;
+    };
 
     return {
       tooltip: {
@@ -184,7 +206,7 @@ export default function CDCPage() {
           if (!params || params.length === 0) return '';
           let result = `${params[0].axisValue}<br/>`;
           params.forEach((param: any) => {
-            const value = param.value !== undefined && param.value !== null ? param.value.toFixed(2) : '0.00';
+            const value = param.value !== undefined && param.value !== null ? param.value.toFixed(4) : '0.0000';
             result += `${param.marker} ${param.seriesName}: ${value}<br/>`;
           });
           return result;
@@ -196,7 +218,8 @@ export default function CDCPage() {
       },
       xAxis: {
         type: 'category',
-        data: ['当前周期']
+        data: dates.map(formatDate),
+        name: '日期'
       },
       yAxis: {
         type: 'value',
@@ -205,7 +228,7 @@ export default function CDCPage() {
       series: cdcData.pollutants.map(pollutant => ({
         name: pollutant.pollutantName,
         type: 'line',
-        data: [pollutant.cdc],
+        data: dates.map(date => cdcData.dailyPollutantCDC[date]?.[pollutant.pollutantId] || 0),
         smooth: true,
         lineStyle: { width: 2 },
         itemStyle: { 
