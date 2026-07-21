@@ -178,7 +178,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       count: records.length,
-      errors: errors.length > 0 ? errors : undefined,
+      errors: errors.length > 0 ? errors : [],
       warnings: records.filter(r => r.status === 'warning').map(r => r.pollutant_type),
     });
   } catch (error: any) {
