@@ -584,13 +584,6 @@ export default function CDCPage() {
                     </>
                   ) : null}
                 </tbody>
-                        <span className={getChangeColor(data.change)}>
-                          {data.change > 0 ? '↑' : '↓'} {Math.abs(data.change).toFixed(2)}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
               </table>
               <div className="mt-4 text-xs text-gray-500 text-right">
                 * CDC = Nor(AD)² + Nor(CV)² + Nor(SKEW)² = {cdcData?.currentCDC.toFixed(2) || '0.00'}
