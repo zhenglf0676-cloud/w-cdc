@@ -773,7 +773,7 @@ function ChartOption({
   // 为每个污染物生成系列数据
   const series = pollutants.map((p) => {
     const pollutantData = sortedData.filter(d => d.pollutant_type === p.id);
-    const dataMap = new Map(pollutantData.map(d => [d.monitored_at, d.value]));
+    const dataMap = new Map(pollutantData.map(d => [d.monitored_at, d]));
 
     return {
       name: p.label,
@@ -781,18 +781,22 @@ function ChartOption({
       smooth: true,
       symbol: 'circle',
       symbolSize: 6,
-      data: times.map(t => dataMap.get(t) ?? null),
+      data: times.map(t => {
+        const record = dataMap.get(t);
+        return record ? record.value : null;
+      }),
       lineStyle: { width: 2 },
+      itemStyle: {
+        color: (params: any) => {
+          const record = dataMap.get(times[params.dataIndex]);
+          if (record && record.status === 'warning') {
+            return '#ef4444'; // 红色 - 危险
+          }
+          return '#0ea5e9'; // 蓝色 - 正常
+        },
+      },
     };
   });
-
-  // 添加标准限值线
-  const markLines = pollutants.map((p) => ({
-    name: `${p.label}限值`,
-    yAxis: p.threshold,
-    lineStyle: { type: 'dashed', color: '#ef4444', width: 1 },
-    label: { formatter: `${p.label}限值：${p.threshold}`, position: 'end' as const },
-  }));
 
   const option = useMemo(() => ({
     tooltip: {
@@ -825,11 +829,8 @@ function ChartOption({
       type: 'value' as const,
       name: '数值',
     },
-    series: series.map((s, i) => ({
-      ...s,
-      markLine: i === 0 ? { data: markLines, silent: true } : undefined,
-    })),
-  }), [data, pollutants, timeRange, times, series, markLines]);
+    series,
+  }), [data, pollutants, timeRange, times, series]);
 
   return <ReactECharts option={option} style={{ height: '400px' }} notMerge lazyUpdate />;
 }

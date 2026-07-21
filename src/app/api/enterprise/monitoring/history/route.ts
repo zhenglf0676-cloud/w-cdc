@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
     const outletId = searchParams.get('outletId');
     const page = parseInt(searchParams.get('page') || '1');
     const pageSize = parseInt(searchParams.get('pageSize') || '10');
+    const days = parseInt(searchParams.get('days') || '1');
 
     if (!outletId) {
       return NextResponse.json(
@@ -54,11 +55,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // 计算时间范围
+    const now = new Date();
+    const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+    const startDateStr = startDate.toISOString();
+
     // 获取历史数据
     const { data: historyData, count } = await supabase
       .from('monitoring_data')
       .select('*', { count: 'exact' })
       .eq('outlet_id', outletId)
+      .gte('monitored_at', startDateStr)
       .order('monitored_at', { ascending: false })
       .range((page - 1) * pageSize, page * pageSize - 1);
 
