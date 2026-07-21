@@ -382,76 +382,10 @@ export default function CDCPage() {
               </div>
             </div>
 
-            {/* 核心指标分析 */}
-            <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-              {/* 雷达图 */}
-              <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                <h3 className="mb-4 font-semibold text-slate-900">核心指标雷达图</h3>
-                <ReactECharts option={radarOption} style={{ height: '280px' }} />
-              </div>
-
-              {/* CDC 组成分析 */}
-              <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                <h3 className="mb-4 font-semibold text-slate-900">CDC 组成分析</h3>
-                <div className="space-y-4">
-                  <div>
-                    <div className="mb-1 flex items-center justify-between">
-                      <span className="text-sm text-slate-600">AV (均值) 贡献</span>
-                      <span className="text-sm font-medium text-slate-900">
-                        {((cdcData.indicators?.av?.normalized || 0) * 100).toFixed(1)}%
-                      </span>
-                    </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                      <div 
-                        className="h-full bg-sky-500"
-                        style={{ width: `${(cdcData.indicators?.av?.normalized || 0) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <div className="mb-1 flex items-center justify-between">
-                      <span className="text-sm text-slate-600">AD (离差) 贡献</span>
-                      <span className="text-sm font-medium text-slate-900">
-                        {((cdcData.indicators?.ad?.normalized || 0) * 100).toFixed(1)}%
-                      </span>
-                    </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                      <div 
-                        className="h-full bg-sky-500"
-                        style={{ width: `${(cdcData.indicators?.ad?.normalized || 0) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <div className="mb-1 flex items-center justify-between">
-                      <span className="text-sm text-slate-600">CV (变异系数) 贡献</span>
-                      <span className="text-sm font-medium text-slate-900">
-                        {((cdcData.indicators?.cv?.normalized || 0) * 100).toFixed(1)}%
-                      </span>
-                    </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                      <div 
-                        className="h-full bg-sky-500"
-                        style={{ width: `${(cdcData.indicators?.cv?.normalized || 0) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <div className="mb-1 flex items-center justify-between">
-                      <span className="text-sm text-slate-600">SKEW (偏度) 贡献</span>
-                      <span className="text-sm font-medium text-slate-900">
-                        {((cdcData.indicators?.skew?.normalized || 0) * 100).toFixed(1)}%
-                      </span>
-                    </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-slate-100">
-                      <div 
-                        className="h-full bg-sky-500"
-                        style={{ width: `${(cdcData.indicators?.skew?.normalized || 0) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
+            {/* 核心指标雷达图 */}
+            <div className="mb-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+              <h3 className="mb-4 font-semibold text-slate-900">核心指标雷达图</h3>
+              <ReactECharts option={radarOption} style={{ height: '350px' }} />
             </div>
 
             {/* 各污染物 CDC 分析表格 */}
