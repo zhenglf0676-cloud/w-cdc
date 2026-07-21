@@ -18,10 +18,10 @@ interface CDCData {
   changeFromMax: number;
   lastWeekCDC: number;
   indicators: {
-    AV: { current: number; lastPeriod: number; change: number };
-    AD: { current: number; lastPeriod: number; change: number };
-    CV: { current: number; lastPeriod: number; change: number };
-    SKEW: { current: number; lastPeriod: number; change: number };
+    av: number;
+    ad: number;
+    cv: number;
+    skew: number;
   };
   trend: any[];
   pollutants: { id: string; name: string }[];
@@ -97,7 +97,19 @@ export default function CDCPage() {
 
   // 雷达图配置
   const radarOption = useMemo(() => {
-    if (!cdcData?.indicators) return {};
+    const defaultOption = {
+      radar: {
+        indicator: [
+          { name: 'AV（平均值）', max: 1 },
+          { name: 'AD（均差）', max: 1 },
+          { name: 'CV（变异性）', max: 1 },
+          { name: 'SKEW（偏态）', max: 1 },
+        ],
+      },
+      series: [{ type: 'radar', data: [] }],
+    };
+
+    if (!cdcData?.indicators) return defaultOption;
 
     const indicators = [
       { name: 'AV（平均值）', max: 1 },
@@ -174,7 +186,13 @@ export default function CDCPage() {
 
   // 折线图配置
   const lineOption = useMemo(() => {
-    if (!cdcData?.trend || cdcData.trend.length === 0) return {};
+    const defaultOption = {
+      xAxis: { type: 'category', data: [] },
+      yAxis: { type: 'value' },
+      series: [],
+    };
+
+    if (!cdcData?.trend || cdcData.trend.length === 0) return defaultOption;
 
     const dates = cdcData.trend.map(item => item.date);
 
