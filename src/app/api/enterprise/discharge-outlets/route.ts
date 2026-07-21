@@ -127,11 +127,12 @@ export async function GET(request: NextRequest) {
 
     const supabase = getSupabaseAdmin();
 
-    // 获取用户的排污口列表
+    // 获取用户的排污口列表（只返回审批通过的）
     const { data: outlets, error } = await supabase
       .from('discharge_outlets')
       .select('*')
       .eq('user_id', user.id)
+      .eq('status', 'approved')
       .order('created_at', { ascending: false });
 
     if (error) {
