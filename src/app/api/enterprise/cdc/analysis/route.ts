@@ -308,7 +308,7 @@ export async function GET(request: NextRequest) {
 
     // 计算趋势数据
     dates.forEach(date => {
-      const dayCDC: Record<string, number> = { date: new Date(date).getTime() };
+      const dayCDC: Record<string, any> = { date };
       let totalCDC = 0;
       let count = 0;
 

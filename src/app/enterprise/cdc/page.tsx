@@ -177,14 +177,18 @@ export default function CDCPage() {
     if (!cdcData?.trend || cdcData.trend.length === 0) return {};
 
     const dates = cdcData.trend.map(item => item.date);
-    const cdcValues = cdcData.trend.map(item => item.cdc);
+    const cdcValues = cdcData.trend.map(item => item['综合'] || 0);
 
     return {
       tooltip: {
         trigger: 'axis',
         formatter: (params: any) => {
-          const data = params[0];
-          return `${data.name}<br/>CDC 值：${data.value.toFixed(3)}`;
+          if (!params || params.length === 0) return '';
+          const data = Array.isArray(params) ? params[0] : params;
+          if (!data || data.value === undefined || data.value === null) return '';
+          const date = new Date(data.name);
+          const dateStr = `${date.getMonth() + 1}/${date.getDate()}`;
+          return `${dateStr}<br/>CDC 值：${Number(data.value).toFixed(3)}`;
         },
       },
       grid: {
