@@ -3,14 +3,18 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { format } from 'date-fns';
-import { CalendarIcon, TrendingUp, AlertTriangle, CheckCircle, Activity } from 'lucide-react';
 import ReactECharts from 'echarts-for-react';
+import {
+  ChevronLeft,
+  CalendarIcon,
+  Activity,
+  AlertTriangle,
+  CheckCircle,
+  TrendingUp,
+  TrendingDown,
+  Loader2,
+} from 'lucide-react';
+import { format } from 'date-fns';
 
 interface PollutantCDC {
   pollutantId: string;
@@ -48,21 +52,32 @@ interface CDCAnalysisData {
 
 export default function CDCPage() {
   const router = useRouter();
-  const { session, isLoading: authLoading } = useAuth();
+  const { user, session, isLoading } = useAuth();
   
-  const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
+  const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
     from: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
     to: new Date()
   });
   const [cdcData, setCdcData] = useState<CDCAnalysisData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [redirecting, setRedirecting] = useState(false);
 
+  const companyName = user?.user_metadata?.company_name || user?.email || '企业用户';
+
+  // 认证检查
   useEffect(() => {
-    if (!authLoading && !session) {
+    if (!isLoading && !user) {
+      setRedirecting(true);
       router.push('/login');
+      return;
     }
-  }, [session, authLoading, router]);
+    if (!isLoading && user?.user_metadata?.role !== 'enterprise') {
+      setRedirecting(true);
+      router.push('/admin');
+      return;
+    }
+  }, [user, isLoading, router]);
 
   const fetchCDCData = async () => {
     if (!session || !dateRange.from || !dateRange.to) return;
@@ -88,7 +103,6 @@ export default function CDCPage() {
       }
 
       const result = await response.json();
-      console.log('CDC API 响应:', result);
       
       if (result.success && result.data) {
         setCdcData(result.data);
@@ -138,7 +152,7 @@ export default function CDCPage() {
             cdcData.indicators.skew.normalized
           ],
           name: '当前指标',
-          areaStyle: { color: 'rgba(14, 165, 233, 0.3)' },
+          areaStyle: { color: 'rgba(14, 165, 233, 0.2)' },
           lineStyle: { color: '#0EA5E9', width: 2 },
           itemStyle: { color: '#0EA5E9' }
         }]
@@ -197,292 +211,316 @@ export default function CDCPage() {
     };
   }, [cdcData]);
 
-  // 污染物 CDC 表格数据
-  const tableData = useMemo(() => {
-    if (!cdcData || !cdcData.pollutants) return [];
-    
-    return cdcData.pollutants.map(p => ({
-      pollutantName: p.pollutantName,
-      av: p.av.toFixed(4),
-      ad: p.ad.toFixed(4),
-      cv: p.cv.toFixed(4),
-      skew: p.skew.toFixed(4),
-      cdc: p.cdc.toFixed(2),
-      weight: (p.weight * 100).toFixed(1) + '%',
-      riskLevel: p.riskLevel,
-      riskColor: p.riskColor
-    }));
-  }, [cdcData]);
-
-  if (authLoading) {
-    return <div className="flex items-center justify-center h-screen">加载中...</div>;
+  if (isLoading || redirecting) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-50">
+        <Loader2 className="h-8 w-8 animate-spin text-sky-500" />
+      </div>
+    );
   }
 
-  if (!session) {
-    return null;
-  }
+  if (!user) return null;
 
-  const getRiskBadgeVariant = (color: string) => {
+  const getRiskColor = (color: string) => {
     switch (color) {
-      case 'green': return 'default';
-      case 'orange': return 'secondary';
-      case 'red': return 'destructive';
-      default: return 'outline';
-    }
-  };
-
-  const getRiskBadgeClass = (color: string) => {
-    switch (color) {
-      case 'green': return 'bg-green-500 text-white';
-      case 'orange': return 'bg-orange-500 text-white';
-      case 'red': return 'bg-red-500 text-white';
-      default: return '';
+      case 'green': return { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200' };
+      case 'orange': return { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' };
+      case 'red': return { bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200' };
+      default: return { bg: 'bg-slate-50', text: 'text-slate-700', border: 'border-slate-200' };
     }
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      {/* 页面标题 */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">CDC 综合污染指数分析</h1>
-          <p className="text-muted-foreground mt-2">
-            基于多指标综合评价的地下水污染风险评估
-          </p>
-        </div>
-      </div>
-
-      {/* 时间范围选择 */}
-      <Card>
-        <CardHeader>
-          <CardTitle>分析周期</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-4">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className="w-[180px] justify-start text-left">
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {dateRange.from ? format(dateRange.from, 'yyyy-MM-dd') : '开始日期'}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={dateRange.from}
-                  onSelect={(date) => setDateRange({ ...dateRange, from: date })}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-
-            <span className="text-muted-foreground">至</span>
-
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className="w-[180px] justify-start text-left">
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {dateRange.to ? format(dateRange.to, 'yyyy-MM-dd') : '结束日期'}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={dateRange.to}
-                  onSelect={(date) => setDateRange({ ...dateRange, to: date })}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-
-            <Button onClick={fetchCDCData} disabled={loading}>
-              {loading ? '分析中...' : '重新分析'}
-            </Button>
+    <div className="flex h-screen flex-col bg-slate-50">
+      {/* Top Bar */}
+      <header className="flex h-14 items-center justify-between border-b bg-white px-6 shadow-sm">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => router.push('/enterprise')}
+            className="flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            返回首页
+          </button>
+          <div>
+            <h1 className="text-lg font-semibold text-slate-900">CDC 综合污染指数分析</h1>
+            <p className="text-xs text-slate-500">基于多指标综合评价的地下水污染风险评估</p>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-slate-600">{companyName}</span>
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-100 text-sm font-semibold text-sky-700">
+            {companyName.charAt(0)}
+          </div>
+        </div>
+      </header>
 
-      {/* 错误提示 */}
-      {error && (
-        <Card className="border-red-500">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2 text-red-600">
-              <AlertTriangle className="h-5 w-5" />
-              <p>{error}</p>
+      {/* Main Content */}
+      <div className="flex-1 overflow-y-auto p-6">
+        {/* 时间范围选择 */}
+        <div className="mb-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-3 flex items-center gap-2">
+            <CalendarIcon className="h-4 w-4 text-slate-500" />
+            <h3 className="font-semibold text-slate-900">分析周期</h3>
+          </div>
+          <div className="flex items-center gap-4">
+            <div>
+              <label className="mb-1 block text-xs text-slate-500">开始日期</label>
+              <input
+                type="date"
+                value={format(dateRange.from, 'yyyy-MM-dd')}
+                onChange={(e) => setDateRange({ ...dateRange, from: new Date(e.target.value) })}
+                className="rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              />
             </div>
-          </CardContent>
-        </Card>
-      )}
+            <div>
+              <label className="mb-1 block text-xs text-slate-500">结束日期</label>
+              <input
+                type="date"
+                value={format(dateRange.to, 'yyyy-MM-dd')}
+                onChange={(e) => setDateRange({ ...dateRange, to: new Date(e.target.value) })}
+                className="rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              />
+            </div>
+            <button
+              onClick={fetchCDCData}
+              disabled={loading}
+              className="mt-5 rounded-md bg-sky-500 px-4 py-2 text-sm font-medium text-white hover:bg-sky-600 disabled:opacity-50"
+            >
+              {loading ? '分析中...' : '重新分析'}
+            </button>
+          </div>
+        </div>
 
-      {/* 总体 CDC 指标 */}
-      {cdcData && (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">综合 CDC 值</CardTitle>
-                <Activity className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{(cdcData.overallCDC || 0).toFixed(2)}</div>
-                <div className="flex items-center gap-2 mt-1">
-                  <p className="text-xs text-muted-foreground">
-                    分析周期: {cdcData.analysisPeriod.days} 天
-                  </p>
+        {/* 错误提示 */}
+        {error && (
+          <div className="mb-6 rounded-lg border border-rose-200 bg-rose-50 p-4">
+            <div className="flex items-center gap-2 text-rose-700">
+              <AlertTriangle className="h-5 w-5" />
+              <p className="text-sm">{error}</p>
+            </div>
+          </div>
+        )}
+
+        {/* CDC 数据展示 */}
+        {cdcData && (
+          <>
+            {/* 总体指标卡片 */}
+            <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
+              {/* 综合 CDC 值 */}
+              <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-sm text-slate-500">综合 CDC 值</span>
+                  <Activity className="h-4 w-4 text-slate-400" />
+                </div>
+                <div className="text-2xl font-bold text-slate-900">
+                  {(cdcData.overallCDC || 0).toFixed(2)}
+                </div>
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="text-xs text-slate-500">
+                    周期: {cdcData.analysisPeriod.days} 天
+                  </span>
                   {cdcData.changeFromLastPeriod !== 0 && (
-                    <span className={`text-xs font-medium ${
-                      cdcData.changeFromLastPeriod > 0 ? 'text-red-500' : 'text-green-500'
+                    <span className={`flex items-center gap-0.5 text-xs font-medium ${
+                      cdcData.changeFromLastPeriod > 0 ? 'text-rose-600' : 'text-emerald-600'
                     }`}>
-                      {cdcData.changeFromLastPeriod > 0 ? '↑' : '↓'} 
+                      {cdcData.changeFromLastPeriod > 0 ? (
+                        <TrendingUp className="h-3 w-3" />
+                      ) : (
+                        <TrendingDown className="h-3 w-3" />
+                      )}
                       {Math.abs(cdcData.changeFromLastPeriod).toFixed(2)}
                     </span>
                   )}
                 </div>
-              </CardContent>
-            </Card>
+              </div>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">风险等级</CardTitle>
-                <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <Badge className={getRiskBadgeClass(cdcData.riskColor || 'green')}>
+              {/* 风险等级 */}
+              <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-sm text-slate-500">风险等级</span>
+                  <AlertTriangle className="h-4 w-4 text-slate-400" />
+                </div>
+                <div className={`inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-medium ${
+                  getRiskColor(cdcData.riskColor || 'green').bg
+                } ${getRiskColor(cdcData.riskColor || 'green').text} ${
+                  getRiskColor(cdcData.riskColor || 'green').border
+                }`}>
                   {cdcData.riskLevel || '低风险'}
-                </Badge>
-                <p className="text-xs text-muted-foreground mt-1">
+                </div>
+                <div className="mt-2 text-xs text-slate-500">
                   {cdcData.enterpriseName}
-                </p>
-              </CardContent>
-            </Card>
+                </div>
+              </div>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">排污口数量</CardTitle>
-                <CheckCircle className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{cdcData.totalOutlets || 0}</div>
-                <p className="text-xs text-muted-foreground mt-1">
+              {/* 排污口数量 */}
+              <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-sm text-slate-500">排污口数量</span>
+                  <CheckCircle className="h-4 w-4 text-slate-400" />
+                </div>
+                <div className="text-2xl font-bold text-slate-900">
+                  {cdcData.totalOutlets || 0}
+                </div>
+                <div className="mt-1 text-xs text-slate-500">
                   园区: {cdcData.parkName}
-                </p>
-              </CardContent>
-            </Card>
+                </div>
+              </div>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">监测污染物</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{cdcData.totalPollutants || 0}</div>
-                <p className="text-xs text-muted-foreground mt-1">
+              {/* 监测污染物 */}
+              <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-sm text-slate-500">监测污染物</span>
+                  <CheckCircle className="h-4 w-4 text-slate-400" />
+                </div>
+                <div className="text-2xl font-bold text-slate-900">
+                  {cdcData.totalPollutants || 0}
+                </div>
+                <div className="mt-1 text-xs text-slate-500">
                   种污染物
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+                </div>
+              </div>
+            </div>
 
-          {/* 核心指标分析 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>核心指标雷达图</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ReactECharts option={radarOption} style={{ height: '300px' }} />
-              </CardContent>
-            </Card>
+            {/* 核心指标分析 */}
+            <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+              {/* 雷达图 */}
+              <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 className="mb-4 font-semibold text-slate-900">核心指标雷达图</h3>
+                <ReactECharts option={radarOption} style={{ height: '280px' }} />
+              </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>CDC 组成分析</CardTitle>
-              </CardHeader>
-              <CardContent>
+              {/* CDC 组成分析 */}
+              <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 className="mb-4 font-semibold text-slate-900">CDC 组成分析</h3>
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">AV (均值) 贡献</span>
-                    <span className="text-sm text-muted-foreground">
-                      {((cdcData.indicators?.av?.normalized || 0) * 100).toFixed(1)}%
-                    </span>
+                  <div>
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="text-sm text-slate-600">AV (均值) 贡献</span>
+                      <span className="text-sm font-medium text-slate-900">
+                        {((cdcData.indicators?.av?.normalized || 0) * 100).toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                      <div 
+                        className="h-full bg-sky-500"
+                        style={{ width: `${(cdcData.indicators?.av?.normalized || 0) * 100}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">AD (离差) 贡献</span>
-                    <span className="text-sm text-muted-foreground">
-                      {((cdcData.indicators?.ad?.normalized || 0) * 100).toFixed(1)}%
-                    </span>
+                  <div>
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="text-sm text-slate-600">AD (离差) 贡献</span>
+                      <span className="text-sm font-medium text-slate-900">
+                        {((cdcData.indicators?.ad?.normalized || 0) * 100).toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                      <div 
+                        className="h-full bg-sky-500"
+                        style={{ width: `${(cdcData.indicators?.ad?.normalized || 0) * 100}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">CV (变异系数) 贡献</span>
-                    <span className="text-sm text-muted-foreground">
-                      {((cdcData.indicators?.cv?.normalized || 0) * 100).toFixed(1)}%
-                    </span>
+                  <div>
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="text-sm text-slate-600">CV (变异系数) 贡献</span>
+                      <span className="text-sm font-medium text-slate-900">
+                        {((cdcData.indicators?.cv?.normalized || 0) * 100).toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                      <div 
+                        className="h-full bg-sky-500"
+                        style={{ width: `${(cdcData.indicators?.cv?.normalized || 0) * 100}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">SKEW (偏度) 贡献</span>
-                    <span className="text-sm text-muted-foreground">
-                      {((cdcData.indicators?.skew?.normalized || 0) * 100).toFixed(1)}%
-                    </span>
+                  <div>
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="text-sm text-slate-600">SKEW (偏度) 贡献</span>
+                      <span className="text-sm font-medium text-slate-900">
+                        {((cdcData.indicators?.skew?.normalized || 0) * 100).toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                      <div 
+                        className="h-full bg-sky-500"
+                        style={{ width: `${(cdcData.indicators?.skew?.normalized || 0) * 100}%` }}
+                      />
+                    </div>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+            </div>
 
-          {/* 污染物 CDC 表格 */}
-          <Card>
-            <CardHeader>
-              <CardTitle>各污染物 CDC 分析</CardTitle>
-            </CardHeader>
-            <CardContent>
+            {/* 各污染物 CDC 分析表格 */}
+            <div className="mb-6 rounded-lg border border-slate-200 bg-white shadow-sm">
+              <div className="border-b border-slate-200 p-4">
+                <h3 className="font-semibold text-slate-900">各污染物 CDC 分析</h3>
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-3 px-4 font-medium">污染物</th>
-                      <th className="text-right py-3 px-4 font-medium">AV (均值)</th>
-                      <th className="text-right py-3 px-4 font-medium">AD (离差)</th>
-                      <th className="text-right py-3 px-4 font-medium">CV (变异系数)</th>
-                      <th className="text-right py-3 px-4 font-medium">SKEW (偏度)</th>
-                      <th className="text-right py-3 px-4 font-medium">权重</th>
-                      <th className="text-right py-3 px-4 font-medium">CDC 值</th>
-                      <th className="text-center py-3 px-4 font-medium">风险等级</th>
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">污染物</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">AV (均值)</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">AD (离差)</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">CV (变异系数)</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">SKEW (偏度)</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">权重</th>
+                      <th className="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">CDC 值</th>
+                      <th className="px-4 py-3 text-center text-xs font-medium uppercase tracking-wider text-slate-500">风险等级</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {tableData.map((row, index) => (
-                      <tr key={index} className="border-b hover:bg-muted/50">
-                        <td className="py-3 px-4">{row.pollutantName}</td>
-                        <td className="text-right py-3 px-4 font-mono">{row.av}</td>
-                        <td className="text-right py-3 px-4 font-mono">{row.ad}</td>
-                        <td className="text-right py-3 px-4 font-mono">{row.cv}</td>
-                        <td className="text-right py-3 px-4 font-mono">{row.skew}</td>
-                        <td className="text-right py-3 px-4 font-mono">{row.weight}</td>
-                        <td className="text-right py-3 px-4 font-mono font-bold">{row.cdc}</td>
-                        <td className="text-center py-3 px-4">
-                          <Badge className={getRiskBadgeClass(row.riskColor)}>
-                            {row.riskLevel}
-                          </Badge>
+                  <tbody className="divide-y divide-slate-200">
+                    {cdcData.pollutants.map((pollutant, index) => (
+                      <tr key={index} className="hover:bg-slate-50">
+                        <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-slate-900">
+                          {pollutant.pollutantName}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-mono text-slate-600">
+                          {pollutant.av.toFixed(4)}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-mono text-slate-600">
+                          {pollutant.ad.toFixed(4)}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-mono text-slate-600">
+                          {pollutant.cv.toFixed(4)}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-mono text-slate-600">
+                          {pollutant.skew.toFixed(4)}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-mono text-slate-600">
+                          {(pollutant.weight * 100).toFixed(1)}%
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-right text-sm font-mono font-semibold text-slate-900">
+                          {pollutant.cdc.toFixed(2)}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-center">
+                          <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${
+                            getRiskColor(pollutant.riskColor).bg
+                          } ${getRiskColor(pollutant.riskColor).text} ${
+                            getRiskColor(pollutant.riskColor).border
+                          }`}>
+                            {pollutant.riskLevel}
+                          </span>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            </CardContent>
-          </Card>
+            </div>
 
-          {/* CDC 趋势图 */}
-          <Card>
-            <CardHeader>
-              <CardTitle>各污染物 CDC 对比</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ReactECharts option={lineOption} style={{ height: '400px' }} />
-            </CardContent>
-          </Card>
-        </>
-      )}
+            {/* CDC 趋势图 */}
+            <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+              <h3 className="mb-4 font-semibold text-slate-900">各污染物 CDC 对比</h3>
+              <ReactECharts option={lineOption} style={{ height: '350px' }} />
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
