@@ -1,6 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
+import { getSupabaseCredentials, getSupabaseServiceRoleKey, getSupabaseClient } from '@/storage/database/supabase-client';
+
+// 使用 service role key 绕过 RLS
+function getSupabaseAdmin() {
+  const { url, anonKey } = getSupabaseCredentials();
+  const serviceRoleKey = getSupabaseServiceRoleKey();
+  return createClient(url, serviceRoleKey || anonKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
 
 // 污染物配置：Excel 列名 -> 数据库字段
 const POLLUTANT_COLUMNS = [
@@ -38,10 +48,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '未授权' }, { status: 401 });
     }
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
+    const supabase = getSupabaseAdmin();
 
     // 2. 获取用户信息
     const { data: { user }, error: userError } = await supabase.auth.getUser(accessToken);
