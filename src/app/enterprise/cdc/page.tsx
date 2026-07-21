@@ -367,7 +367,11 @@ export default function CDCPage() {
               </Badge>
             </div>
             <div className="mt-2 text-xs text-gray-500">
-              <div>评估时间：{cdcData?.evaluatedAt ? new Date(cdcData.evaluatedAt).toLocaleString('zh-CN') : '暂无数据'}</div>
+              <div>评估时间：{cdcData?.evaluatedAt ? (() => {
+                const date = new Date(cdcData.evaluatedAt);
+                const localDate = new Date(date.getTime() + 8 * 60 * 60 * 1000);
+                return localDate.toISOString().slice(0, 16).replace('T', ' ');
+              })() : '暂无数据'}</div>
               <div className="flex items-center gap-1 mt-1">
                 <span>较上周期：</span>
                 {getChangeIcon(cdcData?.changeFromLastPeriod || 0)}
