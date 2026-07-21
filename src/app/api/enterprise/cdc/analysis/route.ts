@@ -229,7 +229,13 @@ export async function GET(request: NextRequest) {
     // 计算每个污染物的 CDC
     const cdcResults: Record<string, any> = {};
     const trendData: Record<string, number>[] = [];
-    const dates = Object.keys(dailyValuesByPollutant[pollutantList[0]?.id] || {}).sort();
+    
+    // 从所有污染物中获取日期列表
+    const allDates = new Set<string>();
+    Object.values(dailyValuesByPollutant).forEach(dailyValues => {
+      Object.keys(dailyValues).forEach(date => allDates.add(date));
+    });
+    const dates = Array.from(allDates).sort();
 
     console.log(`[CDC] 日期列表:`, dates);
     console.log(`[CDC] dailyValuesByPollutant keys:`, Object.keys(dailyValuesByPollutant));
@@ -307,6 +313,10 @@ export async function GET(request: NextRequest) {
     const changeFromMax = currentCDC - maxCDC;
 
     // 计算趋势数据
+    console.log('[CDC] dates:', dates);
+    console.log('[CDC] pollutantList:', pollutantList.map(p => p.id));
+    console.log('[CDC] dailyValuesByPollutant keys:', Object.keys(dailyValuesByPollutant));
+
     dates.forEach(date => {
       const dayCDC: Record<string, any> = { date };
       let totalCDC = 0;
@@ -327,6 +337,9 @@ export async function GET(request: NextRequest) {
       dayCDC['综合'] = count > 0 ? totalCDC / count : 0;
       trendData.push(dayCDC);
     });
+
+    console.log('[CDC] trendData length:', trendData.length);
+    console.log('[CDC] trendData sample:', trendData[0]);
 
     return NextResponse.json({
       success: true,
