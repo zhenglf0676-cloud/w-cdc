@@ -33,6 +33,8 @@ interface CDCAnalysisData {
   totalOutlets: number;
   totalPollutants: number;
   overallCDC: number;
+  lastPeriodCDC: number;
+  changeFromLastPeriod: number;
   riskLevel: string;
   riskColor: string;
   pollutants: PollutantCDC[];
@@ -323,9 +325,19 @@ export default function CDCPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{(cdcData.overallCDC || 0).toFixed(2)}</div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  分析周期: {cdcData.analysisPeriod.days} 天
-                </p>
+                <div className="flex items-center gap-2 mt-1">
+                  <p className="text-xs text-muted-foreground">
+                    分析周期: {cdcData.analysisPeriod.days} 天
+                  </p>
+                  {cdcData.changeFromLastPeriod !== 0 && (
+                    <span className={`text-xs font-medium ${
+                      cdcData.changeFromLastPeriod > 0 ? 'text-red-500' : 'text-green-500'
+                    }`}>
+                      {cdcData.changeFromLastPeriod > 0 ? '↑' : '↓'} 
+                      {Math.abs(cdcData.changeFromLastPeriod).toFixed(2)}
+                    </span>
+                  )}
+                </div>
               </CardContent>
             </Card>
 

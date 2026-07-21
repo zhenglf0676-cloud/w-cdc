@@ -331,6 +331,62 @@ export async function GET(request: NextRequest) {
     const overallCDC = totalWeight > 0 ? totalWeightedCDC / totalWeight : 0;
     const overallRisk = getRiskLevel(overallCDC);
 
+    // 计算上周 CDC（前一个周期的数据）
+    const periodLength = toDate.getTime() - fromDate.getTime();
+    const lastPeriodFrom = new Date(fromDate.getTime() - periodLength);
+    const lastPeriodTo = new Date(fromDate.getTime() - 1); // 前一天
+
+    // 获取上周期的监测数据
+    const { data: lastPeriodData } = await supabase
+      .from('monitoring_data')
+      .select('*')
+      .in('outlet_id', outletIds)
+      .gte('monitored_at', lastPeriodFrom.toISOString())
+      .lte('monitored_at', lastPeriodTo.toISOString());
+
+    let lastPeriodCDC = 0;
+    if (lastPeriodData && lastPeriodData.length > 0) {
+      // 按污染物分组计算上周期 CDC
+      const lastPollutantDataMap: Record<string, number[]> = {};
+      pollutantList.forEach(p => {
+        lastPollutantDataMap[p.id] = [];
+      });
+
+      lastPeriodData.forEach(record => {
+        if (lastPollutantDataMap[record.pollutant_type]) {
+          lastPollutantDataMap[record.pollutant_type].push(record.value);
+        }
+      });
+
+      let lastTotalWeightedCDC = 0;
+      let lastTotalWeight = 0;
+
+      for (const pollutant of pollutantList) {
+        const values = lastPollutantDataMap[pollutant.id];
+        if (!values || values.length === 0) continue;
+
+        const n = values.length;
+        const av = values.reduce((a, b) => a + b, 0) / n;
+        const ad = values.reduce((a, b) => a + Math.abs(b - av), 0) / n;
+        const sd = calculateSD(values, av);
+        const cv = av !== 0 ? sd / av : 0;
+        const skew = calculateSkew(values, av, sd);
+
+        const norAD = normalize(ad, 0, globalAD * 2 || 1);
+        const norCV = normalize(cv, 0, globalCV * 2 || 1);
+        const norSkew = normalize(skew, -1, 1);
+
+        const cdc = weight * (Math.pow(norAD, 2) + Math.pow(norCV, 2) + Math.pow(norSkew, 2));
+
+        lastTotalWeightedCDC += cdc;
+        lastTotalWeight += weight;
+      }
+
+      lastPeriodCDC = lastTotalWeight > 0 ? lastTotalWeightedCDC / lastTotalWeight : 0;
+    }
+
+    const changeFromLastPeriod = overallCDC - lastPeriodCDC;
+
     // 计算归一化指标
     const currentAV = monitoringData.reduce((a, b) => a + b.value, 0) / monitoringData.length;
     const currentAD = monitoringData.reduce((a, b) => a + Math.abs(b.value - currentAV), 0) / monitoringData.length;
@@ -357,6 +413,8 @@ export async function GET(request: NextRequest) {
         totalOutlets: outlets.length,
         totalPollutants: pollutantList.length,
         overallCDC: parseFloat(overallCDC.toFixed(4)),
+        lastPeriodCDC: parseFloat(lastPeriodCDC.toFixed(4)),
+        changeFromLastPeriod: parseFloat(changeFromLastPeriod.toFixed(4)),
         riskLevel: overallRisk.level,
         riskColor: overallRisk.color,
         pollutants: pollutantCDCs,
