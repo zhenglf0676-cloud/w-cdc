@@ -338,6 +338,7 @@ export default function MonitoringPage() {
       if (selectedOutlet) {
         fetchRealtimeData(selectedOutlet.id);
         fetchChartData(selectedOutlet.id, timeRange);
+        fetchHistoryData(selectedOutlet.id);
       }
       fetchOutlets();
     } catch (error: any) {
