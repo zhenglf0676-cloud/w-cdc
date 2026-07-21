@@ -286,6 +286,10 @@ export default function MonitoringPage() {
     setExcelUploading(true);
     setExcelResult(null);
 
+    console.log('开始上传 Excel 文件:', excelFile.name);
+    console.log('当前会话:', session);
+    console.log('已选择的排污口:', selectedOutlet);
+
     try {
       const formData = new FormData();
       formData.append('file', excelFile);
@@ -298,7 +302,10 @@ export default function MonitoringPage() {
         body: formData,
       });
 
+      console.log('上传响应状态:', res.status);
+
       const data = await res.json();
+      console.log('上传响应数据:', data);
 
       if (!res.ok) {
         setExcelResult({
