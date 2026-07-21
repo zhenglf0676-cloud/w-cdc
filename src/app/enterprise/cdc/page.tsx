@@ -91,7 +91,14 @@ export default function CDCPage() {
   }, [user, isLoading, router]);
 
   const fetchCDCData = async () => {
-    if (!session || !dateRange.from || !dateRange.to) return;
+    if (!session?.access_token || !dateRange.from || !dateRange.to) {
+      console.log('CDC 数据获取跳过：', {
+        hasToken: !!session?.access_token,
+        hasFromDate: !!dateRange.from,
+        hasToDate: !!dateRange.to
+      });
+      return;
+    }
 
     setLoading(true);
     setError(null);
