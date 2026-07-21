@@ -794,7 +794,7 @@ function ChartOption({
     label: { formatter: `${p.label}限值：${p.threshold}`, position: 'end' as const },
   }));
 
-  const option = {
+  const option = useMemo(() => ({
     tooltip: {
       trigger: 'axis' as const,
       axisPointer: { type: 'cross' as const },
@@ -829,9 +829,9 @@ function ChartOption({
       ...s,
       markLine: i === 0 ? { data: markLines, silent: true } : undefined,
     })),
-  };
+  }), [data, pollutants, timeRange, times, series, markLines]);
 
-  return <ReactECharts option={option} style={{ height: '400px' }} />;
+  return <ReactECharts option={option} style={{ height: '400px' }} notMerge lazyUpdate />;
 }
 
 // 手动录入表单组件
