@@ -343,7 +343,11 @@ export async function GET(request: NextRequest) {
       data: {
         currentCDC: parseFloat(currentCDC.toFixed(4)),
         riskLevel,
-        indicators: cdcResults,
+        indicators: Object.entries(cdcResults).map(([pollutantId, data]) => ({
+          pollutantId,
+          name: pollutantList.find(p => p.id === pollutantId)?.name || pollutantId,
+          ...data
+        })),
         changeFromLastPeriod: parseFloat((currentCDC - lastWeekCDC).toFixed(4)),
         lastWeekCDC: parseFloat(lastWeekCDC.toFixed(4)),
         maxCDC: parseFloat(maxCDC.toFixed(4)),
