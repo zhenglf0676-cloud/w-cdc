@@ -28,11 +28,26 @@ function calculateSkew(values: number[], avg: number, sd: number): number {
   return (n / ((n - 1) * (n - 2))) * sum;
 }
 
-// 归一化
+// 归一化（使用 0-1 范围，基于指标的理论范围）
 function normalize(value: number, min: number, max: number): number {
-  if (max === min) return 0;
+  if (max === min) return 0.5; // 如果范围无效，返回中间值
   const result = (value - min) / (max - min);
   return Math.max(0, Math.min(1, result)); // 限制在 0-1 之间
+}
+
+// 计算归一化范围（基于数据分布）
+function calculateNormalizationRange(values: number[]): { min: number; max: number } {
+  if (values.length === 0) return { min: 0, max: 1 };
+  const sorted = [...values].sort((a, b) => a - b);
+  const min = sorted[0];
+  const max = sorted[sorted.length - 1];
+  // 使用 5% 和 95% 分位数作为范围，避免极端值影响
+  const p5Index = Math.floor(sorted.length * 0.05);
+  const p95Index = Math.floor(sorted.length * 0.95);
+  return {
+    min: sorted[p5Index] || min,
+    max: sorted[p95Index] || max
+  };
 }
 
 // 获取风险等级
@@ -279,7 +294,9 @@ export async function GET(request: NextRequest) {
 
     // 计算权重 DML(Mi) = m × Wi / ΣWi
     const sumWi = Object.values(companyAVMap).reduce((a, b) => a + b, 0);
-    const weight = sumWi > 0 ? (m * (companyAVMap[companyId] || 0)) / sumWi : 1;
+    // 如果当前企业没有数据，使用园区平均值
+    const currentCompanyAV = companyAVMap[companyId] || (sumWi / (m || 1));
+    const weight = sumWi > 0 ? (m * currentCompanyAV) / sumWi : 1;
 
     // 计算所有污染物的历史统计值（用于归一化）
     const allPollutantValues = monitoringData.map(r => r.value);
@@ -288,6 +305,31 @@ export async function GET(request: NextRequest) {
     const globalSD = calculateSD(allPollutantValues, globalAV);
     const globalCV = globalAV !== 0 ? globalSD / globalAV : 0;
     const globalSkew = calculateSkew(allPollutantValues, globalAV, globalSD);
+
+    // 计算归一化范围（基于所有污染物的指标值）
+    const allADValues: number[] = [];
+    const allCVValues: number[] = [];
+    const allSkewValues: number[] = [];
+
+    for (const pollutant of pollutantList) {
+      const values = pollutantDataMap[pollutant.id];
+      if (!values || values.length === 0) continue;
+
+      const n = values.length;
+      const av = values.reduce((a, b) => a + b, 0) / n;
+      const ad = values.reduce((a, b) => a + Math.abs(b - av), 0) / n;
+      const sd = calculateSD(values, av);
+      const cv = av !== 0 ? sd / av : 0;
+      const skew = calculateSkew(values, av, sd);
+
+      allADValues.push(ad);
+      allCVValues.push(cv);
+      allSkewValues.push(skew);
+    }
+
+    const adRange = calculateNormalizationRange(allADValues);
+    const cvRange = calculateNormalizationRange(allCVValues);
+    const skewRange = calculateNormalizationRange(allSkewValues);
 
     // 计算每个污染物的 CDC
     for (const pollutant of pollutantList) {
@@ -301,10 +343,10 @@ export async function GET(request: NextRequest) {
       const cv = av !== 0 ? sd / av : 0;
       const skew = calculateSkew(values, av, sd);
 
-      // 归一化（使用全局统计值）
-      const norAD = normalize(ad, 0, globalAD * 2 || 1);
-      const norCV = normalize(cv, 0, globalCV * 2 || 1);
-      const norSkew = normalize(skew, -1, 1);
+      // 归一化（使用所有污染物的指标范围）
+      const norAD = normalize(ad, adRange.min, adRange.max);
+      const norCV = normalize(cv, cvRange.min, cvRange.max);
+      const norSkew = normalize(skew, skewRange.min, skewRange.max);
 
       // 计算 CDC = [m × Wi / ΣWi] × [Nor(AD)² + Nor(CV)² + Nor(SKEW)²]
       const cdc = weight * (Math.pow(norAD, 2) + Math.pow(norCV, 2) + Math.pow(norSkew, 2));
@@ -372,9 +414,10 @@ export async function GET(request: NextRequest) {
         const cv = av !== 0 ? sd / av : 0;
         const skew = calculateSkew(values, av, sd);
 
-        const norAD = normalize(ad, 0, globalAD * 2 || 1);
-        const norCV = normalize(cv, 0, globalCV * 2 || 1);
-        const norSkew = normalize(skew, -1, 1);
+        // 使用相同的归一化范围
+        const norAD = normalize(ad, adRange.min, adRange.max);
+        const norCV = normalize(cv, cvRange.min, cvRange.max);
+        const norSkew = normalize(skew, skewRange.min, skewRange.max);
 
         const cdc = weight * (Math.pow(norAD, 2) + Math.pow(norCV, 2) + Math.pow(norSkew, 2));
 
@@ -387,17 +430,20 @@ export async function GET(request: NextRequest) {
 
     const changeFromLastPeriod = overallCDC - lastPeriodCDC;
 
-    // 计算归一化指标
-    const currentAV = monitoringData.reduce((a, b) => a + b.value, 0) / monitoringData.length;
-    const currentAD = monitoringData.reduce((a, b) => a + Math.abs(b.value - currentAV), 0) / monitoringData.length;
-    const currentSD = calculateSD(monitoringData.map(m => m.value), currentAV);
+    // 计算归一化指标（用于雷达图展示）
+    // 使用企业所有污染物的综合指标
+    const allValues = monitoringData.map(m => m.value);
+    const currentAV = allValues.reduce((a, b) => a + b, 0) / allValues.length;
+    const currentAD = allValues.reduce((a, b) => a + Math.abs(b - currentAV), 0) / allValues.length;
+    const currentSD = calculateSD(allValues, currentAV);
     const currentCV = currentAV !== 0 ? currentSD / currentAV : 0;
-    const currentSkew = calculateSkew(monitoringData.map(m => m.value), currentAV, currentSD);
+    const currentSkew = calculateSkew(allValues, currentAV, currentSD);
 
+    // 使用相同的归一化范围
     const norAV = normalize(currentAV, 0, globalAV * 2 || 1);
-    const norAD = normalize(currentAD, 0, globalAD * 2 || 1);
-    const norCV = normalize(currentCV, 0, globalCV * 2 || 1);
-    const norSkew = normalize(currentSkew, -1, 1);
+    const norAD = normalize(currentAD, adRange.min, adRange.max);
+    const norCV = normalize(currentCV, cvRange.min, cvRange.max);
+    const norSkew = normalize(currentSkew, skewRange.min, skewRange.max);
 
     return NextResponse.json({
       success: true,
