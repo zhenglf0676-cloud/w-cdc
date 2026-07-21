@@ -257,10 +257,65 @@ export async function GET(request: NextRequest) {
     const norCV = normalize(cv, 0, allCV * 2);
     const norSkew = normalize(skew, -1, 1);
 
+    // 获取园区内所有企业的数据（用于计算权重）
+    const { data: allOutlets, error: allOutletsError } = await supabase
+      .from('discharge_outlets')
+      .select('id, user_id')
+      .eq('park_name', parkName)
+      .eq('status', 'approved');
+
+    if (allOutletsError) {
+      console.error('获取园区排污口失败:', allOutletsError);
+    }
+
+    // 计算每个企业的 AV 值（用于权重计算）
+    const companyAVMap: Record<string, number> = {};
+    const allCompanyIds = [...new Set(allOutlets?.map(o => o.user_id) || [])];
+
+    for (const companyId of allCompanyIds) {
+      const { data: companyOutlets } = await supabase
+        .from('discharge_outlets')
+        .select('id')
+        .eq('user_id', companyId)
+        .eq('status', 'approved');
+
+      if (companyOutlets && companyOutlets.length > 0) {
+        const companyOutletIds = companyOutlets.map(o => o.id);
+        const { data: companyMonitoringData } = await supabase
+          .from('monitoring_data')
+          .select('pollutant_type, value, monitored_at')
+          .in('outlet_id', companyOutletIds)
+          .gte('monitored_at', startDate.toISOString())
+          .lte('endDate.toISOString()');
+
+        if (companyMonitoringData && companyMonitoringData.length > 0) {
+          // 计算每日累计值
+          const companyDailyValues: Record<string, number> = {};
+          companyMonitoringData.forEach(record => {
+            const date = new Date(record.monitored_at).toISOString().split('T')[0];
+            if (!companyDailyValues[date]) {
+              companyDailyValues[date] = 0;
+            }
+            companyDailyValues[date] += record.value;
+          });
+
+          // 计算 AV
+          const values = Object.values(companyDailyValues);
+          if (values.length > 0) {
+            companyAVMap[companyId] = values.reduce((a, b) => a + b, 0) / values.length;
+          }
+        }
+      }
+    }
+
+    // 计算权重 DML(Mi) = m × Wi / ΣWi
+    const m = allCompanyIds.length;
+    const sumWi = Object.values(companyAVMap).reduce((a, b) => a + b, 0);
+    const weight = sumWi > 0 ? (m * companyAVMap[companyId]) / sumWi : 1;
+
     // 计算 CDC 值
     // CDC = [m × Wi / ΣWi] × [Nor(AD)² + Nor(CV)² + Nor(SKEW)²]
-    // 单企业场景：m=1, Wi/ΣWi = 1
-    const currentCDC = norAD ** 2 + norCV ** 2 + norSkew ** 2;
+    const currentCDC = weight * (norAD ** 2 + norCV ** 2 + norSkew ** 2);
     const riskLevel = getRiskLevel(currentCDC);
 
     // 计算上周 CDC（前 7 天的数据）
@@ -280,7 +335,7 @@ export async function GET(request: NextRequest) {
       const lwNorCV = normalize(lwCV, 0, allCV * 2);
       const lwNorSkew = normalize(lwSkew, -1, 1);
 
-      lastWeekCDC = lwNorAD ** 2 + lwNorCV ** 2 + lwNorSkew ** 2;
+      lastWeekCDC = weight * (lwNorAD ** 2 + lwNorCV ** 2 + lwNorSkew ** 2);
     }
 
     // 计算历史最大 CDC
@@ -301,7 +356,7 @@ export async function GET(request: NextRequest) {
         const pNorCV = normalize(pCV, 0, allCV * 2);
         const pNorSkew = normalize(pSkew, -1, 1);
 
-        const periodCDC = pNorAD ** 2 + pNorCV ** 2 + pNorSkew ** 2;
+        const periodCDC = weight * (pNorAD ** 2 + pNorCV ** 2 + pNorSkew ** 2);
         if (periodCDC > maxCDC) {
           maxCDC = periodCDC;
         }
@@ -326,7 +381,7 @@ export async function GET(request: NextRequest) {
         const pNorCV = normalize(pCV, 0, allCV * 2);
         const pNorSkew = normalize(pSkew, -1, 1);
 
-        const periodCDC = pNorAD ** 2 + pNorCV ** 2 + pNorSkew ** 2;
+        const periodCDC = weight * (pNorAD ** 2 + pNorCV ** 2 + pNorSkew ** 2);
 
         trendData.push({
           date: periodDates[periodDates.length - 1],
