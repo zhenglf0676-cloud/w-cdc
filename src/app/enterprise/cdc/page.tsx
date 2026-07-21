@@ -437,7 +437,7 @@ export default function CDCPage() {
           <CardContent>
             <div className="flex items-baseline gap-2">
               <span className="text-3xl font-bold text-orange-600">
-                {cdcData?.currentCDC.toFixed(2) || '0.00'}
+                {(cdcData?.currentCDC || 0).toFixed(2)}
               </span>
               <Badge className={getRiskColor(cdcData?.riskLevel || '低风险')}>
                 {cdcData?.riskLevel || '低风险'}
@@ -586,7 +586,7 @@ export default function CDCPage() {
                 </tbody>
               </table>
               <div className="mt-4 text-xs text-gray-500 text-right">
-                * CDC = Nor(AD)² + Nor(CV)² + Nor(SKEW)² = {cdcData?.currentCDC.toFixed(2) || '0.00'}
+                * CDC = Nor(AD)² + Nor(CV)² + Nor(SKEW)² = {(cdcData?.currentCDC || 0).toFixed(2)}
               </div>
             </div>
           </div>
