@@ -179,12 +179,12 @@ export default function MonitoringPage() {
     fetchRealtimeData(selectedOutlet.id);
   }, [session, selectedOutlet]);
 
-  // 获取历史监测数据
+  // 获取历史监测数据（只显示当天）
   const fetchHistoryData = async (outletId: string) => {
     if (!session) return;
     try {
       const res = await fetch(
-        `/api/enterprise/monitoring/history?outletId=${outletId}&page=1&pageSize=${historyPageSize}`,
+        `/api/enterprise/monitoring/history?outletId=${outletId}&days=1&page=1&pageSize=${historyPageSize}`,
         {
           headers: { 'x-session': session.access_token },
         }
