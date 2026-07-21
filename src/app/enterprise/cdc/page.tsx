@@ -73,20 +73,6 @@ export default function CDCAnalysisPage() {
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-wrap items-center gap-4">
-            {/* 排污口选择 */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">排污口</span>
-              <Select defaultValue="outlet-1">
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="选择排污口" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="outlet-1">排污口 1（总排口）</SelectItem>
-                  <SelectItem value="outlet-2">排污口 2</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
             {/* 时间范围 */}
             <div className="flex items-center gap-2 ml-auto">
               <span className="text-sm text-gray-600">时间范围</span>
@@ -188,35 +174,35 @@ export default function CDCAnalysisPage() {
           </CardContent>
         </Card>
 
-        {/* 状态（S） */}
+        {/* 状态（S）- CDC 历史最高值 */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-gray-600">状态（S）</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-blue-600">{staticData.state}</span>
-              <span className="text-sm text-gray-500">文本</span>
+              <span className="text-3xl font-bold text-blue-600">0.92</span>
+              <span className="text-sm text-gray-500">历史最高</span>
             </div>
             <div className="mt-2 text-xs text-gray-500 flex items-center gap-1">
-              较上周期：
-              <TrendingUp className="w-3 h-3 text-red-500" />
-              <span className="text-red-500">↑ 0.05</span>
+              较最高值：
+              <TrendingDown className="w-3 h-3 text-green-500" />
+              <span className="text-green-500">↓ 0.10</span>
             </div>
           </CardContent>
         </Card>
 
-        {/* 动作（A） */}
+        {/* 动作（A）- 上周 CDC 值 */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-gray-600">动作（A）</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-green-600">{staticData.action}</div>
+            <div className="text-3xl font-bold text-green-600">0.75</div>
             <div className="mt-2 text-xs text-gray-500 flex items-center gap-1">
               较上周期：
               <TrendingUp className="w-3 h-3 text-red-500" />
-              <span className="text-red-500">↑ 0.06</span>
+              <span className="text-red-500">↑ 0.07</span>
             </div>
           </CardContent>
         </Card>
