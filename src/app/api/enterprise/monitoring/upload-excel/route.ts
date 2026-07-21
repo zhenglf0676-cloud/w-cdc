@@ -84,6 +84,25 @@ export async function POST(request: NextRequest) {
 
     const outletMap = new Map(outlets.map(o => [o.name, o.id]));
 
+    // 获取企业已审批通过的污染物列表
+    const { data: applications } = await supabase
+      .from('pollutant_applications')
+      .select('pollutants')
+      .eq('company_id', profile.id)
+      .eq('status', 'approved');
+
+    const approvedPollutantIds = new Set<string>();
+    if (applications && applications.length > 0) {
+      for (const app of applications) {
+        const pollutants = app.pollutants as any[];
+        if (Array.isArray(pollutants)) {
+          for (const p of pollutants) {
+            approvedPollutantIds.add(p.id);
+          }
+        }
+      }
+    }
+
     // 解析数据
     const records: any[] = [];
     const errors: string[] = [];
@@ -116,6 +135,12 @@ export async function POST(request: NextRequest) {
       for (const [pollutantType, config] of Object.entries(POLLUTANT_CONFIG)) {
         const value = row[pollutantType];
         if (value !== undefined && value !== null && value !== '') {
+          // 验证污染物是否已审批通过
+          if (!approvedPollutantIds.has(pollutantType.toLowerCase())) {
+            errors.push(`第${rowNum}行：${pollutantType}未申请或未审批通过`);
+            continue;
+          }
+
           const numValue = Number(value);
           if (isNaN(numValue)) {
             errors.push(`第${rowNum}行：${pollutantType}数值格式错误`);
