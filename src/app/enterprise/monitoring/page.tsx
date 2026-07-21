@@ -211,6 +211,7 @@ export default function MonitoringPage() {
     if (!session) return;
     try {
       const days = range === 'today' ? 1 : 7;
+      console.log(`获取图表数据: outletId=${outletId}, days=${days}`);
       const res = await fetch(
         `/api/enterprise/monitoring/history?outletId=${outletId}&days=${days}&pageSize=1000`,
         {
@@ -219,8 +220,10 @@ export default function MonitoringPage() {
       );
       if (res.ok) {
         const data = await res.json();
+        console.log('图表数据 API 返回:', data.total, '条');
         if (data.success) {
           setChartData(data.data || []);
+          console.log('图表数据已设置:', data.data?.length, '条');
         }
       }
     } catch (error) {
