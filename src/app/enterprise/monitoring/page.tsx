@@ -789,11 +789,9 @@ function ChartOption({
   // 添加标准限值线
   const markLines = pollutants.map((p) => ({
     name: `${p.label}限值`,
-    type: 'line' as const,
-    symbol: 'none',
+    yAxis: p.threshold,
     lineStyle: { type: 'dashed', color: '#ef4444', width: 1 },
-    label: { formatter: `{c}`, position: 'end' as const },
-    data: [{ yAxis: p.threshold }],
+    label: { formatter: `${p.label}限值：${p.threshold}`, position: 'end' as const },
   }));
 
   const option = {
@@ -829,7 +827,7 @@ function ChartOption({
     },
     series: series.map((s, i) => ({
       ...s,
-      markLine: i === 0 ? { data: markLines } : undefined,
+      markLine: i === 0 ? { data: markLines, silent: true } : undefined,
     })),
   };
 
