@@ -283,35 +283,49 @@ export default function MonitoringPage() {
       return;
     }
 
+    if (!session) {
+      setExcelResult({ success: false, count: 0, errors: ['未登录，请重新登录'], warnings: [] });
+      return;
+    }
+
     setExcelUploading(true);
     setExcelResult(null);
 
-    console.log('开始上传 Excel 文件:', excelFile.name);
-    console.log('当前会话:', session);
-    console.log('已选择的排污口:', selectedOutlet);
+    console.log('=== 开始上传 Excel ===');
+    console.log('文件名:', excelFile.name);
+    console.log('文件大小:', excelFile.size, 'bytes');
 
     try {
       const formData = new FormData();
       formData.append('file', excelFile);
 
+      console.log('发送请求...');
+      
       const res = await fetch('/api/enterprise/monitoring/upload-excel', {
         method: 'POST',
         headers: {
-          'x-session': JSON.stringify(session),
+          'x-session': session.access_token,
         },
         body: formData,
       });
 
-      console.log('上传响应状态:', res.status);
+      console.log('响应状态:', res.status, res.statusText);
 
-      const data = await res.json();
-      console.log('上传响应数据:', data);
+      const text = await res.text();
+      console.log('响应内容:', text);
+
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error('服务器返回的不是 JSON 格式');
+      }
 
       if (!res.ok) {
         setExcelResult({
           success: false,
           count: 0,
-          errors: [data.error || '上传失败'],
+          errors: [data.error || `上传失败 (${res.status})`],
           warnings: [],
         });
         return;
@@ -327,6 +341,7 @@ export default function MonitoringPage() {
       }
       fetchOutlets();
     } catch (error: any) {
+      console.error('上传错误:', error);
       setExcelResult({
         success: false,
         count: 0,

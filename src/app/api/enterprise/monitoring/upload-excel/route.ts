@@ -24,14 +24,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '未授权' }, { status: 401 });
     }
 
-    let session;
+    let accessToken: string;
     try {
-      session = JSON.parse(authHeader);
+      // 尝试解析为 JSON（兼容旧版本）
+      const session = JSON.parse(authHeader);
+      accessToken = session.access_token;
     } catch {
-      return NextResponse.json({ error: '会话格式错误' }, { status: 401 });
+      // 如果不是 JSON，直接使用（新版本）
+      accessToken = authHeader;
     }
 
-    if (!session?.access_token) {
+    if (!accessToken) {
       return NextResponse.json({ error: '未授权' }, { status: 401 });
     }
 
@@ -41,7 +44,7 @@ export async function POST(request: NextRequest) {
     );
 
     // 2. 获取用户信息
-    const { data: { user }, error: userError } = await supabase.auth.getUser(session.access_token);
+    const { data: { user }, error: userError } = await supabase.auth.getUser(accessToken);
     if (userError || !user) {
       console.error('获取用户信息失败:', userError);
       return NextResponse.json({ error: '未授权' }, { status: 401 });
