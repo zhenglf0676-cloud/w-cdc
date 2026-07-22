@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
     // 获取园区内所有企业
     const { data: enterprises, error: enterprisesError } = await supabase
       .from('profiles')
-      .select('id, user_id, username, email, company_name, industry, contact_person')
+      .select('id, user_id, full_name, company_name, park_name')
       .eq('park_name', parkName)
       .eq('role', 'enterprise');
 
@@ -103,9 +103,9 @@ export async function GET(request: NextRequest) {
         if (!outlets || outlets.length === 0) {
           ranking.push({
             enterpriseId: enterprise.id,
-            enterpriseName: enterprise.company_name || enterprise.username || '未知企业',
-            industry: enterprise.industry || '-',
-            contactPerson: enterprise.contact_person || '-',
+            enterpriseName: enterprise.company_name || enterprise.full_name || '未知企业',
+            industry: '-',
+            contactPerson: enterprise.full_name || '-',
             totalOutlets: 0,
             totalPollutants: 0,
             overallCDC: 0,
@@ -127,9 +127,9 @@ export async function GET(request: NextRequest) {
         if (!pollutants || pollutants.length === 0) {
           ranking.push({
             enterpriseId: enterprise.id,
-            enterpriseName: enterprise.company_name || enterprise.username || '未知企业',
-            industry: enterprise.industry || '-',
-            contactPerson: enterprise.contact_person || '-',
+            enterpriseName: enterprise.company_name || enterprise.full_name || '未知企业',
+            industry: '-',
+            contactPerson: enterprise.full_name || '-',
             totalOutlets: outlets.length,
             totalPollutants: 0,
             overallCDC: 0,
@@ -166,9 +166,9 @@ export async function GET(request: NextRequest) {
         if (!monitoringData || monitoringData.length === 0) {
           ranking.push({
             enterpriseId: enterprise.id,
-            enterpriseName: enterprise.company_name || enterprise.username || '未知企业',
-            industry: enterprise.industry || '-',
-            contactPerson: enterprise.contact_person || '-',
+            enterpriseName: enterprise.company_name || enterprise.full_name || '未知企业',
+            industry: '-',
+            contactPerson: enterprise.full_name || '-',
             totalOutlets: outlets.length,
             totalPollutants: pollutantList.length,
             overallCDC: 0,
@@ -303,9 +303,9 @@ export async function GET(request: NextRequest) {
 
         ranking.push({
           enterpriseId: enterprise.id,
-          enterpriseName: enterprise.company_name || enterprise.username || '未知企业',
-          industry: enterprise.industry || '-',
-          contactPerson: enterprise.contact_person || '-',
+          enterpriseName: enterprise.company_name || enterprise.full_name || '未知企业',
+          industry: '-',
+          contactPerson: enterprise.full_name || '-',
           totalOutlets: outlets.length,
           totalPollutants: pollutantList.length,
           overallCDC: parseFloat(overallCDC.toFixed(4)),
@@ -317,9 +317,9 @@ export async function GET(request: NextRequest) {
         // 添加默认值
         ranking.push({
           enterpriseId: enterprise.id,
-          enterpriseName: enterprise.company_name || enterprise.username || '未知企业',
-          industry: enterprise.industry || '-',
-          contactPerson: enterprise.contact_person || '-',
+          enterpriseName: enterprise.company_name || enterprise.full_name || '未知企业',
+          industry: '-',
+          contactPerson: enterprise.full_name || '-',
           totalOutlets: 0,
           totalPollutants: 0,
           overallCDC: 0,
