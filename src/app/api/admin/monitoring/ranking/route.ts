@@ -1,408 +1,286 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseCredentials, getSupabaseServiceRoleKey, getSupabaseClient } from '@/storage/database/supabase-client';
-import { createClient } from '@supabase/supabase-js';
+import { NextResponse } from 'next/server';
+import { getSupabaseClient } from '@/storage/database/supabase-client';
 
-// 使用 service role key 绕过 RLS
-function getSupabaseAdmin() {
-  const { url, anonKey } = getSupabaseCredentials();
-  const serviceRoleKey = getSupabaseServiceRoleKey();
-  return createClient(url, serviceRoleKey || anonKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
-
-// 获取风险等级
-function getRiskLevel(cdc: number): { level: string; color: string } {
-  if (cdc < 0.5) return { level: '低风险', color: 'green' };
-  if (cdc < 1.5) return { level: '中风险', color: 'orange' };
-  return { level: '高风险', color: 'red' };
-}
-
-export async function GET(request: NextRequest) {
+/**
+ * Admin CDC 风险排行 API
+ * 根据 Word 文档标准计算 CDC 值
+ */
+export async function GET(request: Request) {
   try {
-    // 获取认证信息
-    const token = request.headers.get('x-auth-token');
-    if (!token) {
-      return NextResponse.json({ error: '未认证' }, { status: 401 });
+    const supabase = getSupabaseClient();
+
+    // 验证管理员权限
+    const authHeader = request.headers.get('x-auth-token');
+    if (!authHeader) {
+      return NextResponse.json({ error: '未授权' }, { status: 401 });
     }
 
-    // 使用 token 验证用户身份
-    const client = getSupabaseClient(token);
-    const { data: { user }, error: userError } = await client.auth.getUser();
+    const { data: { user }, error: userError } = await supabase.auth.getUser(authHeader);
     if (userError || !user) {
-      return NextResponse.json({ error: '用户信息获取失败' }, { status: 400 });
+      return NextResponse.json({ error: '未授权' }, { status: 401 });
     }
 
-    const userId = user.id;
-    
-    // 使用 service role key 进行后续操作
-    const supabase = getSupabaseAdmin();
-
-    // 获取管理员信息
-    const { data: adminProfile, error: profileError } = await supabase
+    const { data: profile } = await supabase
       .from('profiles')
-      .select('*')
-      .eq('user_id', userId)
+      .select('role, park_name')
+      .eq('user_id', user.id)
       .single();
 
-    if (profileError || !adminProfile) {
-      return NextResponse.json({ error: '管理员信息获取失败' }, { status: 400 });
+    if (!profile || profile.role !== 'admin') {
+      return NextResponse.json({ error: '需要管理员权限' }, { status: 403 });
     }
 
-    if (adminProfile.role !== 'admin') {
-      return NextResponse.json({ error: '无权限访问' }, { status: 403 });
-    }
-
-    const parkName = adminProfile.park_name;
+    const parkName = profile.park_name;
     if (!parkName) {
-      return NextResponse.json({ error: '管理员未绑定园区' }, { status: 400 });
+      return NextResponse.json({ error: '未设置园区名称' }, { status: 400 });
     }
 
     // 获取园区内所有企业
     const { data: enterprises, error: enterprisesError } = await supabase
       .from('profiles')
       .select('id, user_id, full_name, company_name, park_name')
-      .eq('park_name', parkName)
-      .eq('role', 'enterprise');
+      .eq('role', 'enterprise')
+      .eq('park_name', parkName);
 
     if (enterprisesError) {
       console.error('获取企业列表失败:', enterprisesError);
-      return NextResponse.json({ error: '企业列表获取失败' }, { status: 500 });
+      return NextResponse.json({ error: '获取企业列表失败' }, { status: 500 });
     }
 
     if (!enterprises || enterprises.length === 0) {
-      return NextResponse.json({
-        success: true,
-        data: []
-      });
+      return NextResponse.json({ data: [] });
     }
 
-    // 获取时间范围参数
-    const searchParams = request.nextUrl.searchParams;
-    const endDate = searchParams.get('endDate');
+    const m = enterprises.length; // 园区内企业数量
 
-    // 计算 7 天时间范围（与企业端 CDC API 保持一致）
-    let toDate = endDate ? new Date(endDate) : new Date();
-    const fromDate = new Date(toDate.getTime() - 7 * 24 * 60 * 60 * 1000);
-    
-    // 设置时间范围（使用 UTC 时间）
-    fromDate.setUTCHours(0, 0, 0, 0);
-    toDate.setUTCHours(23, 59, 59, 999);
-
-    // 为每个企业计算当天的综合 CDC
-    const ranking = [];
-
+    // 获取所有企业的已审批排污口
+    const enterpriseOutletMap: Record<string, Array<{ id: string; name: string }>> = {};
     for (const enterprise of enterprises) {
-      try {
-        // 获取企业的排污口
-        const { data: outlets } = await supabase
-          .from('discharge_outlets')
-          .select('id, name')
-          .eq('user_id', enterprise.user_id)
-          .eq('status', 'approved');
+      const { data: outlets } = await supabase
+        .from('discharge_outlets')
+        .select('id, name')
+        .eq('user_id', enterprise.user_id)
+        .eq('status', 'approved');
 
-        if (!outlets || outlets.length === 0) {
-          ranking.push({
-            enterpriseId: enterprise.id,
-            enterpriseName: enterprise.company_name || enterprise.full_name || '未知企业',
-            industry: '-',
-            contactPerson: enterprise.full_name || '-',
-            totalOutlets: 0,
-            totalPollutants: 0,
-            overallCDC: 0,
-            riskLevel: '低风险',
-            riskColor: 'green'
-          });
-          continue;
-        }
-
-        const outletIds = outlets.map(o => o.id);
-
-        // 获取企业的污染物
-        const { data: pollutants } = await supabase
-          .from('pollutant_applications')
-          .select('*')
-          .eq('company_id', enterprise.id)
-          .eq('status', 'approved');
-
-        if (!pollutants || pollutants.length === 0) {
-          ranking.push({
-            enterpriseId: enterprise.id,
-            enterpriseName: enterprise.company_name || enterprise.full_name || '未知企业',
-            industry: '-',
-            contactPerson: enterprise.full_name || '-',
-            totalOutlets: outlets.length,
-            totalPollutants: 0,
-            overallCDC: 0,
-            riskLevel: '低风险',
-            riskColor: 'green'
-          });
-          continue;
-        }
-
-        // 解析污染物列表
-        const pollutantList: { id: string; name: string; unit: string; threshold: number }[] = [];
-        pollutants.forEach((app: any) => {
-          if (Array.isArray(app.pollutants)) {
-            app.pollutants.forEach((p: any) => {
-              pollutantList.push({
-                id: p.id,
-                name: p.label || p.id,
-                unit: p.unit || '',
-                threshold: p.threshold || 0
-              });
-            });
-          }
-        });
-
-        // 获取 7 天的监测数据
-        const { data: monitoringData } = await supabase
-          .from('monitoring_data')
-          .select('*')
-          .in('outlet_id', outletIds)
-          .gte('monitored_at', fromDate.toISOString())
-          .lte('monitored_at', toDate.toISOString())
-          .order('monitored_at', { ascending: true });
-
-        if (!monitoringData || monitoringData.length === 0) {
-          ranking.push({
-            enterpriseId: enterprise.id,
-            enterpriseName: enterprise.company_name || enterprise.full_name || '未知企业',
-            industry: '-',
-            contactPerson: enterprise.full_name || '-',
-            totalOutlets: outlets.length,
-            totalPollutants: pollutantList.length,
-            overallCDC: 0,
-            riskLevel: '低风险',
-            riskColor: 'green'
-          });
-          continue;
-        }
-
-        // 按日期和污染物分组，每天取每个排污口的最新值，然后累加（根据 Word 文档标准）
-        const dailyPollutantData: Record<string, Record<string, Record<string, number>>> = {};
-        // 结构：{ date: { pollutantId: { outletId: latestValue } } }
-
-        monitoringData.forEach(record => {
-          // 转换为 UTC+8 时间获取日期（中国时间）
-          const date = new Date(new Date(record.monitored_at).getTime() + 8 * 60 * 60 * 1000).toISOString().split('T')[0];
-          const pollutantType = record.pollutant_type;
-          const outletId = record.outlet_id;
-          const value = record.value;
-
-          if (!dailyPollutantData[date]) {
-            dailyPollutantData[date] = {};
-          }
-          if (!dailyPollutantData[date][pollutantType]) {
-            dailyPollutantData[date][pollutantType] = {};
-          }
-          // 保留最新值（因为数据已按时间排序，后面的会覆盖前面的）
-          dailyPollutantData[date][pollutantType][outletId] = value;
-        });
-
-        // 计算每天的累计值（所有排污口最新值之和）
-        const pollutantDailyTotals: Record<string, number[]> = {};
-        pollutantList.forEach(p => {
-          pollutantDailyTotals[p.id] = [];
-        });
-
-        const sortedDates = Object.keys(dailyPollutantData).sort();
-        for (const date of sortedDates) {
-          for (const pollutant of pollutantList) {
-            const outletValues = dailyPollutantData[date][pollutant.id] || {};
-            const dailyTotal = Object.values(outletValues).reduce((sum, val) => sum + val, 0);
-            if (dailyTotal > 0) {
-              pollutantDailyTotals[pollutant.id].push(dailyTotal);
-            }
-          }
-        }
-
-        // 计算每个污染物的基础统计指标（使用每天累计值）
-        const pollutantStats: Record<string, { av: number; ad: number; cv: number; skew: number }> = {};
-        
-        for (const pollutant of pollutantList) {
-          const values = pollutantDailyTotals[pollutant.id];
-          if (!values || values.length === 0) continue;
-
-          const n = values.length;
-          const av = values.reduce((a, b) => a + b, 0) / n;
-          const ad = values.reduce((a, b) => a + Math.abs(b - av), 0) / n;
-          
-          // 计算标准差
-          const squaredDiffs = values.map(v => Math.pow(v - av, 2));
-          const avgSquaredDiff = squaredDiffs.reduce((a, b) => a + b, 0) / n;
-          const sd = Math.sqrt(avgSquaredDiff);
-          
-          const cv = av !== 0 ? sd / av : 0;
-          
-          // 计算偏度
-          let skew = 0;
-          if (sd !== 0 && n >= 3) {
-            const cubedDiffs = values.map(v => Math.pow((v - av) / sd, 3));
-            const sum = cubedDiffs.reduce((a, b) => a + b, 0);
-            skew = (n / ((n - 1) * (n - 2))) * sum;
-          }
-
-          pollutantStats[pollutant.id] = { av, ad, cv, skew };
-        }
-
-        // 获取园区内所有企业的 AV 值（用于权重计算）
-        // 根据 Word 文档：Wi = 某企业某指标的平均值（这里使用企业所有污染物的综合 AV）
-        const allEnterpriseAVs: number[] = [];
-        for (const otherEnterprise of enterprises) {
-          const { data: otherOutlets } = await supabase
-            .from('discharge_outlets')
-            .select('id')
-            .eq('user_id', otherEnterprise.user_id)
-            .eq('status', 'approved');
-
-          if (!otherOutlets || otherOutlets.length === 0) continue;
-
-          const otherOutletIds = otherOutlets.map(o => o.id);
-          const { data: otherMonitoringData } = await supabase
-            .from('monitoring_data')
-            .select('pollutant_type, value, monitored_at, outlet_id')
-            .in('outlet_id', otherOutletIds)
-            .gte('monitored_at', fromDate.toISOString())
-            .lte('monitored_at', toDate.toISOString());
-
-          if (!otherMonitoringData || otherMonitoringData.length === 0) continue;
-
-          // 按日期和污染物分组，每天取每个排污口的最新值，然后累加
-          const otherDailyPollutantData: Record<string, Record<string, Record<string, number>>> = {};
-          otherMonitoringData.forEach(record => {
-            // 转换为 UTC+8 时间获取日期（中国时间）
-            const date = new Date(new Date(record.monitored_at).getTime() + 8 * 60 * 60 * 1000).toISOString().split('T')[0];
-            const pollutantType = record.pollutant_type;
-            const outletId = record.outlet_id;
-            const value = record.value;
-
-            if (!otherDailyPollutantData[date]) {
-              otherDailyPollutantData[date] = {};
-            }
-            if (!otherDailyPollutantData[date][pollutantType]) {
-              otherDailyPollutantData[date][pollutantType] = {};
-            }
-            otherDailyPollutantData[date][pollutantType][outletId] = value;
-          });
-
-          // 计算该企业 7 天的平均累计值
-          const otherSortedDates = Object.keys(otherDailyPollutantData).sort();
-          const dailyTotals: number[] = [];
-          
-          for (const date of otherSortedDates) {
-            let dayTotal = 0;
-            let pollutantCount = 0;
-            for (const pollutant of pollutantList) {
-              const outletValues = otherDailyPollutantData[date][pollutant.id] || {};
-              const total = Object.values(outletValues).reduce((sum, val) => sum + val, 0);
-              if (total > 0) {
-                dayTotal += total;
-                pollutantCount++;
-              }
-            }
-            if (pollutantCount > 0) {
-              dailyTotals.push(dayTotal);
-            }
-          }
-
-          if (dailyTotals.length > 0) {
-            const avgDailyTotal = dailyTotals.reduce((a, b) => a + b, 0) / dailyTotals.length;
-            allEnterpriseAVs.push(avgDailyTotal);
-          }
-        }
-
-        // 计算当前企业的综合 AV（所有污染物的 7 天平均累计值）
-        let currentEnterpriseAV = 0;
-        let currentPollutantCount = 0;
-        for (const pollutant of pollutantList) {
-          const values = pollutantDailyTotals[pollutant.id];
-          if (values && values.length > 0) {
-            currentEnterpriseAV += values.reduce((a, b) => a + b, 0) / values.length;
-            currentPollutantCount++;
-          }
-        }
-        if (currentPollutantCount > 0) {
-          currentEnterpriseAV = currentEnterpriseAV / currentPollutantCount;
-        }
-
-        // 计算权重和 CDC
-        let totalWeightedCDC = 0;
-        let pollutantCount = 0;
-
-        const m = enterprises.length; // 园区内企业数量
-        const sumWi = allEnterpriseAVs.reduce((a, b) => a + b, 0);
-        const weight = sumWi > 0 ? (m * currentEnterpriseAV) / sumWi : 1;
-
-        // 计算所有污染物的最大值（用于归一化）
-        const allADs = Object.values(pollutantStats).map(s => s.ad);
-        const allCVs = Object.values(pollutantStats).map(s => s.cv);
-        const allSkews = Object.values(pollutantStats).map(s => Math.abs(s.skew));
-
-        const maxAD = Math.max(...allADs) || 1;
-        const maxCV = Math.max(...allCVs) || 1;
-        const maxSkew = Math.max(...allSkews) || 1;
-
-        for (const pollutant of pollutantList) {
-          const stats = pollutantStats[pollutant.id];
-          if (!stats) continue;
-
-          // 归一化（使用最大值归一化，根据 Word 文档）
-          const norAD = Math.min(stats.ad / maxAD, 1);
-          const norCV = Math.min(stats.cv / maxCV, 1);
-          const norSkew = Math.min(Math.abs(stats.skew) / maxSkew, 1);
-
-          // CDC = [m × Wi / ΣWi] × [Nor(AD)² + Nor(CV)² + Nor(SKEW)²]
-          const cdc = weight * (Math.pow(norAD, 2) + Math.pow(norCV, 2) + Math.pow(norSkew, 2));
-
-          totalWeightedCDC += cdc;
-          pollutantCount++;
-        }
-
-        // 企业综合 CDC = 所有污染物的加权平均
-        const overallCDC = pollutantCount > 0 ? totalWeightedCDC / pollutantCount : 0;
-        const { level, color } = getRiskLevel(overallCDC);
-
-        ranking.push({
-          enterpriseId: enterprise.id,
-          enterpriseName: enterprise.company_name || enterprise.full_name || '未知企业',
-          industry: '-',
-          contactPerson: enterprise.full_name || '-',
-          totalOutlets: outlets.length,
-          totalPollutants: pollutantList.length,
-          overallCDC: parseFloat(overallCDC.toFixed(4)),
-          riskLevel: level,
-          riskColor: color
-        });
-      } catch (error) {
-        console.error(`计算企业 ${enterprise.company_name} 的 CDC 失败:`, error);
-        // 添加默认值
-        ranking.push({
-          enterpriseId: enterprise.id,
-          enterpriseName: enterprise.company_name || enterprise.full_name || '未知企业',
-          industry: '-',
-          contactPerson: enterprise.full_name || '-',
-          totalOutlets: 0,
-          totalPollutants: 0,
-          overallCDC: 0,
-          riskLevel: '低风险',
-          riskColor: 'green'
-        });
+      if (outlets && outlets.length > 0) {
+        enterpriseOutletMap[enterprise.id] = outlets;
       }
     }
 
-    // 按 CDC 值降序排列
-    ranking.sort((a, b) => b.overallCDC - a.overallCDC);
+    // 获取所有企业的已审批污染物
+    const enterprisePollutantMap: Record<string, Array<{ id: string; label: string; threshold: number; unit: string }>> = {};
+    for (const enterprise of enterprises) {
+      const { data: applications } = await supabase
+        .from('pollutant_applications')
+        .select('pollutants')
+        .eq('company_id', enterprise.id)
+        .eq('status', 'approved')
+        .limit(1);
 
-    return NextResponse.json({
-      success: true,
-      data: ranking,
-      parkName,
-      totalEnterprises: enterprises.length,
-      calculatedDate: fromDate.toISOString().split('T')[0]
-    });
+      if (applications && applications.length > 0 && applications[0].pollutants) {
+        try {
+          const pollutants = typeof applications[0].pollutants === 'string'
+            ? JSON.parse(applications[0].pollutants)
+            : applications[0].pollutants;
+          enterprisePollutantMap[enterprise.id] = pollutants;
+        } catch (e) {
+          console.error('解析污染物失败:', e);
+        }
+      }
+    }
+
+    // 获取 7 天的监测数据（中国时间 UTC+8）
+    const now = new Date();
+    const toDate = new Date(now);
+    toDate.setUTCHours(23, 59, 59, 999);
+    const fromDate = new Date(toDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+    fromDate.setUTCHours(0, 0, 0, 0);
+
+    // 获取所有相关排污口的监测数据
+    const allOutletIds = Object.values(enterpriseOutletMap).flat().map(o => o.id);
+    if (allOutletIds.length === 0) {
+      return NextResponse.json({ data: [] });
+    }
+
+    const { data: monitoringData, error: monitoringError } = await supabase
+      .from('monitoring_data')
+      .select('outlet_id, pollutant_type, value, monitored_at')
+      .in('outlet_id', allOutletIds)
+      .gte('monitored_at', fromDate.toISOString())
+      .lte('monitored_at', toDate.toISOString());
+
+    if (monitoringError) {
+      console.error('获取监测数据失败:', monitoringError);
+      return NextResponse.json({ error: '获取监测数据失败' }, { status: 500 });
+    }
+
+    // 按企业分组计算 CDC
+    const enterpriseCDCMap: Record<string, { overallCDC: number; riskLevel: string; riskColor: string }> = {};
+
+    for (const enterprise of enterprises) {
+      const outlets = enterpriseOutletMap[enterprise.id] || [];
+      const pollutantList = enterprisePollutantMap[enterprise.id] || [];
+
+      if (outlets.length === 0 || pollutantList.length === 0) continue;
+
+      // 按日期和污染物分组，每天取每个排污口的最新值，累加所有排污口
+      const dailyPollutantData: Record<string, Record<string, Record<string, number>>> = {};
+      const outletMap: Record<string, string> = {};
+      outlets.forEach(o => { outletMap[o.id] = o.name; });
+
+      for (const record of monitoringData || []) {
+        if (!outletMap[record.outlet_id]) continue;
+
+        // 使用中国时间（UTC+8）获取日期
+        const date = new Date(new Date(record.monitored_at).getTime() + 8 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const pollutantType = record.pollutant_type;
+
+        if (!dailyPollutantData[date]) dailyPollutantData[date] = {};
+        if (!dailyPollutantData[date][pollutantType]) dailyPollutantData[date][pollutantType] = {};
+
+        const currentValue = dailyPollutantData[date][pollutantType][record.outlet_id] || 0;
+        if (record.value > currentValue) {
+          dailyPollutantData[date][pollutantType][record.outlet_id] = record.value;
+        }
+      }
+
+      // 计算每个污染物的统计指标
+      const sortedDates = Object.keys(dailyPollutantData).sort();
+      let totalWeightedCDC = 0;
+      const allEnterpriseAVs: number[] = [];
+
+      // 先计算每个污染物的 AV，用于企业综合 AV
+      const pollutantAVMap: Record<string, number> = {};
+      for (const pollutant of pollutantList) {
+        const dailyValues: number[] = [];
+        for (const date of sortedDates) {
+          const outletValues = dailyPollutantData[date][pollutant.id] || {};
+          const total = Object.values(outletValues).reduce((sum, val) => sum + val, 0);
+          if (total > 0) {
+            dailyValues.push(total);
+          }
+        }
+        if (dailyValues.length > 0) {
+          pollutantAVMap[pollutant.id] = dailyValues.reduce((a, b) => a + b, 0) / dailyValues.length;
+        }
+      }
+
+      // 计算企业综合 AV（所有污染物 AV 的平均）
+      const pollutantAVValues = Object.values(pollutantAVMap);
+      const currentEnterpriseAV = pollutantAVValues.length > 0
+        ? pollutantAVValues.reduce((a, b) => a + b, 0) / pollutantAVValues.length
+        : 0;
+      allEnterpriseAVs.push(currentEnterpriseAV);
+
+      // 计算每个污染物的 CDC
+      for (const pollutant of pollutantList) {
+        const dailyValues: number[] = [];
+        for (const date of sortedDates) {
+          const outletValues = dailyPollutantData[date][pollutant.id] || {};
+          const total = Object.values(outletValues).reduce((sum, val) => sum + val, 0);
+          if (total > 0) {
+            dailyValues.push(total);
+          }
+        }
+
+        if (dailyValues.length === 0) continue;
+
+        const n = dailyValues.length;
+        const av = dailyValues.reduce((a, b) => a + b, 0) / n;
+        const ad = dailyValues.reduce((a, b) => a + Math.abs(b - av), 0) / n;
+        const squaredDiffs = dailyValues.map(v => Math.pow(v - av, 2));
+        const avgSquaredDiff = squaredDiffs.reduce((a, b) => a + b, 0) / n;
+        const sd = Math.sqrt(avgSquaredDiff);
+        const cv = av !== 0 ? sd / av : 0;
+        const skew = sd !== 0 ? (dailyValues.reduce((a, b) => a + Math.pow(b - av, 3), 0) / n) / Math.pow(sd, 3) : 0;
+
+        // 存储归一化前的值，稍后统一归一化
+        if (!enterpriseCDCMap[enterprise.id]) {
+          enterpriseCDCMap[enterprise.id] = { overallCDC: 0, riskLevel: '低风险', riskColor: 'green' };
+        }
+
+        // 临时存储，稍后计算
+        if (!(enterprise.id as any).__pollutantStats) (enterprise as any).__pollutantStats = {};
+        (enterprise as any).__pollutantStats[pollutant.id] = { av, ad, cv, skew };
+      }
+    }
+
+    // 计算所有企业的最大值，用于归一化
+    const maxAD = Math.max(...Object.values(enterpriseCDCMap).map(() => 0)); // 占位
+    const maxCV = Math.max(...Object.values(enterpriseCDCMap).map(() => 0)); // 占位
+    const maxSKEW = Math.max(...Object.values(enterpriseCDCMap).map(() => 0)); // 占位
+
+    // 重新计算最大值
+    let globalMaxAD = 0, globalMaxCV = 0, globalMaxSKEW = 0;
+    for (const enterprise of enterprises) {
+      const stats = (enterprise as any).__pollutantStats;
+      if (!stats) continue;
+      for (const pollutantId of Object.keys(stats)) {
+        const { ad, cv, skew } = stats[pollutantId];
+        if (ad > globalMaxAD) globalMaxAD = ad;
+        if (cv > globalMaxCV) globalMaxCV = cv;
+        if (Math.abs(skew) > globalMaxSKEW) globalMaxSKEW = Math.abs(skew);
+      }
+    }
+
+    // 计算每个企业的 CDC
+    const sumWi = allEnterpriseAVs.reduce((a, b) => a + b, 0);
+    const results = [];
+
+    for (const enterprise of enterprises) {
+      const stats = (enterprise as any).__pollutantStats;
+      if (!stats) continue;
+
+      const pollutantList = enterprisePollutantMap[enterprise.id] || [];
+      const currentEnterpriseAV = Object.values(pollutantAVMap).length > 0
+        ? Object.values(pollutantAVMap).reduce((a, b) => a + b, 0) / Object.values(pollutantAVMap).length
+        : 0;
+
+      const weight = sumWi > 0 ? (m * currentEnterpriseAV) / sumWi : 1;
+
+      let totalCDC = 0;
+      let pollutantCount = 0;
+
+      for (const pollutant of pollutantList) {
+        const { ad, cv, skew } = stats[pollutant.id] || {};
+        if (ad === undefined) continue;
+
+        const norAD = globalMaxAD > 0 ? ad / globalMaxAD : 0;
+        const norCV = globalMaxCV > 0 ? cv / globalMaxCV : 0;
+        const norSKEW = globalMaxSKEW > 0 ? Math.abs(skew) / globalMaxSKEW : 0;
+
+        const cdc = weight * (Math.pow(norAD, 2) + Math.pow(norCV, 2) + Math.pow(norSKEW, 2));
+        totalCDC += cdc;
+        pollutantCount++;
+      }
+
+      const overallCDC = pollutantCount > 0 ? totalCDC / pollutantCount : 0;
+
+      let riskLevel = '低风险';
+      let riskColor = 'green';
+      if (overallCDC >= 1.5) {
+        riskLevel = '高风险';
+        riskColor = 'red';
+      } else if (overallCDC >= 0.5) {
+        riskLevel = '中风险';
+        riskColor = 'orange';
+      }
+
+      results.push({
+        id: enterprise.id,
+        name: enterprise.company_name || enterprise.full_name,
+        overallCDC: Math.round(overallCDC * 100) / 100,
+        riskLevel,
+        riskColor
+      });
+    }
+
+    // 按 CDC 值降序排序
+    results.sort((a, b) => b.overallCDC - a.overallCDC);
+
+    return NextResponse.json({ data: results });
   } catch (error) {
-    console.error('CDC 排行 API 错误:', error);
+    console.error('CDC 排行计算失败:', error);
     return NextResponse.json({ error: '服务器错误' }, { status: 500 });
   }
 }
