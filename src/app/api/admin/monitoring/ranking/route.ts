@@ -97,10 +97,10 @@ export async function GET(request: NextRequest) {
       }
     }
     
-    // 设置"当天"的时间范围（从当天 00:00:00 到 23:59:59）
+    // 设置"当天"的时间范围（使用 UTC 时间，因为数据库存储的是 UTC）
     const fromDate = new Date(toDate);
-    fromDate.setHours(0, 0, 0, 0);
-    toDate.setHours(23, 59, 59, 999);
+    fromDate.setUTCHours(0, 0, 0, 0);
+    toDate.setUTCHours(23, 59, 59, 999);
 
     // 为每个企业计算当天的综合 CDC
     const ranking = [];

@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     // 获取园区内所有企业
     const { data: enterprises, error: enterprisesError } = await client
       .from('profiles')
-      .select('id, company_name')
+      .select('id, user_id, company_name')
       .eq('role', 'enterprise')
       .eq('park_name', profile.park_name);
 
