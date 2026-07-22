@@ -27,6 +27,10 @@ interface PollutantCDC {
   weight: number;
   riskLevel: string;
   riskColor: string;
+  // 归一化指标（用于雷达图展示）
+  norAD: number;
+  norCV: number;
+  norSKEW: number;
   // 最后一天的指标（用于雷达图展示）
   lastDayAv?: number;
   lastDayAd?: number;
@@ -147,15 +151,18 @@ export default function CDCPage() {
   }, [session, dateRange]);
 
   // 为每个污染物生成雷达图配置（使用最后一天的数据）
-  const getPollutantRadarOption = (pollutant: PollutantCDC) => {
-    // 使用最后一天的归一化指标值
-    const avValue = pollutant.lastDayNorAv ?? 0;
-    const adValue = pollutant.lastDayNorAd ?? 0;
-    const cvValue = pollutant.lastDayNorCv ?? 0;
-    const skewValue = pollutant.lastDayNorSkew ?? 0;
-    
-    // 使用最后一天的 CDC 值
-    const lastDayCDC = pollutant.lastDayCDC ?? pollutant.cdc;
+  // 为每个污染物分配不同的颜色
+  const pollutantColors = [
+    { line: '#3B82F6', area: 'rgba(59, 130, 246, 0.2)' },   // 蓝色
+    { line: '#10B981', area: 'rgba(16, 185, 129, 0.2)' },   // 绿色
+    { line: '#F59E0B', area: 'rgba(245, 158, 11, 0.2)' },   // 橙色
+    { line: '#8B5CF6', area: 'rgba(139, 92, 246, 0.2)' },   // 紫色
+    { line: '#EC4899', area: 'rgba(236, 72, 153, 0.2)' },   // 粉色
+    { line: '#06B6D4', area: 'rgba(6, 182, 212, 0.2)' },    // 青色
+  ];
+
+  const getPollutantRadarOption = (pollutant: PollutantCDC, index: number) => {
+    const color = pollutantColors[index % pollutantColors.length];
     
     return {
       radar: {
@@ -171,26 +178,22 @@ export default function CDCPage() {
       series: [{
         type: 'radar',
         data: [{
-          value: [avValue, adValue, cvValue, skewValue],
+          value: [
+            pollutant.norAD ?? 0,
+            pollutant.norAD ?? 0,
+            pollutant.norCV ?? 0,
+            pollutant.norSKEW ?? 0
+          ],
           name: pollutant.pollutantName,
-          areaStyle: { 
-            color: pollutant.riskColor === 'green' ? 'rgba(16, 185, 129, 0.2)' : 
-                   pollutant.riskColor === 'orange' ? 'rgba(245, 158, 11, 0.2)' : 'rgba(239, 68, 68, 0.2)'
-          },
-          lineStyle: { 
-            color: pollutant.riskColor === 'green' ? '#10B981' : 
-                   pollutant.riskColor === 'orange' ? '#F59E0B' : '#EF4444',
-            width: 2 
-          },
-          itemStyle: { 
-            color: pollutant.riskColor === 'green' ? '#10B981' : 
-                   pollutant.riskColor === 'orange' ? '#F59E0B' : '#EF4444'
-          }
+          areaStyle: { color: color.area },
+          lineStyle: { color: color.line, width: 2 },
+          itemStyle: { color: color.line }
         }]
       }],
       tooltip: {
         trigger: 'item',
         formatter: () => {
+          const lastDayCDC = pollutant.lastDayCDC ?? pollutant.cdc;
           return `
             <div style="padding: 8px;">
               <div style="font-weight: bold; margin-bottom: 8px;">${pollutant.pollutantName}</div>
@@ -504,7 +507,7 @@ export default function CDCPage() {
                       </span>
                     </div>
                     <ReactECharts 
-                      option={getPollutantRadarOption(pollutant)} 
+                      option={getPollutantRadarOption(pollutant, index)} 
                       style={{ height: '220px' }}
                     />
                     <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
