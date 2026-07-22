@@ -106,11 +106,11 @@ export async function GET(request: Request) {
     const pollutantThresholds: Record<string, { threshold: number }> = {};
     if (!appError && applications && applications.length > 0) {
       for (const app of applications) {
-        const pollutants = app.pollutants as Array<{ name: string; threshold: number }>;
+        const pollutants = app.pollutants as Array<{ id: string; threshold: number }>;
         if (Array.isArray(pollutants)) {
           for (const p of pollutants) {
-            if (p.name && p.threshold) {
-              pollutantThresholds[p.name] = { threshold: p.threshold };
+            if (p.id && p.threshold) {
+              pollutantThresholds[p.id] = { threshold: p.threshold };
             }
           }
         }

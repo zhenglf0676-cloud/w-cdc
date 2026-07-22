@@ -77,11 +77,13 @@ export async function GET(request: Request) {
     // 构建阈值映射：company_id -> { pollutant_type -> threshold }
     const companyThresholdMap = new Map();
     for (const app of applications) {
-      const pollutants = app.pollutants || {};
+      const pollutants = app.pollutants || [];
       const thresholds: Record<string, number> = {};
-      for (const [pollutantType, pollutantData] of Object.entries(pollutants)) {
-        if (pollutantData && typeof pollutantData === 'object' && 'threshold' in (pollutantData as any)) {
-          thresholds[pollutantType] = (pollutantData as any).threshold;
+      if (Array.isArray(pollutants)) {
+        for (const p of pollutants) {
+          if (p && typeof p === 'object' && p.id && p.threshold) {
+            thresholds[p.id] = p.threshold;
+          }
         }
       }
       companyThresholdMap.set(app.company_id, thresholds);
