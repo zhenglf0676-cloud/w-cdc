@@ -350,7 +350,8 @@ export async function GET(request: Request) {
         totalOutlets: outlets.length,
         totalPollutants: pollutantList.length,
         pollutants: Object.entries(pollutantStats).map(([id, stats]) => ({
-          id,
+          pollutantId: id,
+          pollutantName: pollutantMap[id]?.label || id,
           ...stats
         }))
       }
