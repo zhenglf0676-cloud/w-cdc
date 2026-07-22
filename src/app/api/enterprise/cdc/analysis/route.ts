@@ -365,28 +365,28 @@ export async function GET(request: NextRequest) {
             dailyPollutantData[date][pollutantType][outletId] = value;
           });
 
-          // 计算该企业 7 天的平均累计值（只统计 pollutantList 中的污染物）
+          // 计算该企业 7 天的平均累计值（与 Admin Ranking API 一致：先算每个污染物的平均，再对所有污染物求平均）
           const sortedDates = Object.keys(dailyPollutantData).sort();
-          const dailyTotals: number[] = [];
+          let totalAV = 0;
+          let pollutantCount = 0;
           
-          for (const date of sortedDates) {
-            let dayTotal = 0;
-            let pollutantCount = 0;
-            for (const pollutant of pollutantList) {
+          for (const pollutant of pollutantList) {
+            const dailyValues: number[] = [];
+            for (const date of sortedDates) {
               const outletValues = dailyPollutantData[date][pollutant.id] || {};
               const total = Object.values(outletValues).reduce((sum, val) => sum + val, 0);
               if (total > 0) {
-                dayTotal += total;
-                pollutantCount++;
+                dailyValues.push(total);
               }
             }
-            if (pollutantCount > 0) {
-              dailyTotals.push(dayTotal);
+            if (dailyValues.length > 0) {
+              totalAV += dailyValues.reduce((a, b) => a + b, 0) / dailyValues.length;
+              pollutantCount++;
             }
           }
-
-          if (dailyTotals.length > 0) {
-            companyAVMap[compId] = dailyTotals.reduce((a, b) => a + b, 0) / dailyTotals.length;
+          
+          if (pollutantCount > 0) {
+            companyAVMap[compId] = totalAV / pollutantCount;
           }
         }
       }
