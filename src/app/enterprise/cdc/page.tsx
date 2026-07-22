@@ -16,6 +16,22 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 
+// 污染物颜色映射
+const POLLUTANT_COLORS = [
+  '#3B82F6', // 蓝色
+  '#10B981', // 绿色
+  '#F59E0B', // 橙色
+  '#8B5CF6', // 紫色
+  '#EC4899', // 粉色
+  '#06B6D4', // 青色
+  '#EF4444', // 红色
+  '#84CC16', // 黄绿色
+];
+
+function getPollutantColor(index: number): string {
+  return POLLUTANT_COLORS[index % POLLUTANT_COLORS.length];
+}
+
 interface PollutantCDC {
   pollutantId: string;
   pollutantName: string;
