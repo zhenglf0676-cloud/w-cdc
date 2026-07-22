@@ -255,6 +255,8 @@ export default function AdminMonitoringPage() {
       });
       const sortedTimes = Array.from(allTimes).sort();
 
+      const threshold = item.threshold || 0;
+
       // 构建 series：每个排污口一条线
       const series = item.outlets.map((outlet, outletIndex) => {
         // 按时间排序数据
@@ -263,7 +265,7 @@ export default function AdminMonitoringPage() {
         const dataMap = new Map(sortedData.map(d => [d.time, d.value]));
         const values = sortedTimes.map(time => dataMap.get(time) ?? null);
 
-        return {
+        const seriesItem: any = {
           name: outlet.outletName,
           type: 'line' as const,
           data: values,
@@ -273,9 +275,43 @@ export default function AdminMonitoringPage() {
           lineStyle: { color: outletColors[outletIndex % outletColors.length], width: 2 },
           itemStyle: { color: outletColors[outletIndex % outletColors.length] },
         };
-      });
 
-      const threshold = item.threshold || 0;
+        // 在第一个 series 上添加阈值背景色带和阈值线
+        if (outletIndex === 0 && threshold > 0) {
+          seriesItem.markArea = {
+            silent: true,
+            data: [
+              [
+                {
+                  yAxis: 0,
+                  itemStyle: { color: 'rgba(34, 197, 94, 0.1)' }, // 绿色背景（正常）
+                },
+                {
+                  yAxis: threshold,
+                },
+              ],
+              [
+                {
+                  yAxis: threshold,
+                  itemStyle: { color: 'rgba(239, 68, 68, 0.1)' }, // 红色背景（超标）
+                },
+                {
+                  yAxis: 'max',
+                },
+              ],
+            ],
+          };
+          seriesItem.markLine = {
+            silent: true,
+            symbol: 'none',
+            lineStyle: { color: '#ef4444', type: 'dashed', width: 1 },
+            label: { formatter: `阈值 ${threshold}`, position: 'end', color: '#ef4444', fontSize: 10 },
+            data: [{ yAxis: threshold }],
+          };
+        }
+
+        return seriesItem;
+      });
 
       const option: echarts.EChartsOption = {
         tooltip: {
@@ -316,38 +352,6 @@ export default function AdminMonitoringPage() {
           axisLabel: { color: '#64748b', fontSize: 10 },
           splitLine: { lineStyle: { color: '#f1f5f9' } },
         },
-        // 添加阈值背景色带
-        markArea: threshold > 0 ? {
-          silent: true,
-          data: [
-            [
-              {
-                yAxis: 0,
-                itemStyle: { color: 'rgba(34, 197, 94, 0.1)' }, // 绿色背景（正常）
-              },
-              {
-                yAxis: threshold,
-              },
-            ],
-            [
-              {
-                yAxis: threshold,
-                itemStyle: { color: 'rgba(239, 68, 68, 0.1)' }, // 红色背景（超标）
-              },
-              {
-                yAxis: 'max',
-              },
-            ],
-          ],
-        } : undefined,
-        // 添加阈值线
-        markLine: threshold > 0 ? {
-          silent: true,
-          symbol: 'none',
-          lineStyle: { color: '#ef4444', type: 'dashed', width: 1 },
-          label: { formatter: `阈值 ${threshold}`, position: 'end', color: '#ef4444', fontSize: 10 },
-          data: [{ yAxis: threshold }],
-        } : undefined,
         series,
       };
 

@@ -96,6 +96,27 @@ export async function GET(request: Request) {
       return NextResponse.json({ trendData: [] });
     }
 
+    // 获取企业的污染物阈值
+    const { data: applications } = await supabase
+      .from('pollutant_applications')
+      .select('pollutants')
+      .eq('company_id', enterpriseId)
+      .eq('status', 'approved');
+
+    const thresholdMap = new Map<string, number>();
+    if (applications && applications.length > 0) {
+      for (const app of applications) {
+        const pollutants = app.pollutants;
+        if (Array.isArray(pollutants)) {
+          for (const p of pollutants) {
+            if (p.id && p.threshold) {
+              thresholdMap.set(p.id, p.threshold);
+            }
+          }
+        }
+      }
+    }
+
     // 按污染物类型分组
     const pollutantMap = new Map<string, {
       name: string;
@@ -140,7 +161,7 @@ export async function GET(request: Request) {
     const trendData = Array.from(pollutantMap.entries()).map(([type, data]) => ({
       pollutantType: type,
       name: type,
-      threshold: thresholdMap.get(type)?.threshold || 0,
+      threshold: thresholdMap.get(type) || 0,
       outlets: Array.from(data.outlets.entries()).map(([id, outletData]) => ({
         outletId: id,
         outletName: outletData.name,
