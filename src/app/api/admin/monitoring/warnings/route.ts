@@ -78,8 +78,7 @@ export async function GET(request: NextRequest) {
             pollutantMap.set(p.id, {
               id: p.id,
               pollutant_name: p.label || p.id,
-              warning_threshold: p.warningThreshold || p.warning_threshold,
-              alarm_threshold: p.alarmThreshold || p.alarm_threshold,
+              threshold: p.threshold,
               unit: p.unit || 'mg/L',
               company_id: app.company_id
             });
@@ -91,7 +90,7 @@ export async function GET(request: NextRequest) {
     // 获取最近的监测数据（用于检测预警）
     const { data: monitoringData, error: monitoringError } = await client
       .from('monitoring_data')
-      .select('id, outlet_id, pollutant_id, value, monitored_at')
+      .select('id, outlet_id, pollutant_type, value, monitored_at')
       .in('outlet_id', outletIds)
       .order('monitored_at', { ascending: false })
       .limit(500);
@@ -107,7 +106,7 @@ export async function GET(request: NextRequest) {
       const outlet = outletMap.get(record.outlet_id);
       if (!outlet) continue;
 
-      const pollutant = pollutantMap.get(record.pollutant_id);
+      const pollutant = pollutantMap.get(record.pollutant_type);
       if (!pollutant) continue;
 
       const value = parseFloat(record.value);
@@ -116,15 +115,15 @@ export async function GET(request: NextRequest) {
       let warningLevel = null;
       let warningType = null;
 
-      // 检查是否超过报警阈值
-      if (pollutant.alarm_threshold && value >= parseFloat(pollutant.alarm_threshold)) {
+      // 检查是否超过阈值（报警）
+      if (pollutant.threshold && value >= parseFloat(pollutant.threshold)) {
         warningLevel = '高风险';
-        warningType = '超报警';
+        warningType = '超标';
       }
-      // 检查是否超过预警阈值
-      else if (pollutant.warning_threshold && value >= parseFloat(pollutant.warning_threshold)) {
+      // 检查是否超过阈值的 80%（预警）
+      else if (pollutant.threshold && value >= parseFloat(pollutant.threshold) * 0.8) {
         warningLevel = '中风险';
-        warningType = '超预警';
+        warningType = '接近阈值';
       }
 
       if (warningLevel) {
