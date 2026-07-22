@@ -1,22 +1,24 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAuth } from '@/lib/auth-context';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { 
-  RefreshCw, 
-  AlertTriangle, 
-  TrendingUp, 
-  Building2, 
-  Droplets, 
-  Factory, 
-  User,
+import {
+  ArrowLeft,
+  RefreshCw,
+  AlertTriangle,
+  TrendingUp,
+  Activity,
+  Factory,
   ChevronRight,
-  Activity
+  Clock,
+  CheckCircle2,
+  AlertCircle,
+  XCircle,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { useAuth } from '@/lib/auth-context';
+import Link from 'next/link';
 
 // 类型定义
 interface RankingData {
@@ -35,223 +37,275 @@ interface WarningData {
   warningTime: string;
   enterpriseName: string;
   outletName: string;
-  indicatorName: string;
-  measuredValue: number;
-  thresholdValue: number;
-  thresholdType: string;
-  cdcValue: number;
+  pollutantName: string;
+  warningValue: string;
+  cdc: number;
   riskLevel: string;
+  riskColor: string;
   status: string;
+}
+
+interface MonitoringIndicator {
+  name: string;
+  unit: string;
+  latestValue: number;
+  status: 'normal' | 'warning' | 'alarm';
+  warningThreshold: number;
+  alarmThreshold: number;
 }
 
 export default function AdminMonitoringPage() {
   const { session, isLoading } = useAuth();
-  const [selectedTimeRange, setSelectedTimeRange] = useState('24h');
   const [rankingData, setRankingData] = useState<RankingData[]>([]);
   const [warningData, setWarningData] = useState<WarningData[]>([]);
   const [selectedEnterprise, setSelectedEnterprise] = useState<RankingData | null>(null);
+  const [monitoringData, setMonitoringData] = useState<MonitoringIndicator[]>([]);
   const [loading, setLoading] = useState(false);
   const [lastUpdateTime, setLastUpdateTime] = useState<string>('');
+  const [timeRange, setTimeRange] = useState<'24h' | '7d' | '30d'>('24h');
 
-  // 获取 CDC 排行数据
-  const fetchRankingData = async () => {
+  // 获取 CDC 风险排行
+  const fetchRanking = async () => {
     if (!session?.access_token) return;
-    
+
     setLoading(true);
     try {
-      const response = await fetch('/api/admin/monitoring/ranking', {
-        headers: {
-          'x-auth-token': session.access_token
-        }
+      const res = await fetch('/api/admin/monitoring/ranking', {
+        headers: { 'x-auth-token': session.access_token }
       });
-      
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
-          setRankingData(result.data);
-          setLastUpdateTime(new Date().toLocaleString('zh-CN'));
-          // 默认选中第一个企业
-          if (result.data.length > 0 && !selectedEnterprise) {
-            setSelectedEnterprise(result.data[0]);
-          }
+
+      if (res.ok) {
+        const data = await res.json();
+        setRankingData(data.data || []);
+        setLastUpdateTime(new Date().toLocaleString('zh-CN'));
+
+        // 默认选中第一个企业
+        if (data.data?.length > 0 && !selectedEnterprise) {
+          setSelectedEnterprise(data.data[0]);
         }
       }
     } catch (error) {
-      console.error('获取 CDC 排行数据失败:', error);
+      console.error('获取 CDC 排行失败:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  // 获取预警记录
-  const fetchWarningData = async () => {
+  // 获取最新预警记录
+  const fetchWarnings = async () => {
     if (!session?.access_token) return;
-    
+
     try {
-      const response = await fetch('/api/admin/monitoring/warnings', {
-        headers: {
-          'x-auth-token': session.access_token
-        }
+      const res = await fetch('/api/admin/monitoring/warnings', {
+        headers: { 'x-auth-token': session.access_token }
       });
-      
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success) {
-          setWarningData(result.data);
-        }
+
+      if (res.ok) {
+        const data = await res.json();
+        setWarningData(data.data || []);
       }
     } catch (error) {
       console.error('获取预警记录失败:', error);
     }
   };
 
-  // 初始化数据
+  // 获取企业实时监测数据
+  const fetchMonitoringData = async (enterpriseId: string) => {
+    if (!session?.access_token) return;
+
+    try {
+      // TODO: 调用企业监测数据 API
+      // 暂时使用模拟数据
+      setMonitoringData([
+        { name: 'pH', unit: '无量纲', latestValue: 7.32, status: 'normal', warningThreshold: 6.0, alarmThreshold: 9.0 },
+        { name: 'COD', unit: 'mg/L', latestValue: 18.6, status: 'normal', warningThreshold: 30, alarmThreshold: 50 },
+        { name: '氨氮', unit: 'mg/L', latestValue: 1.12, status: 'normal', warningThreshold: 1.5, alarmThreshold: 2.5 },
+        { name: '总磷', unit: 'mg/L', latestValue: 0.23, status: 'normal', warningThreshold: 0.3, alarmThreshold: 0.5 },
+        { name: '总氮', unit: 'mg/L', latestValue: 2.35, status: 'warning', warningThreshold: 2.0, alarmThreshold: 3.0 },
+        { name: '重金属 (Cr6+)', unit: 'mg/L', latestValue: 0.006, status: 'normal', warningThreshold: 0.01, alarmThreshold: 0.05 },
+      ]);
+    } catch (error) {
+      console.error('获取监测数据失败:', error);
+    }
+  };
+
   useEffect(() => {
-    if (!isLoading && session?.access_token) {
-      fetchRankingData();
-      fetchWarningData();
+    if (!isLoading && session) {
+      fetchRanking();
+      fetchWarnings();
     }
   }, [isLoading, session]);
 
-  // 刷新数据
-  const handleRefresh = () => {
-    fetchRankingData();
-    fetchWarningData();
+  useEffect(() => {
+    if (selectedEnterprise) {
+      fetchMonitoringData(selectedEnterprise.enterpriseId);
+    }
+  }, [selectedEnterprise]);
+
+  // 风险等级颜色
+  const getRiskColor = (riskLevel: string) => {
+    switch (riskLevel) {
+      case '高风险': return 'text-rose-600 bg-rose-50 border-rose-200';
+      case '中风险': return 'text-amber-600 bg-amber-50 border-amber-200';
+      case '低风险': return 'text-emerald-600 bg-emerald-50 border-emerald-200';
+      default: return 'text-slate-600 bg-slate-50 border-slate-200';
+    }
   };
 
-  // 点击企业
-  const handleEnterpriseClick = (enterprise: RankingData) => {
-    setSelectedEnterprise(enterprise);
+  // 状态颜色
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'normal': return 'text-emerald-600 bg-emerald-50';
+      case 'warning': return 'text-amber-600 bg-amber-50';
+      case 'alarm': return 'text-rose-600 bg-rose-50';
+      default: return 'text-slate-600 bg-slate-50';
+    }
+  };
+
+  // 状态文本
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'normal': return '正常';
+      case 'warning': return '预警';
+      case 'alarm': return '超标';
+      default: return status;
+    }
   };
 
   return (
     <div className="min-h-screen bg-slate-50">
       {/* 顶部导航栏 */}
-      <div className="bg-white border-b border-slate-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <h1 className="text-2xl font-bold text-slate-900">实时监测（预警中心）</h1>
-            <div className="flex items-center gap-2 text-sm text-slate-500">
-              <Activity className="h-4 w-4" />
-              <span>数据更新时间：{lastUpdateTime || '加载中...'}</span>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-6 w-6 p-0"
-                onClick={handleRefresh}
-                disabled={loading}
-              >
-                <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
-              </Button>
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
+        <div className="px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Link href="/admin">
+                <Button variant="ghost" size="sm">
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  返回首页
+                </Button>
+              </Link>
+              <div>
+                <h1 className="text-2xl font-bold text-slate-900">实时监测（预警中心）</h1>
+                <p className="text-sm text-slate-500 mt-1">
+                  基于状态 - 动作模型，评估企业地下水环境风险状态
+                </p>
+              </div>
             </div>
-          </div>
-          
-          {/* 时间范围选择器 */}
-          <div className="flex items-center gap-2">
-            <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-1">
-              <Button
-                variant={selectedTimeRange === '24h' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setSelectedTimeRange('24h')}
-                className={cn(
-                  'h-8 px-3 text-sm',
-                  selectedTimeRange === '24h' ? 'bg-sky-500 text-white' : ''
-                )}
-              >
-                近 24 小时
-              </Button>
-              <Button
-                variant={selectedTimeRange === '7d' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setSelectedTimeRange('7d')}
-                className={cn(
-                  'h-8 px-3 text-sm',
-                  selectedTimeRange === '7d' ? 'bg-sky-500 text-white' : ''
-                )}
-              >
-                近 7 天
-              </Button>
-              <Button
-                variant={selectedTimeRange === '30d' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setSelectedTimeRange('30d')}
-                className={cn(
-                  'h-8 px-3 text-sm',
-                  selectedTimeRange === '30d' ? 'bg-sky-500 text-white' : ''
-                )}
-              >
-                近 30 天
-              </Button>
+
+            <div className="flex items-center gap-4">
+              {/* 数据更新时间 */}
+              <div className="flex items-center gap-2 text-sm text-slate-500">
+                <Activity className="h-4 w-4" />
+                <span>数据更新时间：{lastUpdateTime || '加载中...'}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={fetchRanking}
+                  disabled={loading}
+                >
+                  <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                </Button>
+              </div>
+
+              {/* 时间范围选择器 */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-slate-600">时间范围：</span>
+                <Button
+                  variant={timeRange === '24h' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setTimeRange('24h')}
+                >
+                  近 24 小时
+                </Button>
+                <Button
+                  variant={timeRange === '7d' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setTimeRange('7d')}
+                >
+                  近 7 天
+                </Button>
+                <Button
+                  variant={timeRange === '30d' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setTimeRange('30d')}
+                >
+                  近 30 天
+                </Button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </header>
 
-      {/* 主内容区域 */}
-      <div className="p-6">
+      {/* 主内容区 */}
+      <main className="p-6">
         <div className="grid grid-cols-12 gap-6">
           {/* 左侧：CDC 风险排行 */}
           <div className="col-span-4">
             <Card>
-              <CardHeader className="pb-3">
+              <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg font-semibold">
+                  <CardTitle className="text-lg font-semibold text-slate-900">
                     CDC 风险排行（实时）
                   </CardTitle>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="h-6 w-6 p-0"
-                    onClick={handleRefresh}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={fetchRanking}
                     disabled={loading}
                   >
-                    <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
+                    <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                   </Button>
                 </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {rankingData.map((item, index) => (
-                    <div
-                      key={item.enterpriseId}
-                      onClick={() => handleEnterpriseClick(item)}
-                      className={cn(
-                        'flex items-center justify-between rounded-lg border p-3 transition-colors cursor-pointer',
-                        selectedEnterprise?.enterpriseId === item.enterpriseId
-                          ? 'border-sky-300 bg-sky-50'
-                          : 'border-slate-100 bg-white hover:border-sky-200 hover:bg-sky-50'
-                      )}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={cn(
-                          'flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium',
-                          index < 3 ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'
-                        )}>
-                          {index + 1}
-                        </div>
-                        <span className="text-sm font-medium text-slate-900">{item.enterpriseName}</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-semibold text-slate-900">{item.overallCDC.toFixed(2)}</span>
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            'text-xs',
-                            item.riskColor === 'red' && 'border-red-200 bg-red-50 text-red-700',
-                            item.riskColor === 'orange' && 'border-amber-200 bg-amber-50 text-amber-700',
-                            item.riskColor === 'green' && 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                          )}
-                        >
-                          {item.riskLevel}
-                        </Badge>
-                      </div>
+                  {rankingData.length === 0 ? (
+                    <div className="text-center py-8 text-slate-500">
+                      暂无数据
                     </div>
-                  ))}
+                  ) : (
+                    rankingData.map((enterprise, index) => (
+                      <div
+                        key={enterprise.enterpriseId}
+                        className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                          selectedEnterprise?.enterpriseId === enterprise.enterpriseId
+                            ? 'border-sky-500 bg-sky-50'
+                            : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                        }`}
+                        onClick={() => setSelectedEnterprise(enterprise)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
+                              index < 3 ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-600'
+                            }`}>
+                              {index + 1}
+                            </div>
+                            <span className="font-medium text-slate-900">
+                              {enterprise.enterpriseName}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg font-bold text-slate-900">
+                              {enterprise.overallCDC.toFixed(2)}
+                            </span>
+                            <Badge className={getRiskColor(enterprise.riskLevel)}>
+                              {enterprise.riskLevel}
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
-                {rankingData.length === 0 && !loading && (
-                  <div className="text-center py-8 text-sm text-slate-500">
-                    暂无数据
-                  </div>
+
+                {rankingData.length > 0 && (
+                  <Button variant="outline" className="w-full mt-4">
+                    查看全部企业
+                    <ChevronRight className="h-4 w-4 ml-2" />
+                  </Button>
                 )}
               </CardContent>
             </Card>
@@ -263,63 +317,55 @@ export default function AdminMonitoringPage() {
               <>
                 {/* 企业基本信息卡片 */}
                 <Card>
-                  <CardHeader className="pb-3">
+                  <CardHeader>
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                        <Building2 className="h-5 w-5 text-sky-500" />
+                      <CardTitle className="text-lg font-semibold text-slate-900">
                         企业详情：{selectedEnterprise.enterpriseName}
                       </CardTitle>
+                      <Button variant="outline" size="sm">
+                        切换企业
+                      </Button>
                     </div>
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-6 gap-4">
-                      <div className={cn(
-                        'text-center p-4 rounded-lg border',
-                        selectedEnterprise.riskColor === 'red' && 'bg-gradient-to-br from-red-50 to-rose-50 border-red-100',
-                        selectedEnterprise.riskColor === 'orange' && 'bg-gradient-to-br from-orange-50 to-amber-50 border-orange-100',
-                        selectedEnterprise.riskColor === 'green' && 'bg-gradient-to-br from-emerald-50 to-green-50 border-emerald-100'
-                      )}>
+                      <div className="p-4 rounded-lg bg-amber-50 border border-amber-200">
                         <div className="text-sm text-slate-600 mb-1">当前 CDC</div>
-                        <div className={cn(
-                          'text-3xl font-bold',
-                          selectedEnterprise.riskColor === 'red' && 'text-red-600',
-                          selectedEnterprise.riskColor === 'orange' && 'text-orange-600',
-                          selectedEnterprise.riskColor === 'green' && 'text-emerald-600'
-                        )}>
+                        <div className="text-3xl font-bold text-amber-600">
                           {selectedEnterprise.overallCDC.toFixed(2)}
                         </div>
                       </div>
-                      <div className={cn(
-                        'text-center p-4 rounded-lg border',
-                        selectedEnterprise.riskColor === 'red' && 'bg-red-50 border-red-100',
-                        selectedEnterprise.riskColor === 'orange' && 'bg-amber-50 border-amber-100',
-                        selectedEnterprise.riskColor === 'green' && 'bg-emerald-50 border-emerald-100'
-                      )}>
+                      <div className="p-4 rounded-lg bg-amber-50 border border-amber-200">
                         <div className="text-sm text-slate-600 mb-1">风险等级</div>
-                        <div className={cn(
-                          'text-lg font-bold',
-                          selectedEnterprise.riskColor === 'red' && 'text-red-600',
-                          selectedEnterprise.riskColor === 'orange' && 'text-amber-600',
-                          selectedEnterprise.riskColor === 'green' && 'text-emerald-600'
-                        )}>
+                        <div className="text-xl font-bold text-amber-600">
                           {selectedEnterprise.riskLevel}
                         </div>
                       </div>
-                      <div className="text-center p-4 rounded-lg bg-slate-50 border border-slate-200">
+                      <div className="p-4 rounded-lg border border-slate-200">
                         <div className="text-sm text-slate-600 mb-1">监测点数量</div>
-                        <div className="text-2xl font-bold text-slate-900">{selectedEnterprise.totalPollutants}</div>
+                        <div className="text-2xl font-bold text-slate-900">
+                          {selectedEnterprise.totalOutlets}
+                          <span className="text-emerald-500 text-sm ml-1">↑</span>
+                        </div>
                       </div>
-                      <div className="text-center p-4 rounded-lg bg-slate-50 border border-slate-200">
+                      <div className="p-4 rounded-lg border border-slate-200">
                         <div className="text-sm text-slate-600 mb-1">排污口数量</div>
-                        <div className="text-2xl font-bold text-slate-900">{selectedEnterprise.totalOutlets}</div>
+                        <div className="text-2xl font-bold text-slate-900">
+                          {selectedEnterprise.totalOutlets}
+                          <span className="text-emerald-500 text-sm ml-1">↑</span>
+                        </div>
                       </div>
-                      <div className="text-center p-4 rounded-lg bg-slate-50 border border-slate-200">
+                      <div className="p-4 rounded-lg border border-slate-200">
                         <div className="text-sm text-slate-600 mb-1">所属行业</div>
-                        <div className="text-sm font-medium text-slate-900 mt-2">{selectedEnterprise.industry || '-'}</div>
+                        <div className="text-lg font-medium text-slate-900">
+                          {selectedEnterprise.industry || '未知'}
+                        </div>
                       </div>
-                      <div className="text-center p-4 rounded-lg bg-slate-50 border border-slate-200">
+                      <div className="p-4 rounded-lg border border-slate-200">
                         <div className="text-sm text-slate-600 mb-1">负责人</div>
-                        <div className="text-sm font-medium text-slate-900 mt-2">{selectedEnterprise.contactPerson || '-'}</div>
+                        <div className="text-lg font-medium text-slate-900">
+                          {selectedEnterprise.contactPerson || '未知'}
+                        </div>
                       </div>
                     </div>
                   </CardContent>
@@ -327,49 +373,91 @@ export default function AdminMonitoringPage() {
 
                 {/* 实时监测数据 */}
                 <Card>
-                  <CardHeader className="pb-3">
+                  <CardHeader>
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-lg font-semibold">
+                      <CardTitle className="text-lg font-semibold text-slate-900">
                         实时监测数据（最新）
                       </CardTitle>
-                      <Button variant="ghost" size="sm" className="text-sky-600 hover:text-sky-700">
+                      <Button variant="link" size="sm">
                         查看全部指标
                         <ChevronRight className="h-4 w-4 ml-1" />
                       </Button>
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-center py-8 text-sm text-slate-500">
-                      待实现：调用 /api/enterprise/monitoring/history 获取数据
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-slate-200">
+                            <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">监测指标</th>
+                            {monitoringData.map((indicator) => (
+                              <th key={indicator.name} className="text-center py-3 px-4 text-sm font-medium text-slate-600">
+                                {indicator.name} ({indicator.unit})
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className="border-b border-slate-200">
+                            <td className="py-3 px-4 text-sm font-medium text-slate-900">最新值</td>
+                            {monitoringData.map((indicator) => (
+                              <td key={indicator.name} className="text-center py-3 px-4 text-sm font-bold text-slate-900">
+                                {indicator.latestValue}
+                              </td>
+                            ))}
+                          </tr>
+                          <tr>
+                            <td className="py-3 px-4 text-sm font-medium text-slate-900">状态</td>
+                            {monitoringData.map((indicator) => (
+                              <td key={indicator.name} className="text-center py-3 px-4">
+                                <Badge className={getStatusColor(indicator.status)}>
+                                  {getStatusText(indicator.status)}
+                                </Badge>
+                              </td>
+                            ))}
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
                   </CardContent>
                 </Card>
 
                 {/* 指标趋势 */}
                 <Card>
-                  <CardHeader className="pb-3">
+                  <CardHeader>
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-lg font-semibold">
+                      <CardTitle className="text-lg font-semibold text-slate-900">
                         指标趋势（近 24 小时）
                       </CardTitle>
-                      <Button variant="ghost" size="sm" className="text-sky-600 hover:text-sky-700">
+                      <Button variant="link" size="sm">
                         查看全部趋势
                         <ChevronRight className="h-4 w-4 ml-1" />
                       </Button>
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="text-center py-8 text-sm text-slate-500">
-                      待实现：调用 /api/enterprise/monitoring/chart 获取数据
+                    <div className="grid grid-cols-4 gap-4">
+                      {monitoringData.slice(0, 4).map((indicator) => (
+                        <div key={indicator.name} className="p-4 border border-slate-200 rounded-lg">
+                          <div className="text-sm font-medium text-slate-900 mb-2">
+                            {indicator.name} ({indicator.unit})
+                          </div>
+                          <div className="h-32 flex items-center justify-center text-slate-400 text-sm">
+                            图表区域
+                          </div>
+                          <div className="mt-2 text-xs text-slate-500">
+                            上限 {indicator.alarmThreshold} | 预警 {indicator.warningThreshold}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </CardContent>
                 </Card>
               </>
             ) : (
               <Card>
-                <CardContent className="py-12 text-center">
-                  <Building2 className="h-12 w-12 mx-auto text-slate-300 mb-4" />
-                  <p className="text-slate-500">请从左侧选择一个企业查看详情</p>
+                <CardContent className="py-12 text-center text-slate-500">
+                  请从左侧选择一个企业查看详情
                 </CardContent>
               </Card>
             )}
@@ -378,16 +466,10 @@ export default function AdminMonitoringPage() {
 
         {/* 最新预警记录 */}
         <Card className="mt-6">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-lg font-semibold">
-                最新预警记录
-              </CardTitle>
-              <Button variant="ghost" size="sm" className="text-sky-600 hover:text-sky-700">
-                查看全部预警记录
-                <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
-            </div>
+          <CardHeader>
+            <CardTitle className="text-lg font-semibold text-slate-900">
+              最新预警记录
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
@@ -399,61 +481,59 @@ export default function AdminMonitoringPage() {
                     <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">排污口</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">预警指标</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">预警值</th>
-                    <th className="text-center py-3 px-4 text-sm font-medium text-slate-600">CDC</th>
-                    <th className="text-center py-3 px-4 text-sm font-medium text-slate-600">预警级别</th>
-                    <th className="text-center py-3 px-4 text-sm font-medium text-slate-600">状态</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">CDC</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">预警级别</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">状态</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {warningData.map((item, index) => (
-                    <tr key={index} className="border-b border-slate-100 hover:bg-slate-50">
-                      <td className="py-3 px-4 text-sm text-slate-600">{item.warningTime}</td>
-                      <td className="py-3 px-4 text-sm font-medium text-slate-900">{item.enterpriseName}</td>
-                      <td className="py-3 px-4 text-sm text-slate-600">{item.outletName}</td>
-                      <td className="py-3 px-4 text-sm text-slate-600">{item.indicatorName}</td>
-                      <td className="py-3 px-4 text-sm text-slate-600">
-                        {item.measuredValue} {item.thresholdType === 'upper' ? '(超上限)' : '(超预警)'}
-                      </td>
-                      <td className="text-center py-3 px-4 text-sm font-semibold text-slate-900">{item.cdcValue.toFixed(2)}</td>
-                      <td className="text-center py-3 px-4">
-                        <Badge
-                          className={cn(
-                            'text-xs',
-                            item.riskLevel === '高风险' && 'bg-red-100 text-red-700 border-red-200',
-                            item.riskLevel === '中风险' && 'bg-amber-100 text-amber-700 border-amber-200',
-                            item.riskLevel === '低风险' && 'bg-emerald-100 text-emerald-700 border-emerald-200'
-                          )}
-                        >
-                          {item.riskLevel}
-                        </Badge>
-                      </td>
-                      <td className="text-center py-3 px-4">
-                        <Badge
-                          className={cn(
-                            'text-xs',
-                            item.status === '未处理' && 'bg-slate-100 text-slate-700 border-slate-200',
-                            item.status === '处理中' && 'bg-blue-100 text-blue-700 border-blue-200',
-                            item.status === '已处理' && 'bg-emerald-100 text-emerald-700 border-emerald-200'
-                          )}
-                        >
-                          {item.status}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
-                  {warningData.length === 0 && (
+                  {warningData.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="text-center py-8 text-sm text-slate-500">
+                      <td colSpan={8} className="text-center py-8 text-slate-500">
                         暂无预警记录
                       </td>
                     </tr>
+                  ) : (
+                    warningData.map((warning, index) => (
+                      <tr key={index} className="border-b border-slate-100">
+                        <td className="py-3 px-4 text-sm text-slate-600">{warning.warningTime}</td>
+                        <td className="py-3 px-4 text-sm font-medium text-slate-900">{warning.enterpriseName}</td>
+                        <td className="py-3 px-4 text-sm text-slate-600">{warning.outletName}</td>
+                        <td className="py-3 px-4 text-sm text-slate-600">{warning.pollutantName}</td>
+                        <td className="py-3 px-4 text-sm font-medium text-slate-900">{warning.warningValue}</td>
+                        <td className="py-3 px-4 text-sm font-bold text-slate-900">{warning.cdc.toFixed(2)}</td>
+                        <td className="py-3 px-4">
+                          <Badge className={getRiskColor(warning.riskLevel)}>
+                            {warning.riskLevel}
+                          </Badge>
+                        </td>
+                        <td className="py-3 px-4">
+                          <Badge variant="outline" className={
+                            warning.status === '未处理' ? 'text-rose-600 border-rose-200' :
+                            warning.status === '处理中' ? 'text-amber-600 border-amber-200' :
+                            'text-emerald-600 border-emerald-200'
+                          }>
+                            {warning.status}
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))
                   )}
                 </tbody>
               </table>
             </div>
+
+            {warningData.length > 0 && (
+              <div className="mt-4 text-right">
+                <Button variant="link">
+                  查看全部预警记录
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
-      </div>
+      </main>
     </div>
   );
 }
