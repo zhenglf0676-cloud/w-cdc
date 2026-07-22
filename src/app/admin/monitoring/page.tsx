@@ -226,6 +226,9 @@ export default function AdminMonitoringPage() {
     }
   };
 
+  // 排污口颜色映射
+  const outletColors = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+
   // 渲染趋势图表
   useEffect(() => {
     if (trendData.length === 0) return;
@@ -245,18 +248,38 @@ export default function AdminMonitoringPage() {
       const chart = echarts.init(chartElement);
       chartRefs.current.set(chartId, chart);
 
+      // 构建 series：每个排污口一条线
+      const series = item.outlets.map((outlet, outletIndex) => ({
+        name: outlet.name,
+        type: 'line' as const,
+        data: outlet.values,
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 6,
+        lineStyle: { color: outletColors[outletIndex % outletColors.length], width: 2 },
+        itemStyle: { color: outletColors[outletIndex % outletColors.length] },
+      }));
+
       const option: echarts.EChartsOption = {
         tooltip: {
           trigger: 'axis',
           formatter: (params: any) => {
-            const data = params[0];
-            return `${data.name}<br/>${item.pollutantName}: ${data.value.toFixed(2)} mg/L`;
+            let html = `${params[0].name}<br/>`;
+            params.forEach((p: any) => {
+              html += `${p.seriesName}: ${p.value.toFixed(2)} mg/L<br/>`;
+            });
+            return html;
           },
+        },
+        legend: {
+          data: item.outlets.map(o => o.name),
+          bottom: 0,
+          textStyle: { fontSize: 11, color: '#64748b' },
         },
         grid: {
           left: '10%',
           right: '10%',
-          bottom: '15%',
+          bottom: '20%',
           top: '10%',
         },
         xAxis: {
@@ -274,27 +297,7 @@ export default function AdminMonitoringPage() {
           axisLabel: { color: '#64748b', fontSize: 10 },
           splitLine: { lineStyle: { color: '#f1f5f9' } },
         },
-        series: [
-          {
-            type: 'line',
-            data: item.values,
-            smooth: true,
-            symbol: 'circle',
-            symbolSize: 6,
-            lineStyle: { color: '#0ea5e9', width: 2 },
-            itemStyle: { color: '#0ea5e9' },
-            areaStyle: {
-              color: {
-                type: 'linear',
-                x: 0, y: 0, x2: 0, y2: 1,
-                colorStops: [
-                  { offset: 0, color: 'rgba(14, 165, 233, 0.2)' },
-                  { offset: 1, color: 'rgba(14, 165, 233, 0)' },
-                ],
-              },
-            },
-          },
-        ],
+        series,
       };
 
       chart.setOption(option);
@@ -587,10 +590,7 @@ export default function AdminMonitoringPage() {
                             <div className="text-sm font-medium text-slate-900 mb-2">
                               {item.pollutantName} (mg/L)
                             </div>
-                            <div id={`trend-chart-${index}`} className="h-32" />
-                            <div className="mt-2 text-xs text-slate-500">
-                              阈值 {item.threshold}
-                            </div>
+                            <div id={`trend-chart-${index}`} className="h-48" />
                           </div>
                         ))}
                       </div>

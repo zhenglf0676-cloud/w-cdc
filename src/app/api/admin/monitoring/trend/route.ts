@@ -96,68 +96,60 @@ export async function GET(request: Request) {
       return NextResponse.json({ trendData: [] });
     }
 
-    // 获取污染物阈值
-    const { data: applications, error: appError } = await supabase
-      .from('pollutant_applications')
-      .select('pollutants')
-      .eq('company_id', enterprise.id)
-      .eq('status', 'approved');
+    // 按污染物类型分组
+    const pollutantMap = new Map<string, {
+      name: string;
+      outlets: Map<string, { name: string; data: { time: string; value: number }[] }>;
+    }>();
 
-    const pollutantThresholds: Record<string, { threshold: number }> = {};
-    if (!appError && applications && applications.length > 0) {
-      for (const app of applications) {
-        const pollutants = app.pollutants as Array<{ id: string; threshold: number }>;
-        if (Array.isArray(pollutants)) {
-          for (const p of pollutants) {
-            if (p.id && p.threshold) {
-              pollutantThresholds[p.id] = { threshold: p.threshold };
-            }
-          }
-        }
-      }
-    }
-
-    // 按污染物类型和日期分组数据
-    const groupedData: Record<string, Record<string, number[]>> = {};
     for (const record of monitoringData) {
       const pollutantType = record.pollutant_type;
-      const date = new Date(record.monitored_at).toISOString().split('T')[0];
-      
-      if (!groupedData[pollutantType]) {
-        groupedData[pollutantType] = {};
+      const outletId = record.outlet_id;
+      const outlet = outlets.find(o => o.id === outletId);
+      if (!outlet) continue;
+
+      if (!pollutantMap.has(pollutantType)) {
+        pollutantMap.set(pollutantType, {
+          name: pollutantType,
+          outlets: new Map(),
+        });
       }
-      if (!groupedData[pollutantType][date]) {
-        groupedData[pollutantType][date] = [];
+
+      const pollutantData = pollutantMap.get(pollutantType)!;
+      if (!pollutantData.outlets.has(outletId)) {
+        pollutantData.outlets.set(outletId, {
+          name: outlet.name,
+          data: [],
+        });
       }
-      groupedData[pollutantType][date].push(record.value);
-    }
 
-    // 计算每日平均值
-    const trendData: Array<{
-      pollutantName: string;
-      dates: string[];
-      values: number[];
-      threshold: number;
-    }> = [];
-
-    for (const [pollutantName, dateValues] of Object.entries(groupedData)) {
-      const dates = Object.keys(dateValues).sort();
-      const values = dates.map(date => {
-        const vals = dateValues[date];
-        return vals.reduce((sum, v) => sum + v, 0) / vals.length;
-      });
-
-      trendData.push({
-        pollutantName,
-        dates,
-        values,
-        threshold: pollutantThresholds[pollutantName]?.threshold || 0,
+      const outletData = pollutantData.outlets.get(outletId)!;
+      outletData.data.push({
+        time: new Date(record.monitored_at).toLocaleString('zh-CN', {
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false,
+        }),
+        value: record.value,
       });
     }
+
+    // 转换为数组格式
+    const trendData = Array.from(pollutantMap.entries()).map(([type, data]) => ({
+      pollutantType: type,
+      name: type,
+      outlets: Array.from(data.outlets.entries()).map(([id, outletData]) => ({
+        outletId: id,
+        outletName: outletData.name,
+        data: outletData.data,
+      })),
+    }));
 
     return NextResponse.json({ trendData });
   } catch (error) {
-    console.error('指标趋势 API 错误:', error);
+    console.error('趋势数据 API 错误:', error);
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
