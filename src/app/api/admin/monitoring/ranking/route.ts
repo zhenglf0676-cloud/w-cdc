@@ -94,7 +94,7 @@ export async function GET(request: NextRequest) {
       fromDate = new Date(toDate.getTime() - 7 * 24 * 60 * 60 * 1000);
     }
 
-    // 为每个企业计算 CDC 值（调用企业端 API 的逻辑）
+    // 为每个企业获取 CDC 值（调用企业端 CDC 分析 API 的逻辑）
     const ranking = [];
 
     for (const enterprise of enterprises) {
@@ -196,10 +196,9 @@ export async function GET(request: NextRequest) {
           }
         });
 
-        // 计算每个污染物的 CDC（简化版，用于排行）
-        let totalCDC = 0;
-        let pollutantCount = 0;
-
+        // 计算每个污染物的基础统计指标
+        const pollutantStats: Record<string, { av: number; ad: number; cv: number; skew: number }> = {};
+        
         for (const pollutant of pollutantList) {
           const values = pollutantDataMap[pollutant.id];
           if (!values || values.length === 0) continue;
@@ -223,14 +222,87 @@ export async function GET(request: NextRequest) {
             skew = (n / ((n - 1) * (n - 2))) * sum;
           }
 
-          // 简化的 CDC 计算（用于排行，不考虑权重和归一化）
-          // 实际 CDC 值需要调用企业端 API 获取
-          const simplifiedCDC = (ad + cv + Math.abs(skew)) / 3;
-          totalCDC += simplifiedCDC;
+          pollutantStats[pollutant.id] = { av, ad, cv, skew };
+        }
+
+        // 获取园区内所有企业的 AV 值（用于权重计算）
+        const allEnterpriseAVs: number[] = [];
+        for (const otherEnterprise of enterprises) {
+          const { data: otherOutlets } = await supabase
+            .from('discharge_outlets')
+            .select('id')
+            .eq('user_id', otherEnterprise.user_id)
+            .eq('status', 'approved');
+
+          if (!otherOutlets || otherOutlets.length === 0) continue;
+
+          const otherOutletIds = otherOutlets.map(o => o.id);
+          const { data: otherMonitoringData } = await supabase
+            .from('monitoring_data')
+            .select('pollutant_type, value')
+            .in('outlet_id', otherOutletIds)
+            .gte('monitored_at', fromDate.toISOString())
+            .lte('monitored_at', toDate.toISOString());
+
+          if (!otherMonitoringData || otherMonitoringData.length === 0) continue;
+
+          // 计算该企业的平均 AV
+          const valueMap: Record<string, number[]> = {};
+          otherMonitoringData.forEach(record => {
+            if (!valueMap[record.pollutant_type]) valueMap[record.pollutant_type] = [];
+            valueMap[record.pollutant_type].push(record.value);
+          });
+
+          let totalAV = 0;
+          let count = 0;
+          for (const pollutant of pollutantList) {
+            const values = valueMap[pollutant.id];
+            if (values && values.length > 0) {
+              totalAV += values.reduce((a, b) => a + b, 0) / values.length;
+              count++;
+            }
+          }
+
+          if (count > 0) {
+            allEnterpriseAVs.push(totalAV / count);
+          }
+        }
+
+        // 计算权重和 CDC
+        let totalWeightedCDC = 0;
+        let pollutantCount = 0;
+
+        const m = enterprises.length; // 园区内企业数量
+
+        for (const pollutant of pollutantList) {
+          const stats = pollutantStats[pollutant.id];
+          if (!stats) continue;
+
+          // 计算权重：DML(Mi) = m × Wi / ΣWi
+          const Wi = stats.av; // 当前企业的 AV 值
+          const sumWi = allEnterpriseAVs.reduce((a, b) => a + b, 0);
+          const weight = sumWi > 0 ? (m * Wi) / sumWi : 1;
+
+          // 归一化（使用全局统计值）
+          const allADs = Object.values(pollutantStats).map(s => s.ad);
+          const allCVs = Object.values(pollutantStats).map(s => s.cv);
+          const allSkews = Object.values(pollutantStats).map(s => Math.abs(s.skew));
+
+          const maxAD = Math.max(...allADs) || 1;
+          const maxCV = Math.max(...allCVs) || 1;
+          const maxSkew = Math.max(...allSkews) || 1;
+
+          const norAD = Math.min(stats.ad / maxAD, 1);
+          const norCV = Math.min(stats.cv / maxCV, 1);
+          const norSkew = Math.min(Math.abs(stats.skew) / maxSkew, 1);
+
+          // CDC = [m × Wi / ΣWi] × [Nor(AD)² + Nor(CV)² + Nor(SKEW)²]
+          const cdc = weight * (Math.pow(norAD, 2) + Math.pow(norCV, 2) + Math.pow(norSkew, 2));
+          totalWeightedCDC += cdc;
           pollutantCount++;
         }
 
-        const avgCDC = pollutantCount > 0 ? totalCDC / pollutantCount : 0;
+        const avgCDC = pollutantCount > 0 ? totalWeightedCDC / pollutantCount : 0;
         const riskInfo = getRiskLevel(avgCDC);
 
         ranking.push({
