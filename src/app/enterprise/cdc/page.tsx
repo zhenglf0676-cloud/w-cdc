@@ -180,13 +180,25 @@ export default function CDCPage() {
   const getPollutantRadarOption = (pollutant: PollutantCDC, index: number) => {
     const color = pollutantColors[index % pollutantColors.length];
     
+    // 使用原始值（非归一化），动态计算每个轴的最大值
+    const av = pollutant.av || 0;
+    const ad = pollutant.ad || 0;
+    const cv = pollutant.cv || 0;
+    const skew = pollutant.skew || 0;
+    
+    // 每个轴的最大值设为当前值的 1.5 倍（留一些空间）
+    const maxAV = Math.max(av * 1.5, 1);
+    const maxAD = Math.max(ad * 1.5, 0.1);
+    const maxCV = Math.max(cv * 1.5, 0.01);
+    const maxSKEW = Math.max(Math.abs(skew) * 1.5, 0.1);
+    
     return {
       radar: {
         indicator: [
-          { name: 'AV', max: 1 },
-          { name: 'AD', max: 1 },
-          { name: 'CV', max: 1 },
-          { name: 'SKEW', max: 1 }
+          { name: 'AV', max: maxAV },
+          { name: 'AD', max: maxAD },
+          { name: 'CV', max: maxCV },
+          { name: 'SKEW', max: maxSKEW }
         ],
         radius: '60%',
         center: ['50%', '50%']
@@ -194,12 +206,7 @@ export default function CDCPage() {
       series: [{
         type: 'radar',
         data: [{
-          value: [
-            pollutant.norAV ?? 0,
-            pollutant.norAD ?? 0,
-            pollutant.norCV ?? 0,
-            pollutant.norSKEW ?? 0
-          ],
+          value: [av, ad, cv, skew],
           name: pollutant.pollutantName,
           areaStyle: { color: color.area },
           lineStyle: { color: color.line, width: 2 },
@@ -213,11 +220,11 @@ export default function CDCPage() {
           return `
             <div style="padding: 8px;">
               <div style="font-weight: bold; margin-bottom: 8px;">${pollutant.pollutantName}</div>
-              <div>AV (均值): ${pollutant.lastDayAv?.toFixed(4) ?? pollutant.av.toFixed(4)}</div>
-              <div>AD (离差): ${pollutant.lastDayAd?.toFixed(4) ?? pollutant.ad.toFixed(4)}</div>
-              <div>CV (变异系数): ${pollutant.lastDayCv?.toFixed(4) ?? pollutant.cv.toFixed(4)}</div>
-              <div>SKEW (偏度): ${pollutant.lastDaySkew?.toFixed(4) ?? pollutant.skew.toFixed(4)}</div>
-              <div style="margin-top: 8px; font-weight: bold;">CDC (最后一天): ${lastDayCDC.toFixed(4)}</div>
+              <div>AV (均值): ${av.toFixed(4)}</div>
+              <div>AD (离差): ${ad.toFixed(4)}</div>
+              <div>CV (变异系数): ${cv.toFixed(4)}</div>
+              <div>SKEW (偏度): ${skew.toFixed(4)}</div>
+              <div style="margin-top: 8px; font-weight: bold;">CDC: ${lastDayCDC.toFixed(4)}</div>
             </div>
           `;
         }
