@@ -331,7 +331,7 @@ export async function GET(request: Request) {
       totalWeightedCDC += cdc;
       pollutantCount++;
 
-      pollutantStats[pollutant.id] = { av, ad, cv, skew, norAD, norCV, norSKEW, cdc };
+      pollutantStats[pollutant.id] = { av, ad, cv, skew, norAD, norCV, norSKEW, cdc, weight };
     }
 
     const overallCDC = pollutantCount > 0 ? totalWeightedCDC / pollutantCount : 0;
