@@ -64,6 +64,7 @@ export async function GET(request: Request) {
     }
 
     if (!outlets || outlets.length === 0) {
+      console.warn('企业没有已审批的排污口:', companyId);
       return NextResponse.json({ error: '没有已审批的排污口' }, { status: 400 });
     }
 
@@ -88,6 +89,7 @@ export async function GET(request: Request) {
     }
 
     if (pollutantList.length === 0) {
+      console.warn('企业没有已审批的污染物:', companyId);
       return NextResponse.json({ error: '没有已审批的污染物' }, { status: 400 });
     }
 
@@ -340,6 +342,7 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({
+      success: true,
       data: {
         overallCDC: Math.round(overallCDC * 100) / 100,
         riskLevel,
