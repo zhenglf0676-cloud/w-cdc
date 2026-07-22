@@ -87,10 +87,12 @@ export async function GET(request: Request) {
       companyThresholdMap.set(app.company_id, thresholds);
     }
 
-    // 获取今天的监测数据（中国时间）
+    // 获取今天的监测数据（中国时间转换为 UTC）
     const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // 中国时间 00:00
-    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1); // 中国时间 24:00
+    // 中国时间今天 00:00 = UTC 时间昨天 16:00
+    const todayStart = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() - 1, 16, 0, 0));
+    // 中国时间今天 24:00 = UTC 时间今天 16:00
+    const todayEnd = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 16, 0, 0));
 
     const { data: monitoringData, error: monitoringError } = await supabase
       .from('monitoring_data')
@@ -101,8 +103,10 @@ export async function GET(request: Request) {
       .order('monitored_at', { ascending: false });
 
     if (monitoringError || !monitoringData) {
+      console.log('监测数据查询失败:', monitoringError);
       return NextResponse.json({ data: [] });
     }
+    console.log('监测数据数量:', monitoringData.length);
 
     // 按排污口和时间分组，检查每个记录是否有超标的污染物
     const groupedData = new Map<string, any>();
