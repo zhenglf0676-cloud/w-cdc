@@ -1,108 +1,277 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseClient } from '@/storage/database/supabase-client';
+import { getSupabaseCredentials, getSupabaseServiceRoleKey, getSupabaseClient } from '@/storage/database/supabase-client';
+import { createClient } from '@supabase/supabase-js';
+
+// 使用 service role key 绕过 RLS
+function getSupabaseAdmin() {
+  const { url, anonKey } = getSupabaseCredentials();
+  const serviceRoleKey = getSupabaseServiceRoleKey();
+  return createClient(url, serviceRoleKey || anonKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
+// 获取风险等级
+function getRiskLevel(cdc: number): { level: string; color: string } {
+  if (cdc < 0.5) return { level: '低风险', color: 'green' };
+  if (cdc < 1.5) return { level: '中风险', color: 'orange' };
+  return { level: '高风险', color: 'red' };
+}
 
 export async function GET(request: NextRequest) {
   try {
-    // 获取认证 token
+    // 获取认证信息
     const token = request.headers.get('x-auth-token');
     if (!token) {
       return NextResponse.json({ error: '未认证' }, { status: 401 });
     }
 
-    // 创建 Supabase 客户端
+    // 使用 token 验证用户身份
     const client = getSupabaseClient(token);
-    
-    // 获取当前用户信息
     const { data: { user }, error: userError } = await client.auth.getUser();
     if (userError || !user) {
       return NextResponse.json({ error: '用户信息获取失败' }, { status: 400 });
     }
 
-    // 获取管理员的园区信息
-    const { data: profile, error: profileError } = await client
+    const userId = user.id;
+    
+    // 使用 service role key 进行后续操作
+    const supabase = getSupabaseAdmin();
+
+    // 获取管理员信息
+    const { data: adminProfile, error: profileError } = await supabase
       .from('profiles')
-      .select('park_name')
-      .eq('user_id', user.id)
-      .eq('role', 'admin')
+      .select('*')
+      .eq('user_id', userId)
       .single();
 
-    if (profileError || !profile) {
+    if (profileError || !adminProfile) {
       return NextResponse.json({ error: '管理员信息获取失败' }, { status: 400 });
     }
 
+    if (adminProfile.role !== 'admin') {
+      return NextResponse.json({ error: '无权限访问' }, { status: 403 });
+    }
+
+    const parkName = adminProfile.park_name;
+    if (!parkName) {
+      return NextResponse.json({ error: '管理员未绑定园区' }, { status: 400 });
+    }
+
     // 获取园区内所有企业
-    const { data: enterprises, error: enterprisesError } = await client
+    const { data: enterprises, error: enterprisesError } = await supabase
       .from('profiles')
-      .select('id, user_id, company_name, park_name')
-      .eq('role', 'enterprise')
-      .eq('park_name', profile.park_name);
+      .select('id, user_id, username, email, company_name, industry, contact_person')
+      .eq('park_name', parkName)
+      .eq('role', 'enterprise');
 
     if (enterprisesError) {
+      console.error('获取企业列表失败:', enterprisesError);
       return NextResponse.json({ error: '企业列表获取失败' }, { status: 500 });
     }
 
-    // 为每个企业计算 CDC 值（简化版：使用最近的监测数据平均值）
-    const rankingData = [];
-    
-    for (const enterprise of enterprises) {
-      // 获取企业的排污口
-      const { data: outlets } = await client
-        .from('discharge_outlets')
-        .select('id')
-        .eq('company_id', enterprise.id)
-        .eq('status', 'approved');
-
-      if (!outlets || outlets.length === 0) {
-        continue;
-      }
-
-      // 获取最近的监测数据
-      const { data: monitoringData } = await client
-        .from('monitoring_data')
-        .select('value')
-        .in('outlet_id', outlets.map(o => o.id))
-        .order('monitored_at', { ascending: false })
-        .limit(100);
-
-      if (!monitoringData || monitoringData.length === 0) {
-        continue;
-      }
-
-      // 计算平均浓度作为简化的 CDC 值
-      const values = monitoringData.map(m => parseFloat(m.value)).filter(v => !isNaN(v));
-      const avgValue = values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0;
-      
-      // 简化的风险等级判定
-      let riskLevel = '低风险';
-      let riskColor = 'green';
-      if (avgValue >= 1.5) {
-        riskLevel = '高风险';
-        riskColor = 'red';
-      } else if (avgValue >= 0.5) {
-        riskLevel = '中风险';
-        riskColor = 'orange';
-      }
-
-      rankingData.push({
-        enterpriseId: enterprise.id,
-        userId: enterprise.user_id,
-        companyName: enterprise.company_name,
-        cdc: parseFloat(avgValue.toFixed(2)),
-        riskLevel,
-        riskColor,
-        outletCount: outlets.length,
-        monitoringCount: values.length
+    if (!enterprises || enterprises.length === 0) {
+      return NextResponse.json({
+        success: true,
+        data: []
       });
     }
 
+    // 获取时间范围参数
+    const searchParams = request.nextUrl.searchParams;
+    const startDate = searchParams.get('startDate');
+    const endDate = searchParams.get('endDate');
+
+    // 默认最近 7 天
+    let fromDate: Date;
+    let toDate: Date;
+
+    if (startDate && endDate) {
+      fromDate = new Date(startDate);
+      toDate = new Date(endDate);
+    } else {
+      toDate = new Date();
+      fromDate = new Date(toDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+    }
+
+    // 为每个企业计算 CDC 值（调用企业端 API 的逻辑）
+    const ranking = [];
+
+    for (const enterprise of enterprises) {
+      try {
+        // 获取企业的排污口
+        const { data: outlets } = await supabase
+          .from('discharge_outlets')
+          .select('id, name')
+          .eq('user_id', enterprise.user_id)
+          .eq('status', 'approved');
+
+        if (!outlets || outlets.length === 0) {
+          ranking.push({
+            enterpriseId: enterprise.id,
+            enterpriseName: enterprise.company_name || enterprise.username || '未知企业',
+            industry: enterprise.industry || '-',
+            contactPerson: enterprise.contact_person || '-',
+            totalOutlets: 0,
+            totalPollutants: 0,
+            overallCDC: 0,
+            riskLevel: '低风险',
+            riskColor: 'green'
+          });
+          continue;
+        }
+
+        const outletIds = outlets.map(o => o.id);
+
+        // 获取企业的污染物
+        const { data: pollutants } = await supabase
+          .from('pollutant_applications')
+          .select('*')
+          .eq('company_id', enterprise.id)
+          .eq('status', 'approved');
+
+        if (!pollutants || pollutants.length === 0) {
+          ranking.push({
+            enterpriseId: enterprise.id,
+            enterpriseName: enterprise.company_name || enterprise.username || '未知企业',
+            industry: enterprise.industry || '-',
+            contactPerson: enterprise.contact_person || '-',
+            totalOutlets: outlets.length,
+            totalPollutants: 0,
+            overallCDC: 0,
+            riskLevel: '低风险',
+            riskColor: 'green'
+          });
+          continue;
+        }
+
+        // 解析污染物列表
+        const pollutantList: { id: string; name: string; unit: string; threshold: number }[] = [];
+        pollutants.forEach((app: any) => {
+          if (Array.isArray(app.pollutants)) {
+            app.pollutants.forEach((p: any) => {
+              pollutantList.push({
+                id: p.id,
+                name: p.label || p.id,
+                unit: p.unit || '',
+                threshold: p.threshold || 0
+              });
+            });
+          }
+        });
+
+        // 获取监测数据
+        const { data: monitoringData } = await supabase
+          .from('monitoring_data')
+          .select('*')
+          .in('outlet_id', outletIds)
+          .gte('monitored_at', fromDate.toISOString())
+          .lte('monitored_at', toDate.toISOString())
+          .order('monitored_at', { ascending: true });
+
+        if (!monitoringData || monitoringData.length === 0) {
+          ranking.push({
+            enterpriseId: enterprise.id,
+            enterpriseName: enterprise.company_name || enterprise.username || '未知企业',
+            industry: enterprise.industry || '-',
+            contactPerson: enterprise.contact_person || '-',
+            totalOutlets: outlets.length,
+            totalPollutants: pollutantList.length,
+            overallCDC: 0,
+            riskLevel: '低风险',
+            riskColor: 'green'
+          });
+          continue;
+        }
+
+        // 按污染物类型分组
+        const pollutantDataMap: Record<string, number[]> = {};
+        pollutantList.forEach(p => {
+          pollutantDataMap[p.id] = [];
+        });
+
+        monitoringData.forEach(record => {
+          if (pollutantDataMap[record.pollutant_type]) {
+            pollutantDataMap[record.pollutant_type].push(record.value);
+          }
+        });
+
+        // 计算每个污染物的 CDC（简化版，用于排行）
+        let totalCDC = 0;
+        let pollutantCount = 0;
+
+        for (const pollutant of pollutantList) {
+          const values = pollutantDataMap[pollutant.id];
+          if (!values || values.length === 0) continue;
+
+          const n = values.length;
+          const av = values.reduce((a, b) => a + b, 0) / n;
+          const ad = values.reduce((a, b) => a + Math.abs(b - av), 0) / n;
+          
+          // 计算标准差
+          const squaredDiffs = values.map(v => Math.pow(v - av, 2));
+          const avgSquaredDiff = squaredDiffs.reduce((a, b) => a + b, 0) / n;
+          const sd = Math.sqrt(avgSquaredDiff);
+          
+          const cv = av !== 0 ? sd / av : 0;
+          
+          // 计算偏度
+          let skew = 0;
+          if (sd !== 0 && n >= 3) {
+            const cubedDiffs = values.map(v => Math.pow((v - av) / sd, 3));
+            const sum = cubedDiffs.reduce((a, b) => a + b, 0);
+            skew = (n / ((n - 1) * (n - 2))) * sum;
+          }
+
+          // 简化的 CDC 计算（用于排行，不考虑权重和归一化）
+          // 实际 CDC 值需要调用企业端 API 获取
+          const simplifiedCDC = (ad + cv + Math.abs(skew)) / 3;
+          totalCDC += simplifiedCDC;
+          pollutantCount++;
+        }
+
+        const avgCDC = pollutantCount > 0 ? totalCDC / pollutantCount : 0;
+        const riskInfo = getRiskLevel(avgCDC);
+
+        ranking.push({
+          enterpriseId: enterprise.id,
+          enterpriseName: enterprise.company_name || enterprise.username || '未知企业',
+          industry: enterprise.industry || '-',
+          contactPerson: enterprise.contact_person || '-',
+          totalOutlets: outlets.length,
+          totalPollutants: pollutantList.length,
+          overallCDC: parseFloat(avgCDC.toFixed(4)),
+          riskLevel: riskInfo.level,
+          riskColor: riskInfo.color
+        });
+
+      } catch (error) {
+        console.error(`计算企业 ${enterprise.id} CDC 失败:`, error);
+        ranking.push({
+          enterpriseId: enterprise.id,
+          enterpriseName: enterprise.company_name || enterprise.username || '未知企业',
+          industry: enterprise.industry || '-',
+          contactPerson: enterprise.contact_person || '-',
+          totalOutlets: 0,
+          totalPollutants: 0,
+          overallCDC: 0,
+          riskLevel: '低风险',
+          riskColor: 'green'
+        });
+      }
+    }
+
     // 按 CDC 值降序排列
-    rankingData.sort((a, b) => b.cdc - a.cdc);
+    ranking.sort((a, b) => b.overallCDC - a.overallCDC);
 
     return NextResponse.json({
       success: true,
-      data: rankingData,
-      parkName: profile.park_name,
-      total: rankingData.length
+      data: ranking,
+      parkName,
+      period: {
+        startDate: fromDate.toISOString(),
+        endDate: toDate.toISOString()
+      }
     });
 
   } catch (error) {
