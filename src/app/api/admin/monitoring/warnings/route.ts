@@ -51,8 +51,8 @@ export async function GET(request: NextRequest) {
     // 获取所有排污口
     const { data: outlets, error: outletsError } = await client
       .from('discharge_outlets')
-      .select('id, outlet_name, company_id')
-      .in('company_id', enterpriseIds)
+      .select('id, name, user_id')
+      .in('user_id', enterpriseIds)
       .eq('status', 'approved');
 
     if (outletsError) {
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
     }
 
     const outletIds = outlets.map(o => o.id);
-    const outletMap = new Map(outlets.map(o => [o.id, { name: o.outlet_name, companyId: o.company_id }]));
+    const outletMap = new Map(outlets.map(o => [o.id, { name: o.name, companyId: o.user_id }]));
 
     if (outletIds.length === 0) {
       return NextResponse.json({ success: true, data: [], parkName: profile.park_name, total: 0 });
