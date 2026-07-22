@@ -233,7 +233,7 @@ export async function GET(request: Request) {
       const pollutantStats: Record<string, { av: number; ad: number; cv: number; skew: number }> = {};
       for (const pollutant of entPollutantList) {
         const dailyValues: number[] = [];
-        for (const date of sortedDates) {
+        for (const date of entSortedDates) {
           const outletValues = entDailyPollutantData[date][pollutant.id] || {};
           const total = Object.values(outletValues).reduce((sum, val) => sum + val, 0);
           if (total > 0) {
