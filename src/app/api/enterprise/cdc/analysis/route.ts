@@ -202,12 +202,12 @@ export async function GET(request: Request) {
         }
       }
 
-      const sortedDates = Object.keys(entDailyPollutantData).sort();
+      const entSortedDates = Object.keys(entDailyPollutantData).sort();
       const pollutantAVMap: Record<string, number> = {};
 
       for (const pollutant of entPollutantList) {
         const dailyValues: number[] = [];
-        for (const date of sortedDates) {
+        for (const date of entSortedDates) {
           const outletValues = entDailyPollutantData[date][pollutant.id] || {};
           const total = Object.values(outletValues).reduce((sum, val) => sum + val, 0);
           if (total > 0) {
@@ -348,16 +348,16 @@ export async function GET(request: Request) {
 
     // 计算每日 CDC（用于趋势图）
     const dailyPollutantCDC: Record<string, Record<string, number>> = {};
-    const sortedDates = Object.keys(dailyPollutantData).sort();
 
     for (const date of sortedDates) {
       const dayPollutantData = dailyPollutantData[date];
       const dayCDC: Record<string, number> = {};
 
       for (const pollutant of pollutantList) {
-        const values = dayPollutantData[pollutant.id];
-        if (!values || values.length === 0) continue;
+        const outletValues = dayPollutantData[pollutant.id];
+        if (!outletValues || Object.keys(outletValues).length === 0) continue;
 
+        const values = Object.values(outletValues);
         const n = values.length;
         const av = values.reduce((a, b) => a + b, 0) / n;
         const ad = values.reduce((a, b) => a + Math.abs(b - av), 0) / n;
