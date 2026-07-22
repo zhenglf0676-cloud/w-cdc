@@ -236,9 +236,9 @@ export async function GET(request: Request) {
       }
     }
 
-    // 计算所有企业的 AV 总和（用于权重计算）
-    // 注意：allEnterpriseAVs 已经在上面循环中填充，这里直接计算总和
-    const sumWi = allEnterpriseAVs.reduce((a: number, b: number) => a + b, 0);
+    // 计算所有企业所有污染物的 AV 总和（用于权重计算）
+    // 根据 Word 文档：Wi = (m × AV_i) / ΣAV，其中 ΣAV 是所有企业所有污染物的 AV 总和
+    const sumWi = Object.values(globalPollutantAVMap).reduce((a: number, b: number) => a + b, 0);
 
     // 计算每个企业的 CDC
     const results = [];
