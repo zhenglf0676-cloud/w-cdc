@@ -164,17 +164,27 @@ export async function GET(request: Request) {
         .from('pollutant_applications')
         .select('pollutants')
         .eq('company_id', enterprise.id)
-        .eq('status', 'approved')
-        .limit(1);
+        .eq('status', 'approved');
 
       let entPollutantList: Array<{ id: string }> = [];
-      if (entApplications && entApplications.length > 0 && entApplications[0].pollutants) {
-        try {
-          const pollutants = typeof entApplications[0].pollutants === 'string'
-            ? JSON.parse(entApplications[0].pollutants)
-            : entApplications[0].pollutants;
-          entPollutantList = pollutants;
-        } catch (e) {}
+      if (entApplications && entApplications.length > 0) {
+        for (const app of entApplications) {
+          if (app.pollutants) {
+            try {
+              const pollutants = typeof app.pollutants === 'string'
+                ? JSON.parse(app.pollutants)
+                : app.pollutants;
+              entPollutantList = [...entPollutantList, ...pollutants];
+            } catch (e) {}
+          }
+        }
+        // 去重
+        const seen = new Set<string>();
+        entPollutantList = entPollutantList.filter(p => {
+          if (seen.has(p.id)) return false;
+          seen.add(p.id);
+          return true;
+        });
       }
 
       if (entPollutantList.length === 0) continue;
