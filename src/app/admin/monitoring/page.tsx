@@ -295,6 +295,29 @@ export default function AdminMonitoringPage() {
             },
           },
         ],
+        // 添加阈值线
+        ...(item.threshold > 0 ? {
+          series: [
+            {
+              type: 'line',
+              data: Array(item.dates.length).fill(item.threshold),
+              symbol: 'none',
+              lineStyle: { color: '#ef4444', width: 1, type: 'dashed' },
+              markLine: {
+                silent: true,
+                symbol: 'none',
+                label: {
+                  position: 'end',
+                  formatter: `阈值 ${item.threshold}`,
+                  color: '#ef4444',
+                  fontSize: 10,
+                },
+                lineStyle: { color: '#ef4444', width: 1, type: 'dashed' },
+                data: [{ yAxis: item.threshold }],
+              },
+            },
+          ],
+        } : {}),
       };
 
       chart.setOption(option);
