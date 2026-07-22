@@ -342,23 +342,51 @@ export async function GET(request: NextRequest) {
         const compOutletIds = compOutlets.map(o => o.id);
         const { data: compMonitoringData } = await supabase
           .from('monitoring_data')
-          .select('value, monitored_at')
+          .select('pollutant_type, value, monitored_at, outlet_id')
           .in('outlet_id', compOutletIds)
           .gte('monitored_at', fromDate.toISOString())
           .lte('monitored_at', toDate.toISOString());
 
         if (compMonitoringData && compMonitoringData.length > 0) {
-          // 计算每日累计值（使用中国时间 UTC+8）
-          const dailyValues: Record<string, number> = {};
+          // 按日期和污染物分组，每天取每个排污口的最新值，然后累加（与 Admin Ranking API 一致）
+          const dailyPollutantData: Record<string, Record<string, Record<string, number>>> = {};
           compMonitoringData.forEach(record => {
             const date = new Date(new Date(record.monitored_at).getTime() + 8 * 60 * 60 * 1000).toISOString().split('T')[0];
-            if (!dailyValues[date]) dailyValues[date] = 0;
-            dailyValues[date] += record.value;
+            const pollutantType = record.pollutant_type;
+            const outletId = record.outlet_id;
+            const value = record.value;
+
+            if (!dailyPollutantData[date]) {
+              dailyPollutantData[date] = {};
+            }
+            if (!dailyPollutantData[date][pollutantType]) {
+              dailyPollutantData[date][pollutantType] = {};
+            }
+            dailyPollutantData[date][pollutantType][outletId] = value;
           });
 
-          const values = Object.values(dailyValues);
-          if (values.length > 0) {
-            companyAVMap[compId] = values.reduce((a, b) => a + b, 0) / values.length;
+          // 计算该企业 7 天的平均累计值（只统计 pollutantList 中的污染物）
+          const sortedDates = Object.keys(dailyPollutantData).sort();
+          const dailyTotals: number[] = [];
+          
+          for (const date of sortedDates) {
+            let dayTotal = 0;
+            let pollutantCount = 0;
+            for (const pollutant of pollutantList) {
+              const outletValues = dailyPollutantData[date][pollutant.id] || {};
+              const total = Object.values(outletValues).reduce((sum, val) => sum + val, 0);
+              if (total > 0) {
+                dayTotal += total;
+                pollutantCount++;
+              }
+            }
+            if (pollutantCount > 0) {
+              dailyTotals.push(dayTotal);
+            }
+          }
+
+          if (dailyTotals.length > 0) {
+            companyAVMap[compId] = dailyTotals.reduce((a, b) => a + b, 0) / dailyTotals.length;
           }
         }
       }
