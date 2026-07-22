@@ -467,24 +467,33 @@ export default function AdminMonitoringPage() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-6 gap-4">
-                      <div className="p-4 rounded-lg bg-amber-50 border border-amber-200">
+                    <div className="grid grid-cols-4 gap-4">
+                      <div className={`p-4 rounded-lg border ${
+                        selectedEnterprise.riskLevel === '高风险' ? 'bg-red-50 border-red-200' :
+                        selectedEnterprise.riskLevel === '中风险' ? 'bg-amber-50 border-amber-200' :
+                        'bg-emerald-50 border-emerald-200'
+                      }`}>
                         <div className="text-sm text-slate-600 mb-1">当前 CDC</div>
-                        <div className="text-3xl font-bold text-amber-600">
+                        <div className={`text-3xl font-bold ${
+                          selectedEnterprise.riskLevel === '高风险' ? 'text-red-600' :
+                          selectedEnterprise.riskLevel === '中风险' ? 'text-amber-600' :
+                          'text-emerald-600'
+                        }`}>
                           {selectedEnterprise.overallCDC.toFixed(2)}
                         </div>
                       </div>
-                      <div className="p-4 rounded-lg bg-amber-50 border border-amber-200">
+                      <div className={`p-4 rounded-lg border ${
+                        selectedEnterprise.riskLevel === '高风险' ? 'bg-red-50 border-red-200' :
+                        selectedEnterprise.riskLevel === '中风险' ? 'bg-amber-50 border-amber-200' :
+                        'bg-emerald-50 border-emerald-200'
+                      }`}>
                         <div className="text-sm text-slate-600 mb-1">风险等级</div>
-                        <div className="text-xl font-bold text-amber-600">
+                        <div className={`text-xl font-bold ${
+                          selectedEnterprise.riskLevel === '高风险' ? 'text-red-600' :
+                          selectedEnterprise.riskLevel === '中风险' ? 'text-amber-600' :
+                          'text-emerald-600'
+                        }`}>
                           {selectedEnterprise.riskLevel}
-                        </div>
-                      </div>
-                      <div className="p-4 rounded-lg border border-slate-200">
-                        <div className="text-sm text-slate-600 mb-1">监测点数量</div>
-                        <div className="text-2xl font-bold text-slate-900">
-                          {selectedEnterprise.totalOutlets}
-                          <span className="text-emerald-500 text-sm ml-1">↑</span>
                         </div>
                       </div>
                       <div className="p-4 rounded-lg border border-slate-200">
@@ -492,12 +501,6 @@ export default function AdminMonitoringPage() {
                         <div className="text-2xl font-bold text-slate-900">
                           {selectedEnterprise.totalOutlets}
                           <span className="text-emerald-500 text-sm ml-1">↑</span>
-                        </div>
-                      </div>
-                      <div className="p-4 rounded-lg border border-slate-200">
-                        <div className="text-sm text-slate-600 mb-1">所属行业</div>
-                        <div className="text-lg font-medium text-slate-900">
-                          {selectedEnterprise.industry || '未知'}
                         </div>
                       </div>
                       <div className="p-4 rounded-lg border border-slate-200">
