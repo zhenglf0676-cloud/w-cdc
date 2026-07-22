@@ -349,17 +349,41 @@ export async function GET(request: Request) {
     }
 
     // 计算每日 CDC（用于趋势图）
+    // 每个日期点的 CDC = 以该天为结束日期的 7 天窗口计算的 CDC
     const dailyPollutantCDC: Record<string, Record<string, number>> = {};
 
-    for (const date of sortedDates) {
-      const dayPollutantData = dailyPollutantData[date];
+    for (const endDate of sortedDates) {
+      // 计算 7 天窗口的起始日期
+      const endDateTime = new Date(endDate).getTime();
+      const startDateTime = endDateTime - 6 * 24 * 60 * 60 * 1000; // 7 天窗口（包含结束日期）
+      const startDateStr = new Date(startDateTime).toISOString().split('T')[0];
+
+      // 收集 7 天窗口的数据
+      const windowDailyValues: Record<string, number[]> = {};
+      for (const pollutant of pollutantList) {
+        windowDailyValues[pollutant.id] = [];
+      }
+
+      for (const date of sortedDates) {
+        if (date < startDateStr || date > endDate) continue;
+        const dayPollutantData = dailyPollutantData[date];
+
+        for (const pollutant of pollutantList) {
+          const outletValues = dayPollutantData[pollutant.id];
+          if (!outletValues || Object.keys(outletValues).length === 0) continue;
+          const total = Object.values(outletValues).reduce((sum, val) => sum + val, 0);
+          if (total > 0) {
+            windowDailyValues[pollutant.id].push(total);
+          }
+        }
+      }
+
       const dayCDC: Record<string, number> = {};
 
       for (const pollutant of pollutantList) {
-        const outletValues = dayPollutantData[pollutant.id];
-        if (!outletValues || Object.keys(outletValues).length === 0) continue;
+        const values = windowDailyValues[pollutant.id];
+        if (values.length === 0) continue;
 
-        const values = Object.values(outletValues);
         const n = values.length;
         const av = values.reduce((a, b) => a + b, 0) / n;
         const ad = values.reduce((a, b) => a + Math.abs(b - av), 0) / n;
@@ -373,13 +397,14 @@ export async function GET(request: Request) {
         const norCV = globalMaxCV > 0 ? Math.min(cv / globalMaxCV, 1) : 0;
         const norSKEW = globalMaxSKEW > 0 ? Math.min(Math.abs(skew) / globalMaxSKEW, 1) : 0;
 
-        const weight = sumWi > 0 ? (m * currentEnterpriseAV) / sumWi : 1;
-        const cdc = weight * (Math.pow(norAD, 2) + Math.pow(norCV, 2) + Math.pow(norSKEW, 2));
+        // 使用每个污染物的单独权重
+        const pollutantWeight = sumWi > 0 ? (m * av) / sumWi : 1;
+        const cdc = pollutantWeight * (Math.pow(norAD, 2) + Math.pow(norCV, 2) + Math.pow(norSKEW, 2));
 
         dayCDC[pollutant.id] = Math.round(cdc * 100) / 100;
       }
 
-      dailyPollutantCDC[date] = dayCDC;
+      dailyPollutantCDC[endDate] = dayCDC;
     }
 
     return NextResponse.json({
