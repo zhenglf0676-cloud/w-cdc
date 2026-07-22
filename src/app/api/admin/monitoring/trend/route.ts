@@ -73,11 +73,11 @@ export async function GET(request: Request) {
 
     const outletIds = outlets.map(o => o.id);
 
-    // 获取时间范围内的监测数据
+    // 获取时间范围内的监测数据（与企业端 CDC API 保持一致）
     const now = new Date();
-    const startDate = new Date(now);
+    const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
     startDate.setUTCHours(0, 0, 0, 0);
-    startDate.setUTCDate(startDate.getUTCDate() - days + 1);
+    now.setUTCHours(23, 59, 59, 999);
 
     const { data: monitoringData, error: dataError } = await supabase
       .from('monitoring_data')
