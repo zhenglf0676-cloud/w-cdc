@@ -255,30 +255,27 @@ export async function GET(request: Request) {
       if (!stats) continue;
 
       const pollutantList = enterprisePollutantMap[enterprise.id] || [];
-      const pollutantAVValues = pollutantList.map(p => globalPollutantAVMap[p.id] || 0).filter(v => v > 0);
-      const currentEnterpriseAV = pollutantAVValues.length > 0
-        ? pollutantAVValues.reduce((a: number, b: number) => a + b, 0) / pollutantAVValues.length
-        : 0;
 
-      const weight = sumWi > 0 ? (m * currentEnterpriseAV) / sumWi : 1;
-
-      let totalCDC = 0;
+      let totalWeightedCDC = 0;
       let pollutantCount = 0;
 
       for (const pollutant of pollutantList) {
-        const { ad, cv, skew } = stats[pollutant.id] || {};
+        const { av, ad, cv, skew } = stats[pollutant.id] || {};
         if (ad === undefined) continue;
 
         const norAD = globalMaxAD > 0 ? ad / globalMaxAD : 0;
         const norCV = globalMaxCV > 0 ? cv / globalMaxCV : 0;
         const norSKEW = globalMaxSKEW > 0 ? Math.abs(skew) / globalMaxSKEW : 0;
 
-        const cdc = weight * (Math.pow(norAD, 2) + Math.pow(norCV, 2) + Math.pow(norSKEW, 2));
-        totalCDC += cdc;
+        // 计算每个污染物的单独权重（根据 Word 文档）
+        const pollutantWeight = sumWi > 0 ? (m * av) / sumWi : 1;
+        const cdc = pollutantWeight * (Math.pow(norAD, 2) + Math.pow(norCV, 2) + Math.pow(norSKEW, 2));
+        totalWeightedCDC += cdc;
         pollutantCount++;
       }
 
-      const overallCDC = pollutantCount > 0 ? totalCDC / pollutantCount : 0;
+      // 综合 CDC = 所有污染物 CDC 之和 / 污染物数量（根据 Word 文档）
+      const overallCDC = pollutantCount > 0 ? totalWeightedCDC / pollutantCount : 0;
 
       let riskLevel = '低风险';
       let riskColor = 'green';
