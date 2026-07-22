@@ -248,17 +248,32 @@ export default function AdminMonitoringPage() {
       const chart = echarts.init(chartElement);
       chartRefs.current.set(chartId, chart);
 
+      // 收集所有时间点
+      const allTimes = new Set<string>();
+      item.outlets.forEach(outlet => {
+        outlet.data.forEach(d => allTimes.add(d.time));
+      });
+      const sortedTimes = Array.from(allTimes).sort();
+
       // 构建 series：每个排污口一条线
-      const series = item.outlets.map((outlet, outletIndex) => ({
-        name: outlet.name,
-        type: 'line' as const,
-        data: outlet.values,
-        smooth: true,
-        symbol: 'circle',
-        symbolSize: 6,
-        lineStyle: { color: outletColors[outletIndex % outletColors.length], width: 2 },
-        itemStyle: { color: outletColors[outletIndex % outletColors.length] },
-      }));
+      const series = item.outlets.map((outlet, outletIndex) => {
+        // 按时间排序数据
+        const sortedData = [...outlet.data].sort((a, b) => a.time.localeCompare(b.time));
+        // 填充缺失时间点的数据
+        const dataMap = new Map(sortedData.map(d => [d.time, d.value]));
+        const values = sortedTimes.map(time => dataMap.get(time) ?? null);
+
+        return {
+          name: outlet.outletName,
+          type: 'line' as const,
+          data: values,
+          smooth: true,
+          symbol: 'circle',
+          symbolSize: 6,
+          lineStyle: { color: outletColors[outletIndex % outletColors.length], width: 2 },
+          itemStyle: { color: outletColors[outletIndex % outletColors.length] },
+        };
+      });
 
       const option: echarts.EChartsOption = {
         tooltip: {
@@ -266,13 +281,15 @@ export default function AdminMonitoringPage() {
           formatter: (params: any) => {
             let html = `${params[0].name}<br/>`;
             params.forEach((p: any) => {
-              html += `${p.seriesName}: ${p.value.toFixed(2)} mg/L<br/>`;
+              if (p.value !== null && p.value !== undefined) {
+                html += `${p.seriesName}: ${p.value.toFixed(2)} mg/L<br/>`;
+              }
             });
             return html;
           },
         },
         legend: {
-          data: item.outlets.map(o => o.name),
+          data: item.outlets.map(o => o.outletName),
           bottom: 0,
           textStyle: { fontSize: 11, color: '#64748b' },
         },
@@ -284,10 +301,7 @@ export default function AdminMonitoringPage() {
         },
         xAxis: {
           type: 'category',
-          data: item.dates.map(date => {
-            const d = new Date(date);
-            return `${d.getMonth() + 1}/${d.getDate()}`;
-          }),
+          data: sortedTimes,
           axisLine: { lineStyle: { color: '#e2e8f0' } },
           axisLabel: { color: '#64748b', fontSize: 10 },
         },
@@ -586,7 +600,7 @@ export default function AdminMonitoringPage() {
                     ) : (
                       <div className="grid grid-cols-2 gap-4">
                         {trendData.slice(0, 4).map((item, index) => (
-                          <div key={item.pollutantName} className="p-4 border border-slate-200 rounded-lg">
+                          <div key={`trend-${index}`} className="p-4 border border-slate-200 rounded-lg">
                             <div className="text-sm font-medium text-slate-900 mb-2">
                               {item.pollutantName} (mg/L)
                             </div>
