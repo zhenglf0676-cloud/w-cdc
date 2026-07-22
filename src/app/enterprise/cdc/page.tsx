@@ -503,25 +503,25 @@ export default function CDCPage() {
                     <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                       <div className="rounded bg-slate-50 p-2">
                         <div className="text-slate-500">AV (均值)</div>
-                        <div className="font-mono font-medium text-slate-900">{pollutant.av.toFixed(4)}</div>
+                        <div className="font-mono font-medium text-slate-900">{(pollutant.lastDayAv ?? pollutant.av).toFixed(4)}</div>
                       </div>
                       <div className="rounded bg-slate-50 p-2">
                         <div className="text-slate-500">AD (离差)</div>
-                        <div className="font-mono font-medium text-slate-900">{pollutant.ad.toFixed(4)}</div>
+                        <div className="font-mono font-medium text-slate-900">{(pollutant.lastDayAd ?? pollutant.ad).toFixed(4)}</div>
                       </div>
                       <div className="rounded bg-slate-50 p-2">
                         <div className="text-slate-500">CV (变异系数)</div>
-                        <div className="font-mono font-medium text-slate-900">{pollutant.cv.toFixed(4)}</div>
+                        <div className="font-mono font-medium text-slate-900">{(pollutant.lastDayCv ?? pollutant.cv).toFixed(4)}</div>
                       </div>
                       <div className="rounded bg-slate-50 p-2">
                         <div className="text-slate-500">SKEW (偏度)</div>
-                        <div className="font-mono font-medium text-slate-900">{pollutant.skew.toFixed(4)}</div>
+                        <div className="font-mono font-medium text-slate-900">{(pollutant.lastDaySkew ?? pollutant.skew).toFixed(4)}</div>
                       </div>
                     </div>
                     <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3">
                       <div>
-                        <div className="text-xs text-slate-500">CDC 值</div>
-                        <div className="text-lg font-bold text-slate-900">{pollutant.cdc.toFixed(2)}</div>
+                        <div className="text-xs text-slate-500">CDC 值 (最后一天)</div>
+                        <div className="text-lg font-bold text-slate-900">{(pollutant.lastDayCDC ?? pollutant.cdc).toFixed(2)}</div>
                       </div>
                       <div className="text-right">
                         <div className="text-xs text-slate-500">权重</div>
