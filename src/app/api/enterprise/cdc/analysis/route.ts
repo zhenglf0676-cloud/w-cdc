@@ -150,6 +150,7 @@ export async function GET(request: Request) {
     // 计算所有企业的 AV（用于归一化和权重）
     const allEnterpriseAVs: number[] = [];
     const allEnterpriseStats: Record<string, Record<string, { av: number; ad: number; cv: number; skew: number }>> = {};
+    const globalPollutantAVMap: Record<string, number> = {}; // 所有企业每个污染物的 AV 累加
 
     for (const enterprise of allEnterprises || []) {
       const { data: entOutlets } = await supabase
@@ -232,6 +233,8 @@ export async function GET(request: Request) {
         if (dailyValues.length > 0) {
           const av = dailyValues.reduce((a, b) => a + b, 0) / dailyValues.length;
           pollutantAVMap[pollutant.id] = av;
+          // 累加到全局 pollutantAVMap
+          globalPollutantAVMap[pollutant.id] = (globalPollutantAVMap[pollutant.id] || 0) + av;
         }
       }
 
@@ -305,7 +308,9 @@ export async function GET(request: Request) {
 
     // 计算权重（每个污染物单独计算）
     // Wi = (m × AV_i) / ΣAV，其中 ΣAV 是所有企业所有污染物的 AV 总和
-    const sumWi = allEnterpriseAVs.reduce((a, b) => a + b, 0);
+    // 注意：allEnterpriseAVs 存储的是每个企业的综合 AV，不能直接用于 sumWi
+    // 需要使用 globalPollutantAVMap（所有企业每个污染物的 AV 累加）来计算 ΣAV
+    const sumWi = Object.values(globalPollutantAVMap).reduce((a: number, b: number) => a + b, 0);
 
     // 计算每个污染物的 CDC（使用 7 天数据，按 Word 文档）
     let totalWeightedCDC = 0;

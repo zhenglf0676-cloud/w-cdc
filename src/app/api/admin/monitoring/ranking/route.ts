@@ -237,14 +237,7 @@ export async function GET(request: Request) {
     }
 
     // 计算所有企业的 AV 总和（用于权重计算）
-    for (const enterprise of enterprises) {
-      const pollutantList = enterprisePollutantMap[enterprise.id] || [];
-      const pollutantAVValues = pollutantList.map(p => globalPollutantAVMap[p.id] || 0).filter(v => v > 0);
-      const currentEnterpriseAV = pollutantAVValues.length > 0
-        ? pollutantAVValues.reduce((a: number, b: number) => a + b, 0) / pollutantAVValues.length
-        : 0;
-      allEnterpriseAVs.push(currentEnterpriseAV);
-    }
+    // 注意：allEnterpriseAVs 已经在上面循环中填充，这里直接计算总和
     const sumWi = allEnterpriseAVs.reduce((a: number, b: number) => a + b, 0);
 
     // 计算每个企业的 CDC
