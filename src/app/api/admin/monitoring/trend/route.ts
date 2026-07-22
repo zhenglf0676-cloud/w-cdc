@@ -6,7 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 function getSupabaseAdmin() {
   const credentials = getSupabaseCredentials();
   const serviceRoleKey = getSupabaseServiceRoleKey();
-  return createClient(credentials.url, serviceRoleKey, {
+  return createClient(credentials.url, serviceRoleKey || '', {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 }
@@ -157,10 +157,18 @@ export async function GET(request: Request) {
       });
     }
 
+    // 污染物 ID 到中文名称的映射
+    const pollutantNameMap: Record<string, string> = {
+      'cod': 'COD（化学需氧量）',
+      'nh3n': 'NH₃-N（氨氮）',
+      'tp': 'TP（总磷）',
+      'tn': 'TN（总氮）'
+    };
+
     // 转换为数组格式，添加阈值信息
     const trendData = Array.from(pollutantMap.entries()).map(([type, data]) => ({
       pollutantType: type,
-      name: type,
+      name: pollutantNameMap[type] || type,
       threshold: thresholdMap.get(type) || 0,
       outlets: Array.from(data.outlets.entries()).map(([id, outletData]) => ({
         outletId: id,

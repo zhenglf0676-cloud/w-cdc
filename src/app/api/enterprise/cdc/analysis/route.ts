@@ -235,7 +235,7 @@ export async function GET(request: Request) {
       }
 
       // 计算每个污染物的统计指标
-      const pollutantStats: Record<string, { av: number; ad: number; cv: number; skew: number }> = {};
+      const pollutantStats: Record<string, { av: number; ad: number; cv: number; skew: number; norAD?: number; norCV?: number; norSKEW?: number; cdc?: number; weight?: number }> = {};
       for (const pollutant of entPollutantList) {
         const dailyValues: number[] = [];
         for (const date of entSortedDates) {
@@ -276,7 +276,7 @@ export async function GET(request: Request) {
     // 计算当前企业的 CDC
     const sortedDates = Object.keys(dailyPollutantData).sort();
     const pollutantAVMap: Record<string, number> = {};
-    const pollutantStats: Record<string, { av: number; ad: number; cv: number; skew: number; norAD: number; norCV: number; norSKEW: number; cdc: number }> = {};
+    const pollutantStats: Record<string, { av: number; ad: number; cv: number; skew: number; norAD: number; norCV: number; norSKEW: number; cdc: number; weight?: number }> = {};
 
     // 计算每个污染物的 AV
     for (const pollutant of pollutantList) {

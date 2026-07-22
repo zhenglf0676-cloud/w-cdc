@@ -61,7 +61,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ data: [] });
     }
 
-    const outletMap = new Map(outlets.map(o => [o.id, { name: o.name, userId: o.user_id }]));
+    const outletMap = new Map(outlets.map(o => [o.id, { id: o.id, name: o.name, userId: o.user_id }]));
 
     // 获取企业的污染物阈值（从 pollutant_applications）
     const { data: applications, error: appsError } = await supabase
@@ -127,16 +127,19 @@ export async function GET(request: Request) {
 
       // 检查是否超过阈值
       if (threshold && record.value > threshold) {
-        // 使用 monitored_at 作为分组键
+        // 使用 outlet_id 和 monitored_at 作为分组键
         const timeKey = record.monitored_at;
         const groupKey = `${outlet.id}_${timeKey}`;
         
         if (!groupedData.has(groupKey)) {
           groupedData.set(groupKey, {
-            time: record.monitored_at,
-            enterpriseName: enterprise.company_name,
+            outletId: outlet.id,
             outletName: outlet.name,
+            enterpriseId: enterprise.id,
+            enterpriseName: enterprise.company_name,
+            time: record.monitored_at,
             pollutants: {},
+            hasWarning: true,
           });
         }
 
@@ -150,7 +153,6 @@ export async function GET(request: Request) {
 
     // 转换为数组并按时间排序
     const warnings = Array.from(groupedData.values())
-      .filter(w => Object.keys(w.pollutants).length > 0)
       .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
 
     return NextResponse.json({ data: warnings });

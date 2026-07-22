@@ -126,6 +126,8 @@ export async function GET(request: Request) {
 
     // 按企业分组计算 CDC
     const enterpriseCDCMap: Record<string, { overallCDC: number; riskLevel: string; riskColor: string }> = {};
+    const globalPollutantAVMap: Record<string, number> = {};
+    const allEnterpriseAVs: number[] = [];
 
     for (const enterprise of enterprises) {
       const outlets = enterpriseOutletMap[enterprise.id] || [];
@@ -156,8 +158,6 @@ export async function GET(request: Request) {
 
       // 计算每个污染物的统计指标
       const sortedDates = Object.keys(dailyPollutantData).sort();
-      let totalWeightedCDC = 0;
-      const allEnterpriseAVs: number[] = [];
 
       // 先计算每个污染物的 AV，用于企业综合 AV
       const pollutantAVMap: Record<string, number> = {};
@@ -171,14 +171,17 @@ export async function GET(request: Request) {
           }
         }
         if (dailyValues.length > 0) {
-          pollutantAVMap[pollutant.id] = dailyValues.reduce((a, b) => a + b, 0) / dailyValues.length;
+          const av = dailyValues.reduce((a, b) => a + b, 0) / dailyValues.length;
+          pollutantAVMap[pollutant.id] = av;
+          // 累加到全局 pollutantAVMap
+          globalPollutantAVMap[pollutant.id] = (globalPollutantAVMap[pollutant.id] || 0) + av;
         }
       }
 
       // 计算企业综合 AV（所有污染物 AV 的平均）
       const pollutantAVValues = Object.values(pollutantAVMap);
       const currentEnterpriseAV = pollutantAVValues.length > 0
-        ? pollutantAVValues.reduce((a, b) => a + b, 0) / pollutantAVValues.length
+        ? pollutantAVValues.reduce((a: number, b: number) => a + b, 0) / pollutantAVValues.length
         : 0;
       allEnterpriseAVs.push(currentEnterpriseAV);
 
@@ -233,8 +236,18 @@ export async function GET(request: Request) {
       }
     }
 
+    // 计算所有企业的 AV 总和（用于权重计算）
+    for (const enterprise of enterprises) {
+      const pollutantList = enterprisePollutantMap[enterprise.id] || [];
+      const pollutantAVValues = pollutantList.map(p => globalPollutantAVMap[p.id] || 0).filter(v => v > 0);
+      const currentEnterpriseAV = pollutantAVValues.length > 0
+        ? pollutantAVValues.reduce((a: number, b: number) => a + b, 0) / pollutantAVValues.length
+        : 0;
+      allEnterpriseAVs.push(currentEnterpriseAV);
+    }
+    const sumWi = allEnterpriseAVs.reduce((a: number, b: number) => a + b, 0);
+
     // 计算每个企业的 CDC
-    const sumWi = allEnterpriseAVs.reduce((a, b) => a + b, 0);
     const results = [];
 
     for (const enterprise of enterprises) {
@@ -242,8 +255,9 @@ export async function GET(request: Request) {
       if (!stats) continue;
 
       const pollutantList = enterprisePollutantMap[enterprise.id] || [];
-      const currentEnterpriseAV = Object.values(pollutantAVMap).length > 0
-        ? Object.values(pollutantAVMap).reduce((a, b) => a + b, 0) / Object.values(pollutantAVMap).length
+      const pollutantAVValues = pollutantList.map(p => globalPollutantAVMap[p.id] || 0).filter(v => v > 0);
+      const currentEnterpriseAV = pollutantAVValues.length > 0
+        ? pollutantAVValues.reduce((a: number, b: number) => a + b, 0) / pollutantAVValues.length
         : 0;
 
       const weight = sumWi > 0 ? (m * currentEnterpriseAV) / sumWi : 1;
@@ -277,8 +291,12 @@ export async function GET(request: Request) {
       }
 
       results.push({
-        id: enterprise.id,
-        name: enterprise.company_name || enterprise.full_name,
+        enterpriseId: enterprise.id,
+        enterpriseName: enterprise.company_name || enterprise.full_name,
+        industry: '',
+        contactPerson: enterprise.full_name || '',
+        totalOutlets: enterpriseOutletMap[enterprise.id]?.length || 0,
+        totalPollutants: enterprisePollutantMap[enterprise.id]?.length || 0,
         overallCDC: Math.round(overallCDC * 100) / 100,
         riskLevel,
         riskColor

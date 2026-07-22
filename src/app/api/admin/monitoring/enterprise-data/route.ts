@@ -81,11 +81,18 @@ export async function GET(request: NextRequest) {
     });
 
     // 获取污染物阈值信息
-    const { data: pollutantApplications } = await client
+    const { data: pollutantApplications, error: pollError } = await client
       .from('pollutant_applications')
       .select('pollutants')
       .eq('company_id', enterpriseId)
       .eq('status', 'approved');
+
+    if (pollError) {
+      console.error('获取污染物申请失败:', pollError);
+    }
+
+    console.log('企业 ID:', enterpriseId);
+    console.log('污染物申请数量:', pollutantApplications?.length || 0);
 
     const thresholdMap: Record<string, { threshold: number; unit: string }> = {};
     if (pollutantApplications) {
@@ -103,6 +110,16 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    console.log('阈值映射:', thresholdMap);
+
+    // 污染物 ID 到中文名称的映射
+    const pollutantNameMap: Record<string, string> = {
+      'cod': 'COD（化学需氧量）',
+      'nh3n': 'NH₃-N（氨氮）',
+      'tp': 'TP（总磷）',
+      'tn': 'TN（总氮）'
+    };
+
     // 构建返回数据
     const result = Object.entries(latestByPollutant).map(([pollutantType, record]: [string, any]) => {
       const threshold = thresholdMap[pollutantType];
@@ -117,7 +134,7 @@ export async function GET(request: NextRequest) {
       }
 
       return {
-        name: pollutantType.toUpperCase(),
+        name: pollutantNameMap[pollutantType] || pollutantType.toUpperCase(),
         unit: threshold?.unit || record.unit || 'mg/L',
         latestValue: value,
         status,
@@ -126,6 +143,8 @@ export async function GET(request: NextRequest) {
         monitoredAt: record.monitored_at
       };
     });
+
+    console.log('返回数据:', result);
 
     return NextResponse.json({
       success: true,

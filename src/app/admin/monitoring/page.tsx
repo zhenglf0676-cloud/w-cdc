@@ -21,6 +21,14 @@ import {
 import Link from 'next/link';
 import * as echarts from 'echarts';
 
+// 污染物 ID 到中文名称的映射
+const pollutantNameMap: Record<string, string> = {
+  'cod': 'COD',
+  'nh3n': 'NH₃-N',
+  'tp': 'TP',
+  'tn': 'TN'
+};
+
 // 类型定义
 interface RankingData {
   enterpriseId: string;
@@ -40,7 +48,7 @@ interface WarningData {
   enterpriseId: string;
   enterpriseName: string;
   time: string;
-  values: Record<string, number>;
+  pollutants: Record<string, { value: number; threshold: number }>;
   hasWarning: boolean;
 }
 
@@ -60,10 +68,14 @@ export default function AdminMonitoringPage() {
   const [selectedEnterprise, setSelectedEnterprise] = useState<RankingData | null>(null);
   const [monitoringData, setMonitoringData] = useState<MonitoringIndicator[]>([]);
   const [trendData, setTrendData] = useState<Array<{
-    pollutantName: string;
-    dates: string[];
-    values: number[];
+    name: string;
+    pollutantType: string;
     threshold: number;
+    outlets: Array<{
+      outletId: string;
+      outletName: string;
+      data: Array<{ time: string; value: number }>;
+    }>;
   }>>([]);
   const [loading, setLoading] = useState(false);
   const [lastUpdateTime, setLastUpdateTime] = useState<string>('');
@@ -643,7 +655,7 @@ export default function AdminMonitoringPage() {
                         {trendData.slice(0, 4).map((item, index) => (
                           <div key={`trend-${index}`} className="p-4 border border-slate-200 rounded-lg">
                             <div className="text-sm font-medium text-slate-900 mb-2">
-                              {item.pollutantName} (mg/L)
+                              {item.name} (mg/L)
                             </div>
                             <div id={`trend-chart-${index}`} className="h-48" />
                           </div>
@@ -706,7 +718,7 @@ export default function AdminMonitoringPage() {
                             <div className="flex flex-wrap gap-2">
                               {exceededPollutants.map((p) => (
                                 <Badge key={p.type} className="bg-red-100 text-red-700 border-red-200">
-                                  {p.type}: {p.value.toFixed(3)} mg/L (阈值：{p.threshold} mg/L)
+                                  {pollutantNameMap[p.type] || p.type}: {p.value.toFixed(3)} mg/L (阈值：{p.threshold} mg/L)
                                 </Badge>
                               ))}
                             </div>
