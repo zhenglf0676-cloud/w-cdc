@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,6 +19,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import Link from 'next/link';
+import * as echarts from 'echarts';
 
 // 类型定义
 interface RankingData {
@@ -60,9 +61,16 @@ export default function AdminMonitoringPage() {
   const [warningData, setWarningData] = useState<WarningData[]>([]);
   const [selectedEnterprise, setSelectedEnterprise] = useState<RankingData | null>(null);
   const [monitoringData, setMonitoringData] = useState<MonitoringIndicator[]>([]);
+  const [trendData, setTrendData] = useState<Array<{
+    pollutantName: string;
+    dates: string[];
+    values: number[];
+    threshold: number;
+  }>>([]);
   const [loading, setLoading] = useState(false);
   const [lastUpdateTime, setLastUpdateTime] = useState<string>('');
   const [timeRange, setTimeRange] = useState<'24h' | '7d' | '30d'>('24h');
+  const chartRefs = useRef<Map<string, echarts.ECharts>>(new Map());
 
   // 获取 CDC 风险排行
   const fetchRanking = async () => {
@@ -129,6 +137,9 @@ export default function AdminMonitoringPage() {
       console.error('获取监测数据失败:', error);
       setMonitoringData([]);
     }
+
+    // 同时获取趋势数据
+    fetchTrendData(enterpriseId);
   };
 
   useEffect(() => {
@@ -143,6 +154,13 @@ export default function AdminMonitoringPage() {
       fetchMonitoringData(selectedEnterprise.enterpriseId);
     }
   }, [selectedEnterprise]);
+
+  // 时间范围变化时重新获取趋势数据
+  useEffect(() => {
+    if (selectedEnterprise) {
+      fetchTrendData(selectedEnterprise.enterpriseId);
+    }
+  }, [timeRange]);
 
   // 风险等级颜色
   const getRiskColor = (riskLevel: string) => {
@@ -173,6 +191,125 @@ export default function AdminMonitoringPage() {
       default: return status;
     }
   };
+
+  // 格式化时间为中国时间
+  const formatChinaTime = (timeStr: string) => {
+    if (!timeStr) return '-';
+    const date = new Date(timeStr);
+    return date.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+  };
+
+  // 获取指标趋势数据
+  const fetchTrendData = async (enterpriseId: string) => {
+    if (!session?.access_token) return;
+
+    try {
+      const days = timeRange === '24h' ? 1 : timeRange === '7d' ? 7 : 30;
+      const res = await fetch(`/api/admin/monitoring/trend?enterpriseId=${enterpriseId}&days=${days}`, {
+        headers: {
+          'x-auth-token': session.access_token,
+        },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setTrendData(data.trendData || []);
+      }
+    } catch (error) {
+      console.error('趋势数据获取失败:', error);
+    }
+  };
+
+  // 渲染趋势图表
+  useEffect(() => {
+    if (trendData.length === 0) return;
+
+    trendData.forEach((item, index) => {
+      const chartId = `trend-chart-${index}`;
+      const chartElement = document.getElementById(chartId);
+      if (!chartElement) return;
+
+      // 销毁旧图表
+      const oldChart = chartRefs.current.get(chartId);
+      if (oldChart) {
+        oldChart.dispose();
+      }
+
+      // 创建新图表
+      const chart = echarts.init(chartElement);
+      chartRefs.current.set(chartId, chart);
+
+      const option: echarts.EChartsOption = {
+        tooltip: {
+          trigger: 'axis',
+          formatter: (params: any) => {
+            const data = params[0];
+            return `${data.name}<br/>${item.pollutantName}: ${data.value.toFixed(2)} mg/L`;
+          },
+        },
+        grid: {
+          left: '10%',
+          right: '10%',
+          bottom: '15%',
+          top: '10%',
+        },
+        xAxis: {
+          type: 'category',
+          data: item.dates.map(date => {
+            const d = new Date(date);
+            return `${d.getMonth() + 1}/${d.getDate()}`;
+          }),
+          axisLine: { lineStyle: { color: '#e2e8f0' } },
+          axisLabel: { color: '#64748b', fontSize: 10 },
+        },
+        yAxis: {
+          type: 'value',
+          axisLine: { lineStyle: { color: '#e2e8f0' } },
+          axisLabel: { color: '#64748b', fontSize: 10 },
+          splitLine: { lineStyle: { color: '#f1f5f9' } },
+        },
+        series: [
+          {
+            type: 'line',
+            data: item.values,
+            smooth: true,
+            symbol: 'circle',
+            symbolSize: 6,
+            lineStyle: { color: '#0ea5e9', width: 2 },
+            itemStyle: { color: '#0ea5e9' },
+            areaStyle: {
+              color: {
+                type: 'linear',
+                x: 0, y: 0, x2: 0, y2: 1,
+                colorStops: [
+                  { offset: 0, color: 'rgba(14, 165, 233, 0.2)' },
+                  { offset: 1, color: 'rgba(14, 165, 233, 0)' },
+                ],
+              },
+            },
+          },
+        ],
+      };
+
+      chart.setOption(option);
+    });
+
+    // 清理函数
+    return () => {
+      chartRefs.current.forEach((chart) => {
+        chart.dispose();
+      });
+      chartRefs.current.clear();
+    };
+  }, [trendData]);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -429,7 +566,7 @@ export default function AdminMonitoringPage() {
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-lg font-semibold text-slate-900">
-                        指标趋势（近 24 小时）
+                        指标趋势（近 {timeRange === '24h' ? '24 小时' : timeRange === '7d' ? '7 天' : '30 天'}）
                       </CardTitle>
                       <Button variant="link" size="sm">
                         查看全部趋势
@@ -438,21 +575,25 @@ export default function AdminMonitoringPage() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-4 gap-4">
-                      {monitoringData.slice(0, 4).map((indicator) => (
-                        <div key={indicator.name} className="p-4 border border-slate-200 rounded-lg">
-                          <div className="text-sm font-medium text-slate-900 mb-2">
-                            {indicator.name} ({indicator.unit})
+                    {trendData.length === 0 ? (
+                      <div className="h-32 flex items-center justify-center text-slate-400 text-sm">
+                        暂无趋势数据
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-4">
+                        {trendData.slice(0, 4).map((item, index) => (
+                          <div key={item.pollutantName} className="p-4 border border-slate-200 rounded-lg">
+                            <div className="text-sm font-medium text-slate-900 mb-2">
+                              {item.pollutantName} (mg/L)
+                            </div>
+                            <div id={`trend-chart-${index}`} className="h-32" />
+                            <div className="mt-2 text-xs text-slate-500">
+                              阈值 {item.threshold}
+                            </div>
                           </div>
-                          <div className="h-32 flex items-center justify-center text-slate-400 text-sm">
-                            图表区域
-                          </div>
-                          <div className="mt-2 text-xs text-slate-500">
-                            上限 {indicator.alarmThreshold} | 预警 {indicator.warningThreshold}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </>
@@ -498,7 +639,7 @@ export default function AdminMonitoringPage() {
                   ) : (
                     warningData.map((warning, index) => (
                       <tr key={index} className="border-b border-slate-100">
-                        <td className="py-3 px-4 text-sm text-slate-600">{warning.warningTime}</td>
+                        <td className="py-3 px-4 text-sm text-slate-600">{formatChinaTime(warning.warningTime)}</td>
                         <td className="py-3 px-4 text-sm font-medium text-slate-900">{warning.enterpriseName}</td>
                         <td className="py-3 px-4 text-sm text-slate-600">{warning.outletName}</td>
                         <td className="py-3 px-4 text-sm text-slate-600">{warning.pollutantName}</td>
