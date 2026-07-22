@@ -190,6 +190,10 @@ export async function GET(request: NextRequest) {
       fromDate = new Date(toDate.getTime() - days * 24 * 60 * 60 * 1000);
     }
 
+    // 设置 UTC 时间范围（与 Admin Ranking API 一致）
+    fromDate.setUTCHours(0, 0, 0, 0);
+    toDate.setUTCHours(23, 59, 59, 999);
+
     // 获取监测数据
     const { data: monitoringData, error: dataError } = await supabase
       .from('monitoring_data')
