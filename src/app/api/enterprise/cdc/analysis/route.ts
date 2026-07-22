@@ -304,10 +304,11 @@ export async function GET(request: NextRequest) {
     let totalWeightedCDC = 0;
     let pollutantCount = 0;
 
-    // 按日期分组监测数据（用于计算每日 CDC）
+    // 按日期分组监测数据（使用中国时间 UTC+8）
     const dailyMonitoringData: Record<string, any[]> = {};
     monitoringData.forEach(record => {
-      const date = new Date(record.monitored_at).toISOString().split('T')[0];
+      // 转换为 UTC+8 时间获取日期
+      const date = new Date(new Date(record.monitored_at).getTime() + 8 * 60 * 60 * 1000).toISOString().split('T')[0];
       if (!dailyMonitoringData[date]) {
         dailyMonitoringData[date] = [];
       }
@@ -347,10 +348,10 @@ export async function GET(request: NextRequest) {
           .lte('monitored_at', toDate.toISOString());
 
         if (compMonitoringData && compMonitoringData.length > 0) {
-          // 计算每日累计值
+          // 计算每日累计值（使用中国时间 UTC+8）
           const dailyValues: Record<string, number> = {};
           compMonitoringData.forEach(record => {
-            const date = new Date(record.monitored_at).toISOString().split('T')[0];
+            const date = new Date(new Date(record.monitored_at).getTime() + 8 * 60 * 60 * 1000).toISOString().split('T')[0];
             if (!dailyValues[date]) dailyValues[date] = 0;
             dailyValues[date] += record.value;
           });

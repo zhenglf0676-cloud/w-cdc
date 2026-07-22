@@ -184,7 +184,8 @@ export async function GET(request: NextRequest) {
         // 结构：{ date: { pollutantId: { outletId: latestValue } } }
 
         monitoringData.forEach(record => {
-          const date = new Date(record.monitored_at).toISOString().split('T')[0];
+          // 转换为 UTC+8 时间获取日期（中国时间）
+          const date = new Date(new Date(record.monitored_at).getTime() + 8 * 60 * 60 * 1000).toISOString().split('T')[0];
           const pollutantType = record.pollutant_type;
           const outletId = record.outlet_id;
           const value = record.value;
@@ -270,7 +271,8 @@ export async function GET(request: NextRequest) {
           // 按日期和污染物分组，每天取每个排污口的最新值，然后累加
           const otherDailyPollutantData: Record<string, Record<string, Record<string, number>>> = {};
           otherMonitoringData.forEach(record => {
-            const date = new Date(record.monitored_at).toISOString().split('T')[0];
+            // 转换为 UTC+8 时间获取日期（中国时间）
+            const date = new Date(new Date(record.monitored_at).getTime() + 8 * 60 * 60 * 1000).toISOString().split('T')[0];
             const pollutantType = record.pollutant_type;
             const outletId = record.outlet_id;
             const value = record.value;
