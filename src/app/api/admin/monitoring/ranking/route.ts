@@ -125,9 +125,7 @@ export async function GET(request: Request) {
     }
 
     // 按企业分组计算 CDC
-    const enterpriseCDCMap: Record<string, { overallCDC: number; riskLevel: string; riskColor: string }> = {};
     const globalPollutantAVMap: Record<string, number> = {};
-    const allEnterpriseAVs: number[] = [];
 
     for (const enterprise of enterprises) {
       const outlets = enterpriseOutletMap[enterprise.id] || [];
@@ -156,36 +154,10 @@ export async function GET(request: Request) {
         }
       }
 
-      // 计算每个污染物的统计指标
+      // 计算每个污染物的统计指标（一次性计算 AV、AD、CV、SKEW）
       const sortedDates = Object.keys(dailyPollutantData).sort();
+      const pollutantStats: Record<string, { av: number; ad: number; cv: number; skew: number }> = {};
 
-      // 先计算每个污染物的 AV，用于企业综合 AV
-      const pollutantAVMap: Record<string, number> = {};
-      for (const pollutant of pollutantList) {
-        const dailyValues: number[] = [];
-        for (const date of sortedDates) {
-          const outletValues = dailyPollutantData[date][pollutant.id] || {};
-          const total = Object.values(outletValues).reduce((sum, val) => sum + val, 0);
-          if (total > 0) {
-            dailyValues.push(total);
-          }
-        }
-        if (dailyValues.length > 0) {
-          const av = dailyValues.reduce((a, b) => a + b, 0) / dailyValues.length;
-          pollutantAVMap[pollutant.id] = av;
-          // 累加到全局 pollutantAVMap
-          globalPollutantAVMap[pollutant.id] = (globalPollutantAVMap[pollutant.id] || 0) + av;
-        }
-      }
-
-      // 计算企业综合 AV（所有污染物 AV 的平均）
-      const pollutantAVValues = Object.values(pollutantAVMap);
-      const currentEnterpriseAV = pollutantAVValues.length > 0
-        ? pollutantAVValues.reduce((a: number, b: number) => a + b, 0) / pollutantAVValues.length
-        : 0;
-      allEnterpriseAVs.push(currentEnterpriseAV);
-
-      // 计算每个污染物的 CDC
       for (const pollutant of pollutantList) {
         const dailyValues: number[] = [];
         for (const date of sortedDates) {
@@ -207,23 +179,17 @@ export async function GET(request: Request) {
         const cv = av !== 0 ? sd / av : 0;
         const skew = sd !== 0 ? (dailyValues.reduce((a, b) => a + Math.pow(b - av, 3), 0) / n) / Math.pow(sd, 3) : 0;
 
-        // 存储归一化前的值，稍后统一归一化
-        if (!enterpriseCDCMap[enterprise.id]) {
-          enterpriseCDCMap[enterprise.id] = { overallCDC: 0, riskLevel: '低风险', riskColor: 'green' };
-        }
+        pollutantStats[pollutant.id] = { av, ad, cv, skew };
 
-        // 临时存储，稍后计算
-        if (!(enterprise.id as any).__pollutantStats) (enterprise as any).__pollutantStats = {};
-        (enterprise as any).__pollutantStats[pollutant.id] = { av, ad, cv, skew };
+        // 累加到全局 pollutantAVMap（用于权重计算）
+        globalPollutantAVMap[pollutant.id] = (globalPollutantAVMap[pollutant.id] || 0) + av;
       }
+
+      // 存储到企业对象上，供后续使用
+      (enterprise as any).__pollutantStats = pollutantStats;
     }
 
     // 计算所有企业的最大值，用于归一化
-    const maxAD = Math.max(...Object.values(enterpriseCDCMap).map(() => 0)); // 占位
-    const maxCV = Math.max(...Object.values(enterpriseCDCMap).map(() => 0)); // 占位
-    const maxSKEW = Math.max(...Object.values(enterpriseCDCMap).map(() => 0)); // 占位
-
-    // 重新计算最大值
     let globalMaxAD = 0, globalMaxCV = 0, globalMaxSKEW = 0;
     for (const enterprise of enterprises) {
       const stats = (enterprise as any).__pollutantStats;
