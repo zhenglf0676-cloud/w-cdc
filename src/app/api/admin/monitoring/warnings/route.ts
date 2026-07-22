@@ -131,36 +131,30 @@ export async function GET(request: NextRequest) {
       if (isNaN(value)) continue;
 
       let warningLevel = null;
-      let warningType = null;
 
       // 检查是否超过阈值（报警）
       if (pollutant.threshold && value >= parseFloat(pollutant.threshold)) {
         warningLevel = '高风险';
-        warningType = '超标';
-      }
-      // 检查是否超过阈值的 80%（预警）
-      else if (pollutant.threshold && value >= parseFloat(pollutant.threshold) * 0.8) {
-        warningLevel = '中风险';
-        warningType = '接近阈值';
       }
 
       if (warningLevel) {
         warnings.push({
-          id: record.id,
-          time: record.monitored_at,
-          companyName: enterpriseMap.get(outlet.companyId) || '未知企业',
+          warningTime: record.monitored_at,
+          enterpriseName: enterpriseMap.get(outlet.companyId) || '未知企业',
           outletName: outlet.name,
-          indicator: pollutant.pollutant_name,
-          value: `${value} mg/L (${warningType})`,
-          cdc: 0, // 简化：实际应该计算 CDC
-          level: warningLevel,
+          pollutantName: pollutant.pollutant_name,
+          warningValue: `${value} mg/L`,
+          threshold: `${pollutant.threshold} mg/L`,
+          cdc: 0,
+          riskLevel: warningLevel,
+          riskColor: 'red',
           status: '未处理'
         });
       }
     }
 
     // 按时间降序排列
-    warnings.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+    warnings.sort((a, b) => new Date(b.warningTime).getTime() - new Date(a.warningTime).getTime());
 
     return NextResponse.json({
       success: true,
