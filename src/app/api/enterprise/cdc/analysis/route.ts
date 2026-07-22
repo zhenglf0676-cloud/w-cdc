@@ -303,15 +303,9 @@ export async function GET(request: Request) {
       }
     }
 
-    // 计算企业综合 AV
-    const pollutantAVValues = Object.values(pollutantAVMap);
-    const currentEnterpriseAV = pollutantAVValues.length > 0
-      ? pollutantAVValues.reduce((a, b) => a + b, 0) / pollutantAVValues.length
-      : 0;
-
-    // 计算权重
+    // 计算权重（每个污染物单独计算）
+    // Wi = (m × AV_i) / ΣAV，其中 ΣAV 是所有企业所有污染物的 AV 总和
     const sumWi = allEnterpriseAVs.reduce((a, b) => a + b, 0);
-    const weight = sumWi > 0 ? (m * currentEnterpriseAV) / sumWi : 1;
 
     // 计算每个污染物的 CDC（使用 7 天数据，按 Word 文档）
     let totalWeightedCDC = 0;
