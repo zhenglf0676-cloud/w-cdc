@@ -114,18 +114,20 @@ export default function AdminMonitoringPage() {
     if (!session?.access_token) return;
 
     try {
-      // TODO: 调用企业监测数据 API
-      // 暂时使用模拟数据
-      setMonitoringData([
-        { name: 'pH', unit: '无量纲', latestValue: 7.32, status: 'normal', warningThreshold: 6.0, alarmThreshold: 9.0 },
-        { name: 'COD', unit: 'mg/L', latestValue: 18.6, status: 'normal', warningThreshold: 30, alarmThreshold: 50 },
-        { name: '氨氮', unit: 'mg/L', latestValue: 1.12, status: 'normal', warningThreshold: 1.5, alarmThreshold: 2.5 },
-        { name: '总磷', unit: 'mg/L', latestValue: 0.23, status: 'normal', warningThreshold: 0.3, alarmThreshold: 0.5 },
-        { name: '总氮', unit: 'mg/L', latestValue: 2.35, status: 'warning', warningThreshold: 2.0, alarmThreshold: 3.0 },
-        { name: '重金属 (Cr6+)', unit: 'mg/L', latestValue: 0.006, status: 'normal', warningThreshold: 0.01, alarmThreshold: 0.05 },
-      ]);
+      const res = await fetch(`/api/admin/monitoring/enterprise-data?enterpriseId=${enterpriseId}`, {
+        headers: { 'x-auth-token': session.access_token }
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setMonitoringData(data.data || []);
+      } else {
+        console.error('获取监测数据失败:', await res.text());
+        setMonitoringData([]);
+      }
     } catch (error) {
       console.error('获取监测数据失败:', error);
+      setMonitoringData([]);
     }
   };
 
