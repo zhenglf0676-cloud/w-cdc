@@ -327,11 +327,13 @@ export async function GET(request: Request) {
       const norCV = globalMaxCV > 0 ? cv / globalMaxCV : 0;
       const norSKEW = globalMaxSKEW > 0 ? Math.abs(skew) / globalMaxSKEW : 0;
 
-      const cdc = weight * (Math.pow(norAD, 2) + Math.pow(norCV, 2) + Math.pow(norSKEW, 2));
+      // 计算每个污染物的单独权重
+      const pollutantWeight = sumWi > 0 ? (m * av) / sumWi : 1;
+      const cdc = pollutantWeight * (Math.pow(norAD, 2) + Math.pow(norCV, 2) + Math.pow(norSKEW, 2));
       totalWeightedCDC += cdc;
       pollutantCount++;
 
-      pollutantStats[pollutant.id] = { av, ad, cv, skew, norAD, norCV, norSKEW, cdc, weight };
+      pollutantStats[pollutant.id] = { av, ad, cv, skew, norAD, norCV, norSKEW, cdc, weight: pollutantWeight };
     }
 
     const overallCDC = pollutantCount > 0 ? totalWeightedCDC / pollutantCount : 0;
