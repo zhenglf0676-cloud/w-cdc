@@ -346,10 +346,54 @@ export async function GET(request: Request) {
       riskColor = 'orange';
     }
 
+    // 计算每日 CDC（用于趋势图）
+    const dailyPollutantCDC: Record<string, Record<string, number>> = {};
+    const sortedDates = Object.keys(dailyPollutantData).sort();
+
+    for (const date of sortedDates) {
+      const dayPollutantData = dailyPollutantData[date];
+      const dayCDC: Record<string, number> = {};
+
+      for (const pollutant of pollutantList) {
+        const values = dayPollutantData[pollutant.id];
+        if (!values || values.length === 0) continue;
+
+        const n = values.length;
+        const av = values.reduce((a, b) => a + b, 0) / n;
+        const ad = values.reduce((a, b) => a + Math.abs(b - av), 0) / n;
+        const squaredDiffs = values.map(v => Math.pow(v - av, 2));
+        const avgSquaredDiff = squaredDiffs.reduce((a, b) => a + b, 0) / n;
+        const sd = Math.sqrt(avgSquaredDiff);
+        const cv = av !== 0 ? sd / av : 0;
+        const skew = sd !== 0 ? (values.reduce((a, b) => a + Math.pow(b - av, 3), 0) / n) / Math.pow(sd, 3) : 0;
+
+        const norAD = maxAD > 0 ? Math.min(ad / maxAD, 1) : 0;
+        const norCV = maxCV > 0 ? Math.min(cv / maxCV, 1) : 0;
+        const norSKEW = maxSKEW > 0 ? Math.min(Math.abs(skew) / maxSKEW, 1) : 0;
+
+        const weight = sumWi > 0 ? (m * currentCompanyAV) / sumWi : 1;
+        const cdc = weight * (Math.pow(norAD, 2) + Math.pow(norCV, 2) + Math.pow(norSKEW, 2));
+
+        dayCDC[pollutant.id] = Math.round(cdc * 100) / 100;
+      }
+
+      dailyPollutantCDC[date] = dayCDC;
+    }
+
     return NextResponse.json({
       success: true,
       data: {
+        enterpriseId: companyId,
+        enterpriseName: profile.company_name || '',
+        parkName: profile.park_name || '',
+        analysisPeriod: {
+          days: 7,
+          startDate: fromDate.toISOString().split('T')[0],
+          endDate: toDate.toISOString().split('T')[0]
+        },
         overallCDC: Math.round(overallCDC * 100) / 100,
+        lastPeriodCDC: 0,
+        changeFromLastPeriod: 0,
         riskLevel,
         riskColor,
         totalOutlets: outlets.length,
@@ -358,7 +402,8 @@ export async function GET(request: Request) {
           pollutantId: id,
           pollutantName: pollutantMap[id]?.label || id,
           ...stats
-        }))
+        })),
+        dailyPollutantCDC
       }
     });
   } catch (error) {
