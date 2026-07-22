@@ -77,28 +77,16 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 获取时间范围参数（用于确定"当天"）
+    // 获取时间范围参数
     const searchParams = request.nextUrl.searchParams;
     const endDate = searchParams.get('endDate');
 
-    // 获取最新的监测数据日期作为参考日期
+    // 计算 7 天时间范围（根据 Word 文档标准）
     let toDate = endDate ? new Date(endDate) : new Date();
-    
-    // 如果没有指定日期，使用最新监测数据的日期
-    if (!endDate) {
-      const { data: latestData } = await supabase
-        .from('monitoring_data')
-        .select('monitored_at')
-        .order('monitored_at', { ascending: false })
-        .limit(1);
-      
-      if (latestData && latestData.length > 0) {
-        toDate = new Date(latestData[0].monitored_at);
-      }
-    }
-    
-    // 设置"当天"的时间范围（使用 UTC 时间，因为数据库存储的是 UTC）
     const fromDate = new Date(toDate);
+    fromDate.setDate(fromDate.getDate() - 6); // 7 天周期（包含当天）
+    
+    // 设置时间范围（使用 UTC 时间）
     fromDate.setUTCHours(0, 0, 0, 0);
     toDate.setUTCHours(23, 59, 59, 999);
 
@@ -168,7 +156,7 @@ export async function GET(request: NextRequest) {
           }
         });
 
-        // 获取当天的监测数据
+        // 获取 7 天的监测数据
         const { data: monitoringData } = await supabase
           .from('monitoring_data')
           .select('*')
@@ -192,23 +180,48 @@ export async function GET(request: NextRequest) {
           continue;
         }
 
-        // 按污染物类型分组
-        const pollutantDataMap: Record<string, number[]> = {};
-        pollutantList.forEach(p => {
-          pollutantDataMap[p.id] = [];
-        });
+        // 按日期和污染物分组，每天取每个排污口的最新值，然后累加（根据 Word 文档标准）
+        const dailyPollutantData: Record<string, Record<string, Record<string, number>>> = {};
+        // 结构：{ date: { pollutantId: { outletId: latestValue } } }
 
         monitoringData.forEach(record => {
-          if (pollutantDataMap[record.pollutant_type]) {
-            pollutantDataMap[record.pollutant_type].push(record.value);
+          const date = new Date(record.monitored_at).toISOString().split('T')[0];
+          const pollutantType = record.pollutant_type;
+          const outletId = record.outlet_id;
+          const value = record.value;
+
+          if (!dailyPollutantData[date]) {
+            dailyPollutantData[date] = {};
           }
+          if (!dailyPollutantData[date][pollutantType]) {
+            dailyPollutantData[date][pollutantType] = {};
+          }
+          // 保留最新值（因为数据已按时间排序，后面的会覆盖前面的）
+          dailyPollutantData[date][pollutantType][outletId] = value;
         });
 
-        // 计算每个污染物的基础统计指标
+        // 计算每天的累计值（所有排污口最新值之和）
+        const pollutantDailyTotals: Record<string, number[]> = {};
+        pollutantList.forEach(p => {
+          pollutantDailyTotals[p.id] = [];
+        });
+
+        const sortedDates = Object.keys(dailyPollutantData).sort();
+        for (const date of sortedDates) {
+          for (const pollutant of pollutantList) {
+            const outletValues = dailyPollutantData[date][pollutant.id] || {};
+            const dailyTotal = Object.values(outletValues).reduce((sum, val) => sum + val, 0);
+            if (dailyTotal > 0) {
+              pollutantDailyTotals[pollutant.id].push(dailyTotal);
+            }
+          }
+        }
+
+        // 计算每个污染物的基础统计指标（使用每天累计值）
         const pollutantStats: Record<string, { av: number; ad: number; cv: number; skew: number }> = {};
         
         for (const pollutant of pollutantList) {
-          const values = pollutantDataMap[pollutant.id];
+          const values = pollutantDailyTotals[pollutant.id];
           if (!values || values.length === 0) continue;
 
           const n = values.length;
@@ -234,6 +247,7 @@ export async function GET(request: NextRequest) {
         }
 
         // 获取园区内所有企业的 AV 值（用于权重计算）
+        // 根据 Word 文档：Wi = 某企业某指标的平均值（这里使用企业所有污染物的综合 AV）
         const allEnterpriseAVs: number[] = [];
         for (const otherEnterprise of enterprises) {
           const { data: otherOutlets } = await supabase
@@ -247,33 +261,68 @@ export async function GET(request: NextRequest) {
           const otherOutletIds = otherOutlets.map(o => o.id);
           const { data: otherMonitoringData } = await supabase
             .from('monitoring_data')
-            .select('pollutant_type, value')
+            .select('pollutant_type, value, monitored_at, outlet_id')
             .in('outlet_id', otherOutletIds)
             .gte('monitored_at', fromDate.toISOString())
             .lte('monitored_at', toDate.toISOString());
 
           if (!otherMonitoringData || otherMonitoringData.length === 0) continue;
 
-          // 计算该企业的平均 AV
-          const valueMap: Record<string, number[]> = {};
+          // 按日期和污染物分组，每天取每个排污口的最新值，然后累加
+          const otherDailyPollutantData: Record<string, Record<string, Record<string, number>>> = {};
           otherMonitoringData.forEach(record => {
-            if (!valueMap[record.pollutant_type]) valueMap[record.pollutant_type] = [];
-            valueMap[record.pollutant_type].push(record.value);
+            const date = new Date(record.monitored_at).toISOString().split('T')[0];
+            const pollutantType = record.pollutant_type;
+            const outletId = record.outlet_id;
+            const value = record.value;
+
+            if (!otherDailyPollutantData[date]) {
+              otherDailyPollutantData[date] = {};
+            }
+            if (!otherDailyPollutantData[date][pollutantType]) {
+              otherDailyPollutantData[date][pollutantType] = {};
+            }
+            otherDailyPollutantData[date][pollutantType][outletId] = value;
           });
 
-          let totalAV = 0;
-          let count = 0;
-          for (const pollutant of pollutantList) {
-            const values = valueMap[pollutant.id];
-            if (values && values.length > 0) {
-              totalAV += values.reduce((a, b) => a + b, 0) / values.length;
-              count++;
+          // 计算该企业 7 天的平均累计值
+          const otherSortedDates = Object.keys(otherDailyPollutantData).sort();
+          const dailyTotals: number[] = [];
+          
+          for (const date of otherSortedDates) {
+            let dayTotal = 0;
+            let pollutantCount = 0;
+            for (const pollutant of pollutantList) {
+              const outletValues = otherDailyPollutantData[date][pollutant.id] || {};
+              const total = Object.values(outletValues).reduce((sum, val) => sum + val, 0);
+              if (total > 0) {
+                dayTotal += total;
+                pollutantCount++;
+              }
+            }
+            if (pollutantCount > 0) {
+              dailyTotals.push(dayTotal);
             }
           }
 
-          if (count > 0) {
-            allEnterpriseAVs.push(totalAV / count);
+          if (dailyTotals.length > 0) {
+            const avgDailyTotal = dailyTotals.reduce((a, b) => a + b, 0) / dailyTotals.length;
+            allEnterpriseAVs.push(avgDailyTotal);
           }
+        }
+
+        // 计算当前企业的综合 AV（所有污染物的 7 天平均累计值）
+        let currentEnterpriseAV = 0;
+        let currentPollutantCount = 0;
+        for (const pollutant of pollutantList) {
+          const values = pollutantDailyTotals[pollutant.id];
+          if (values && values.length > 0) {
+            currentEnterpriseAV += values.reduce((a, b) => a + b, 0) / values.length;
+            currentPollutantCount++;
+          }
+        }
+        if (currentPollutantCount > 0) {
+          currentEnterpriseAV = currentEnterpriseAV / currentPollutantCount;
         }
 
         // 计算权重和 CDC
@@ -281,25 +330,23 @@ export async function GET(request: NextRequest) {
         let pollutantCount = 0;
 
         const m = enterprises.length; // 园区内企业数量
+        const sumWi = allEnterpriseAVs.reduce((a, b) => a + b, 0);
+        const weight = sumWi > 0 ? (m * currentEnterpriseAV) / sumWi : 1;
+
+        // 计算所有污染物的最大值（用于归一化）
+        const allADs = Object.values(pollutantStats).map(s => s.ad);
+        const allCVs = Object.values(pollutantStats).map(s => s.cv);
+        const allSkews = Object.values(pollutantStats).map(s => Math.abs(s.skew));
+
+        const maxAD = Math.max(...allADs) || 1;
+        const maxCV = Math.max(...allCVs) || 1;
+        const maxSkew = Math.max(...allSkews) || 1;
 
         for (const pollutant of pollutantList) {
           const stats = pollutantStats[pollutant.id];
           if (!stats) continue;
 
-          // 计算权重：DML(Mi) = m × Wi / ΣWi
-          const Wi = stats.av; // 当前企业的 AV 值
-          const sumWi = allEnterpriseAVs.reduce((a, b) => a + b, 0);
-          const weight = sumWi > 0 ? (m * Wi) / sumWi : 1;
-
-          // 归一化（使用全局统计值）
-          const allADs = Object.values(pollutantStats).map(s => s.ad);
-          const allCVs = Object.values(pollutantStats).map(s => s.cv);
-          const allSkews = Object.values(pollutantStats).map(s => Math.abs(s.skew));
-
-          const maxAD = Math.max(...allADs) || 1;
-          const maxCV = Math.max(...allCVs) || 1;
-          const maxSkew = Math.max(...allSkews) || 1;
-
+          // 归一化（使用最大值归一化，根据 Word 文档）
           const norAD = Math.min(stats.ad / maxAD, 1);
           const norCV = Math.min(stats.cv / maxCV, 1);
           const norSkew = Math.min(Math.abs(stats.skew) / maxSkew, 1);
