@@ -298,7 +298,7 @@ export async function GET(request: Request) {
     const sumWi = allEnterpriseAVs.reduce((a, b) => a + b, 0);
     const weight = sumWi > 0 ? (m * currentEnterpriseAV) / sumWi : 1;
 
-    // 计算每个污染物的 CDC
+    // 计算每个污染物的 CDC（使用 7 天数据，按 Word 文档）
     let totalWeightedCDC = 0;
     let pollutantCount = 0;
 
