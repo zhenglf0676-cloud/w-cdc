@@ -1106,12 +1106,7 @@ function ExcelUploadForm({
         {/* 错误提示 */}
         {excelResult?.errors && excelResult.errors.length > 0 && (
           <div className="rounded-md bg-red-50 border border-red-200 p-3">
-            <p className="mb-1 text-sm font-medium text-red-700">上传失败：</p>
-            <ul className="text-xs text-red-600 space-y-1">
-              {excelResult.errors.map((error, i) => (
-                <li key={i}>{error}</li>
-              ))}
-            </ul>
+            <p className="text-sm text-red-700">{excelResult.errors[0]}</p>
           </div>
         )}
 

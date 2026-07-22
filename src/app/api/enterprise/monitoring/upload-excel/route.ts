@@ -243,7 +243,7 @@ export async function POST(request: NextRequest) {
     console.log('解析结果：成功', records.length, '条，错误', errors.length, '条');
 
     if (errors.length > 0 && records.length === 0) {
-      return NextResponse.json({ error: '数据解析失败', details: errors }, { status: 400 });
+      return NextResponse.json({ error: '数据解析失败，请检查 Excel 格式和污染物申请状态' }, { status: 400 });
     }
 
     // 9. 批量插入数据
@@ -264,7 +264,7 @@ export async function POST(request: NextRequest) {
     const result = {
       success: true,
       count: records.length,
-      errors: errors.length > 0 ? errors : [],
+      errors: errors.length > 0 ? ['部分数据未上传，请检查 Excel 格式和污染物申请状态'] : [],
       warnings: warnings,
     };
     
