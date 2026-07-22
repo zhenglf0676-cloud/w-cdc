@@ -179,7 +179,7 @@ export default function CDCPage() {
         type: 'radar',
         data: [{
           value: [
-            pollutant.norAD ?? 0,
+            pollutant.norAV ?? 0,
             pollutant.norAD ?? 0,
             pollutant.norCV ?? 0,
             pollutant.norSKEW ?? 0
@@ -307,8 +307,7 @@ export default function CDCPage() {
         symbol: 'circle',
         symbolSize: 6,
         itemStyle: { 
-          color: pollutant.riskColor === 'green' ? '#10B981' : 
-                 pollutant.riskColor === 'orange' ? '#F59E0B' : '#EF4444'
+          color: getPollutantColor(cdcData.pollutants.indexOf(pollutant))
         },
         emphasis: {
           focus: 'series'
@@ -528,15 +527,9 @@ export default function CDCPage() {
                         <div className="font-mono font-medium text-slate-900">{(pollutant.lastDaySkew ?? pollutant.skew).toFixed(4)}</div>
                       </div>
                     </div>
-                    <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3">
-                      <div>
-                        <div className="text-xs text-slate-500">CDC 值 (最后一天)</div>
-                        <div className="text-lg font-bold text-slate-900">{(pollutant.lastDayCDC ?? pollutant.cdc).toFixed(2)}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-xs text-slate-500">权重</div>
-                        <div className="text-sm font-medium text-slate-700">{(pollutant.weight * 100).toFixed(1)}%</div>
-                      </div>
+                    <div className="mt-3 border-t border-slate-100 pt-3">
+                      <div className="text-xs text-slate-500">CDC 值 (最后一天)</div>
+                      <div className="text-lg font-bold text-slate-900">{(pollutant.lastDayCDC ?? pollutant.cdc).toFixed(2)}</div>
                     </div>
                   </div>
                 ))}
