@@ -41,6 +41,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '企业列表获取失败' }, { status: 500 });
     }
 
+    if (!enterprises || enterprises.length === 0) {
+      return NextResponse.json({ success: true, data: [], parkName: profile.park_name, total: 0 });
+    }
+
     const enterpriseIds = enterprises.map(e => e.id);
     const enterpriseMap = new Map(enterprises.map(e => [e.id, e.company_name]));
 
@@ -52,11 +56,20 @@ export async function GET(request: NextRequest) {
       .eq('status', 'approved');
 
     if (outletsError) {
+      console.error('排污口列表获取失败:', outletsError);
       return NextResponse.json({ error: '排污口列表获取失败' }, { status: 500 });
+    }
+
+    if (!outlets || outlets.length === 0) {
+      return NextResponse.json({ success: true, data: [], parkName: profile.park_name, total: 0 });
     }
 
     const outletIds = outlets.map(o => o.id);
     const outletMap = new Map(outlets.map(o => [o.id, { name: o.outlet_name, companyId: o.company_id }]));
+
+    if (outletIds.length === 0) {
+      return NextResponse.json({ success: true, data: [], parkName: profile.park_name, total: 0 });
+    }
 
     // 获取所有已审批的污染物申请（包含阈值）
     const { data: pollutantApplications, error: pollutantsError } = await client
@@ -96,7 +109,12 @@ export async function GET(request: NextRequest) {
       .limit(500);
 
     if (monitoringError) {
+      console.error('监测数据获取失败:', monitoringError);
       return NextResponse.json({ error: '监测数据获取失败' }, { status: 500 });
+    }
+
+    if (!monitoringData || monitoringData.length === 0) {
+      return NextResponse.json({ success: true, data: [], parkName: profile.park_name, total: 0 });
     }
 
     // 生成预警记录
@@ -153,6 +171,7 @@ export async function GET(request: NextRequest) {
 
   } catch (error) {
     console.error('预警记录 API 错误:', error);
-    return NextResponse.json({ error: '服务器错误' }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : '未知错误';
+    return NextResponse.json({ error: '服务器错误', detail: errorMessage }, { status: 500 });
   }
 }
