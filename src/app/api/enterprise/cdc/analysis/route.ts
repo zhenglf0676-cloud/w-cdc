@@ -229,22 +229,76 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 按污染物类型分组
-    const pollutantDataMap: Record<string, number[]> = {};
-    pollutantList.forEach(p => {
-      pollutantDataMap[p.id] = [];
-    });
+    // 按日期和污染物分组，每天取每个排污口的最新值，然后累加（根据 Word 文档标准）
+    const dailyPollutantData: Record<string, Record<string, Record<string, number>>> = {};
+    // 结构：{ date: { pollutantId: { outletId: latestValue } } }
 
     monitoringData.forEach(record => {
-      if (pollutantDataMap[record.pollutant_type]) {
-        pollutantDataMap[record.pollutant_type].push(record.value);
+      const date = new Date(record.monitored_at).toISOString().split('T')[0];
+      const pollutantType = record.pollutant_type;
+      const outletId = record.outlet_id;
+      const value = record.value;
+
+      if (!dailyPollutantData[date]) {
+        dailyPollutantData[date] = {};
       }
+      if (!dailyPollutantData[date][pollutantType]) {
+        dailyPollutantData[date][pollutantType] = {};
+      }
+      // 保留最新值（因为数据已按时间排序，后面的会覆盖前面的）
+      dailyPollutantData[date][pollutantType][outletId] = value;
     });
+
+    // 计算每天的累计值（所有排污口最新值之和）
+    const pollutantDailyTotals: Record<string, number[]> = {};
+    pollutantList.forEach(p => {
+      pollutantDailyTotals[p.id] = [];
+    });
+
+    const sortedDates = Object.keys(dailyPollutantData).sort();
+    for (const date of sortedDates) {
+      for (const pollutant of pollutantList) {
+        const outletValues = dailyPollutantData[date][pollutant.id] || {};
+        const dailyTotal = Object.values(outletValues).reduce((sum, val) => sum + val, 0);
+        if (dailyTotal > 0) {
+          pollutantDailyTotals[pollutant.id].push(dailyTotal);
+        }
+      }
+    }
+
+    // 计算每个污染物的基础统计指标（使用每天累计值）
+    const pollutantStats: Record<string, { av: number; ad: number; cv: number; skew: number }> = {};
+    
+    for (const pollutant of pollutantList) {
+      const values = pollutantDailyTotals[pollutant.id];
+      if (!values || values.length === 0) continue;
+
+      const n = values.length;
+      const av = values.reduce((a, b) => a + b, 0) / n;
+      const ad = values.reduce((a, b) => a + Math.abs(b - av), 0) / n;
+      
+      // 计算标准差
+      const squaredDiffs = values.map(v => Math.pow(v - av, 2));
+      const avgSquaredDiff = squaredDiffs.reduce((a, b) => a + b, 0) / n;
+      const sd = Math.sqrt(avgSquaredDiff);
+      
+      const cv = av !== 0 ? sd / av : 0;
+      
+      // 计算偏度
+      let skew = 0;
+      if (sd !== 0 && n >= 3) {
+        const cubedDiffs = values.map(v => Math.pow((v - av) / sd, 3));
+        const sum = cubedDiffs.reduce((a, b) => a + b, 0);
+        skew = (n / ((n - 1) * (n - 2))) * sum;
+      }
+
+      pollutantStats[pollutant.id] = { av, ad, cv, skew };
+    }
 
     // 计算每个污染物的 CDC
     const pollutantCDCs: any[] = [];
     let totalWeightedCDC = 0;
-    let totalWeight = 0;
+    let pollutantCount = 0;
 
     // 按日期分组监测数据（用于计算每日 CDC）
     const dailyMonitoringData: Record<string, any[]> = {};
@@ -320,30 +374,14 @@ export async function GET(request: NextRequest) {
     const globalSkew = calculateSkew(allPollutantValues, globalAV, globalSD);
 
     // 计算所有污染物的指标值（用于最大值归一化，根据 Word 文档）
-    const allADValues: number[] = [];
-    const allCVValues: number[] = [];
-    const allSkewValues: number[] = [];
-
-    for (const pollutant of pollutantList) {
-      const values = pollutantDataMap[pollutant.id];
-      if (!values || values.length === 0) continue;
-
-      const n = values.length;
-      const av = values.reduce((a, b) => a + b, 0) / n;
-      const ad = values.reduce((a, b) => a + Math.abs(b - av), 0) / n;
-      const sd = calculateSD(values, av);
-      const cv = av !== 0 ? sd / av : 0;
-      const skew = calculateSkew(values, av, sd);
-
-      allADValues.push(ad);
-      allCVValues.push(cv);
-      allSkewValues.push(skew);
-    }
+    const allADValues = Object.values(pollutantStats).map(s => s.ad);
+    const allCVValues = Object.values(pollutantStats).map(s => s.cv);
+    const allSkewValues = Object.values(pollutantStats).map(s => Math.abs(s.skew));
 
     // 使用最大值归一化（根据 Word 文档：Nor(x) = x / max(x)）
     const maxAD = Math.max(...allADValues) || 1;
     const maxCV = Math.max(...allCVValues) || 1;
-    const maxSkew = Math.max(...allSkewValues.map(v => Math.abs(v))) || 1;
+    const maxSkew = Math.max(...allSkewValues) || 1;
 
     // 先计算每日各污染物的 CDC 值（用于趋势图和最后一天的 CDC）
     const dailyPollutantCDC: Record<string, Record<string, number>> = {};
@@ -403,17 +441,12 @@ export async function GET(request: NextRequest) {
 
     // 计算每个污染物的 CDC（使用整个周期的数据）
     for (const pollutant of pollutantList) {
-      const values = pollutantDataMap[pollutant.id];
-      if (!values || values.length === 0) continue;
+      const stats = pollutantStats[pollutant.id];
+      if (!stats) continue;
 
-      const n = values.length;
-      const av = values.reduce((a, b) => a + b, 0) / n;
-      const ad = values.reduce((a, b) => a + Math.abs(b - av), 0) / n;
-      const sd = calculateSD(values, av);
-      const cv = av !== 0 ? sd / av : 0;
-      const skew = calculateSkew(values, av, sd);
+      const { av, ad, cv, skew } = stats;
 
-      // 归一化（使用所有污染物的指标范围）
+      // 归一化（使用最大值归一化，根据 Word 文档）
       const norAD = Math.min(ad / maxAD, 1);
       const norCV = Math.min(cv / maxCV, 1);
       const norSkew = Math.min(Math.abs(skew) / maxSkew, 1);
@@ -465,11 +498,11 @@ export async function GET(request: NextRequest) {
       });
 
       totalWeightedCDC += cdc;
-      totalWeight += weight;
+      pollutantCount++;
     }
 
-    // 计算综合 CDC
-    const overallCDC = totalWeight > 0 ? totalWeightedCDC / totalWeight : 0;
+    // 计算综合 CDC（使用污染物数量作为除数，与 Admin API 一致）
+    const overallCDC = pollutantCount > 0 ? totalWeightedCDC / pollutantCount : 0;
     const overallRisk = getRiskLevel(overallCDC);
 
     // 计算上周 CDC（前一个周期的数据）
