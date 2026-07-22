@@ -136,10 +136,11 @@ export async function GET(request: Request) {
       });
     }
 
-    // 转换为数组格式
+    // 转换为数组格式，添加阈值信息
     const trendData = Array.from(pollutantMap.entries()).map(([type, data]) => ({
       pollutantType: type,
       name: type,
+      threshold: thresholdMap.get(type)?.threshold || 0,
       outlets: Array.from(data.outlets.entries()).map(([id, outletData]) => ({
         outletId: id,
         outletName: outletData.name,

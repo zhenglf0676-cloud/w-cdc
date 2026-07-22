@@ -275,6 +275,8 @@ export default function AdminMonitoringPage() {
         };
       });
 
+      const threshold = item.threshold || 0;
+
       const option: echarts.EChartsOption = {
         tooltip: {
           trigger: 'axis',
@@ -285,6 +287,9 @@ export default function AdminMonitoringPage() {
                 html += `${p.seriesName}: ${p.value.toFixed(2)} mg/L<br/>`;
               }
             });
+            if (threshold > 0) {
+              html += `阈值：${threshold} mg/L`;
+            }
             return html;
           },
         },
@@ -311,6 +316,38 @@ export default function AdminMonitoringPage() {
           axisLabel: { color: '#64748b', fontSize: 10 },
           splitLine: { lineStyle: { color: '#f1f5f9' } },
         },
+        // 添加阈值背景色带
+        markArea: threshold > 0 ? {
+          silent: true,
+          data: [
+            [
+              {
+                yAxis: 0,
+                itemStyle: { color: 'rgba(34, 197, 94, 0.1)' }, // 绿色背景（正常）
+              },
+              {
+                yAxis: threshold,
+              },
+            ],
+            [
+              {
+                yAxis: threshold,
+                itemStyle: { color: 'rgba(239, 68, 68, 0.1)' }, // 红色背景（超标）
+              },
+              {
+                yAxis: 'max',
+              },
+            ],
+          ],
+        } : undefined,
+        // 添加阈值线
+        markLine: threshold > 0 ? {
+          silent: true,
+          symbol: 'none',
+          lineStyle: { color: '#ef4444', type: 'dashed', width: 1 },
+          label: { formatter: `阈值 ${threshold}`, position: 'end', color: '#ef4444', fontSize: 10 },
+          data: [{ yAxis: threshold }],
+        } : undefined,
         series,
       };
 
