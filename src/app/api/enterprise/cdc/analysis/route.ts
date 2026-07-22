@@ -319,7 +319,7 @@ export async function GET(request: NextRequest) {
     const globalCV = globalAV !== 0 ? globalSD / globalAV : 0;
     const globalSkew = calculateSkew(allPollutantValues, globalAV, globalSD);
 
-    // 计算归一化范围（基于所有污染物的指标值）
+    // 计算所有污染物的指标值（用于最大值归一化，根据 Word 文档）
     const allADValues: number[] = [];
     const allCVValues: number[] = [];
     const allSkewValues: number[] = [];
@@ -340,9 +340,10 @@ export async function GET(request: NextRequest) {
       allSkewValues.push(skew);
     }
 
-    const adRange = calculateNormalizationRange(allADValues);
-    const cvRange = calculateNormalizationRange(allCVValues);
-    const skewRange = calculateNormalizationRange(allSkewValues);
+    // 使用最大值归一化（根据 Word 文档：Nor(x) = x / max(x)）
+    const maxAD = Math.max(...allADValues) || 1;
+    const maxCV = Math.max(...allCVValues) || 1;
+    const maxSkew = Math.max(...allSkewValues.map(v => Math.abs(v))) || 1;
 
     // 先计算每日各污染物的 CDC 值（用于趋势图和最后一天的 CDC）
     const dailyPollutantCDC: Record<string, Record<string, number>> = {};
@@ -376,9 +377,9 @@ export async function GET(request: NextRequest) {
         const cv = av !== 0 ? sd / av : 0;
         const skew = calculateSkew(values, av, sd);
 
-        const norAD = normalize(ad, adRange.min, adRange.max);
-        const norCV = normalize(cv, cvRange.min, cvRange.max);
-        const norSkew = normalize(skew, skewRange.min, skewRange.max);
+        const norAD = Math.min(ad / maxAD, 1);
+        const norCV = Math.min(cv / maxCV, 1);
+        const norSkew = Math.min(Math.abs(skew) / maxSkew, 1);
 
         const cdc = weight * (Math.pow(norAD, 2) + Math.pow(norCV, 2) + Math.pow(norSkew, 2));
         dayCDCs[pollutant.id] = parseFloat(cdc.toFixed(4));
@@ -413,9 +414,9 @@ export async function GET(request: NextRequest) {
       const skew = calculateSkew(values, av, sd);
 
       // 归一化（使用所有污染物的指标范围）
-      const norAD = normalize(ad, adRange.min, adRange.max);
-      const norCV = normalize(cv, cvRange.min, cvRange.max);
-      const norSkew = normalize(skew, skewRange.min, skewRange.max);
+      const norAD = Math.min(ad / maxAD, 1);
+      const norCV = Math.min(cv / maxCV, 1);
+      const norSkew = Math.min(Math.abs(skew) / maxSkew, 1);
 
       // 计算 CDC = [m × Wi / ΣWi] × [Nor(AD)² + Nor(CV)² + Nor(SKEW)²]
       const cdc = weight * (Math.pow(norAD, 2) + Math.pow(norCV, 2) + Math.pow(norSkew, 2));
@@ -435,9 +436,9 @@ export async function GET(request: NextRequest) {
         lastDaySkew = calculateSkew(lastDayValues, lastDayAv, lastDaySd);
         
         lastDayNorAv = normalize(lastDayAv, 0, globalAV * 2 || 1);
-        lastDayNorAd = normalize(lastDayAd, adRange.min, adRange.max);
-        lastDayNorCv = normalize(lastDayCv, cvRange.min, cvRange.max);
-        lastDayNorSkew = normalize(lastDaySkew, skewRange.min, skewRange.max);
+        lastDayNorAd = Math.min(lastDayAd / maxAD, 1);
+        lastDayNorCv = Math.min(lastDayCv / maxCV, 1);
+        lastDayNorSkew = Math.min(Math.abs(lastDaySkew) / maxSkew, 1);
       }
 
       pollutantCDCs.push({
@@ -513,9 +514,9 @@ export async function GET(request: NextRequest) {
         const skew = calculateSkew(values, av, sd);
 
         // 使用相同的归一化范围
-        const norAD = normalize(ad, adRange.min, adRange.max);
-        const norCV = normalize(cv, cvRange.min, cvRange.max);
-        const norSkew = normalize(skew, skewRange.min, skewRange.max);
+        const norAD = Math.min(ad / maxAD, 1);
+        const norCV = Math.min(cv / maxCV, 1);
+        const norSkew = Math.min(Math.abs(skew) / maxSkew, 1);
 
         const cdc = weight * (Math.pow(norAD, 2) + Math.pow(norCV, 2) + Math.pow(norSkew, 2));
 
@@ -539,9 +540,9 @@ export async function GET(request: NextRequest) {
 
     // 使用相同的归一化范围
     const norAV = normalize(currentAV, 0, globalAV * 2 || 1);
-    const norAD = normalize(currentAD, adRange.min, adRange.max);
-    const norCV = normalize(currentCV, cvRange.min, cvRange.max);
-    const norSkew = normalize(currentSkew, skewRange.min, skewRange.max);
+    const norAD = Math.min(currentAD / maxAD, 1);
+    const norCV = Math.min(currentCV / maxCV, 1);
+    const norSkew = Math.min(Math.abs(currentSkew) / maxSkew, 1);
 
     return NextResponse.json({
       success: true,

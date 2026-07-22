@@ -81,10 +81,9 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const endDate = searchParams.get('endDate');
 
-    // 计算 7 天时间范围（根据 Word 文档标准）
+    // 计算 7 天时间范围（与企业端 CDC API 保持一致）
     let toDate = endDate ? new Date(endDate) : new Date();
-    const fromDate = new Date(toDate);
-    fromDate.setDate(fromDate.getDate() - 6); // 7 天周期（包含当天）
+    const fromDate = new Date(toDate.getTime() - 7 * 24 * 60 * 60 * 1000);
     
     // 设置时间范围（使用 UTC 时间）
     fromDate.setUTCHours(0, 0, 0, 0);
