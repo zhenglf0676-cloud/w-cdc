@@ -367,11 +367,11 @@ export async function GET(request: Request) {
         const cv = av !== 0 ? sd / av : 0;
         const skew = sd !== 0 ? (values.reduce((a, b) => a + Math.pow(b - av, 3), 0) / n) / Math.pow(sd, 3) : 0;
 
-        const norAD = maxAD > 0 ? Math.min(ad / maxAD, 1) : 0;
-        const norCV = maxCV > 0 ? Math.min(cv / maxCV, 1) : 0;
-        const norSKEW = maxSKEW > 0 ? Math.min(Math.abs(skew) / maxSKEW, 1) : 0;
+        const norAD = globalMaxAD > 0 ? Math.min(ad / globalMaxAD, 1) : 0;
+        const norCV = globalMaxCV > 0 ? Math.min(cv / globalMaxCV, 1) : 0;
+        const norSKEW = globalMaxSKEW > 0 ? Math.min(Math.abs(skew) / globalMaxSKEW, 1) : 0;
 
-        const weight = sumWi > 0 ? (m * currentCompanyAV) / sumWi : 1;
+        const weight = sumWi > 0 ? (m * currentEnterpriseAV) / sumWi : 1;
         const cdc = weight * (Math.pow(norAD, 2) + Math.pow(norCV, 2) + Math.pow(norSKEW, 2));
 
         dayCDC[pollutant.id] = Math.round(cdc * 100) / 100;
