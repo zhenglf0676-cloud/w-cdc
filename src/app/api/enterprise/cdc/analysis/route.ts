@@ -68,26 +68,31 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: '没有已审批的排污口' }, { status: 400 });
     }
 
-    // 获取企业的已审批污染物
+    // 获取企业的已审批污染物（合并所有 approved 申请）
     const { data: applications } = await supabase
       .from('pollutant_applications')
       .select('pollutants')
       .eq('company_id', companyId)
-      .eq('status', 'approved')
-      .limit(1);
+      .eq('status', 'approved');
 
     let pollutantList: Array<{ id: string; label: string; threshold: number; unit: string }> = [];
     const pollutantMap: Record<string, { label: string; threshold: number; unit: string }> = {};
-    if (applications && applications.length > 0 && applications[0].pollutants) {
+    if (applications && applications.length > 0) {
       try {
-        const pollutants = typeof applications[0].pollutants === 'string'
-          ? JSON.parse(applications[0].pollutants)
-          : applications[0].pollutants;
-        pollutantList = pollutants;
-        // 创建污染物映射
-        pollutants.forEach((p: { id: string; label: string; threshold: number; unit: string }) => {
-          pollutantMap[p.id] = { label: p.label, threshold: p.threshold, unit: p.unit };
-        });
+        // 合并所有申请的污染物
+        for (const app of applications) {
+          if (!app.pollutants) continue;
+          const pollutants = typeof app.pollutants === 'string'
+            ? JSON.parse(app.pollutants)
+            : app.pollutants;
+          pollutants.forEach((p: { id: string; label: string; threshold: number; unit: string }) => {
+            // 避免重复
+            if (!pollutantMap[p.id]) {
+              pollutantMap[p.id] = { label: p.label, threshold: p.threshold, unit: p.unit };
+              pollutantList.push(p);
+            }
+          });
+        }
       } catch (e) {
         console.error('解析污染物失败:', e);
       }

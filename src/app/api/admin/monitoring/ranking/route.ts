@@ -67,21 +67,31 @@ export async function GET(request: Request) {
       }
     }
 
-    // 获取所有企业的已审批污染物
+    // 获取所有企业的已审批污染物（合并所有 approved 申请）
     const enterprisePollutantMap: Record<string, Array<{ id: string; label: string; threshold: number; unit: string }>> = {};
     for (const enterprise of enterprises) {
       const { data: applications } = await supabase
         .from('pollutant_applications')
         .select('pollutants')
         .eq('company_id', enterprise.id)
-        .eq('status', 'approved')
-        .limit(1);
+        .eq('status', 'approved');
 
-      if (applications && applications.length > 0 && applications[0].pollutants) {
+      if (applications && applications.length > 0) {
         try {
-          const pollutants = typeof applications[0].pollutants === 'string'
-            ? JSON.parse(applications[0].pollutants)
-            : applications[0].pollutants;
+          const pollutants: Array<{ id: string; label: string; threshold: number; unit: string }> = [];
+          const seenIds = new Set<string>();
+          for (const app of applications) {
+            if (!app.pollutants) continue;
+            const appPollutants = typeof app.pollutants === 'string'
+              ? JSON.parse(app.pollutants)
+              : app.pollutants;
+            for (const p of appPollutants) {
+              if (!seenIds.has(p.id)) {
+                seenIds.add(p.id);
+                pollutants.push(p);
+              }
+            }
+          }
           enterprisePollutantMap[enterprise.id] = pollutants;
         } catch (e) {
           console.error('解析污染物失败:', e);
