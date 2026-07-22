@@ -77,24 +77,18 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // 获取时间范围参数
+    // 获取时间范围参数（用于确定"当天"）
     const searchParams = request.nextUrl.searchParams;
-    const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
-    // 默认最近 7 天
-    let fromDate: Date;
-    let toDate: Date;
+    // 默认使用当前日期
+    const toDate = endDate ? new Date(endDate) : new Date();
+    // 设置"当天"的时间范围（从当天 00:00:00 到 23:59:59）
+    const fromDate = new Date(toDate);
+    fromDate.setHours(0, 0, 0, 0);
+    toDate.setHours(23, 59, 59, 999);
 
-    if (startDate && endDate) {
-      fromDate = new Date(startDate);
-      toDate = new Date(endDate);
-    } else {
-      toDate = new Date();
-      fromDate = new Date(toDate.getTime() - 7 * 24 * 60 * 60 * 1000);
-    }
-
-    // 为每个企业获取 CDC 值（调用企业端 CDC 分析 API 的逻辑）
+    // 为每个企业计算当天的综合 CDC
     const ranking = [];
 
     for (const enterprise of enterprises) {
@@ -160,7 +154,7 @@ export async function GET(request: NextRequest) {
           }
         });
 
-        // 获取监测数据
+        // 获取当天的监测数据
         const { data: monitoringData } = await supabase
           .from('monitoring_data')
           .select('*')
@@ -298,12 +292,14 @@ export async function GET(request: NextRequest) {
 
           // CDC = [m × Wi / ΣWi] × [Nor(AD)² + Nor(CV)² + Nor(SKEW)²]
           const cdc = weight * (Math.pow(norAD, 2) + Math.pow(norCV, 2) + Math.pow(norSkew, 2));
+
           totalWeightedCDC += cdc;
           pollutantCount++;
         }
 
-        const avgCDC = pollutantCount > 0 ? totalWeightedCDC / pollutantCount : 0;
-        const riskInfo = getRiskLevel(avgCDC);
+        // 企业综合 CDC = 所有污染物的加权平均
+        const overallCDC = pollutantCount > 0 ? totalWeightedCDC / pollutantCount : 0;
+        const { level, color } = getRiskLevel(overallCDC);
 
         ranking.push({
           enterpriseId: enterprise.id,
@@ -312,13 +308,13 @@ export async function GET(request: NextRequest) {
           contactPerson: enterprise.contact_person || '-',
           totalOutlets: outlets.length,
           totalPollutants: pollutantList.length,
-          overallCDC: parseFloat(avgCDC.toFixed(4)),
-          riskLevel: riskInfo.level,
-          riskColor: riskInfo.color
+          overallCDC: parseFloat(overallCDC.toFixed(4)),
+          riskLevel: level,
+          riskColor: color
         });
-
       } catch (error) {
-        console.error(`计算企业 ${enterprise.id} CDC 失败:`, error);
+        console.error(`计算企业 ${enterprise.company_name} 的 CDC 失败:`, error);
+        // 添加默认值
         ranking.push({
           enterpriseId: enterprise.id,
           enterpriseName: enterprise.company_name || enterprise.username || '未知企业',
@@ -340,12 +336,9 @@ export async function GET(request: NextRequest) {
       success: true,
       data: ranking,
       parkName,
-      period: {
-        startDate: fromDate.toISOString(),
-        endDate: toDate.toISOString()
-      }
+      totalEnterprises: enterprises.length,
+      calculatedDate: fromDate.toISOString().split('T')[0]
     });
-
   } catch (error) {
     console.error('CDC 排行 API 错误:', error);
     return NextResponse.json({ error: '服务器错误' }, { status: 500 });
