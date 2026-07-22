@@ -58,10 +58,10 @@ export async function GET(request: NextRequest) {
     const outletIds = outlets.map(o => o.id);
     const outletMap = new Map(outlets.map(o => [o.id, { name: o.outlet_name, companyId: o.company_id }]));
 
-    // 获取所有污染物的阈值
-    const { data: pollutants, error: pollutantsError } = await client
+    // 获取所有已审批的污染物申请（包含阈值）
+    const { data: pollutantApplications, error: pollutantsError } = await client
       .from('pollutant_applications')
-      .select('id, pollutant_name, warning_threshold, alarm_threshold, company_id')
+      .select('id, pollutants, company_id')
       .in('company_id', enterpriseIds)
       .eq('status', 'approved');
 
@@ -69,7 +69,24 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '污染物列表获取失败' }, { status: 500 });
     }
 
-    const pollutantMap = new Map(pollutants.map(p => [p.id, p]));
+    // 构建污染物映射（从 pollutants JSON 字段解析）
+    const pollutantMap = new Map<string, any>();
+    pollutantApplications?.forEach(app => {
+      if (app.pollutants && Array.isArray(app.pollutants)) {
+        app.pollutants.forEach((p: any) => {
+          if (p.id) {
+            pollutantMap.set(p.id, {
+              id: p.id,
+              pollutant_name: p.label || p.id,
+              warning_threshold: p.warningThreshold || p.warning_threshold,
+              alarm_threshold: p.alarmThreshold || p.alarm_threshold,
+              unit: p.unit || 'mg/L',
+              company_id: app.company_id
+            });
+          }
+        });
+      }
+    });
 
     // 获取最近的监测数据（用于检测预警）
     const { data: monitoringData, error: monitoringError } = await client
