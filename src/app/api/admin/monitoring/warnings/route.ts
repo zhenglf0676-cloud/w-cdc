@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/storage/database/supabase-client';
+import { getSupabaseClient } from '@/storage/database/supabase-client';
 
 export async function GET(request: Request) {
   try {
@@ -8,38 +8,42 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: '未授权' }, { status: 401 });
     }
 
-    const supabase = createClient();
+    const supabase = getSupabaseClient(authHeader);
 
     // 获取当前用户信息
-    const { data: { user }, error: userError } = await supabase.auth.getUser(authHeader);
-    if (userError || !user) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
       return NextResponse.json({ error: '用户信息获取失败' }, { status: 400 });
     }
 
     // 获取管理员信息
     const { data: admin, error: adminError } = await supabase
       .from('profiles')
-      .select('id, user_id, park_name, role')
+      .select('id, user_id, full_name, company_name, park_name, role')
       .eq('user_id', user.id)
       .single();
 
-    if (adminError || !admin || admin.role !== 'admin') {
+    if (adminError || !admin) {
+      return NextResponse.json({ error: '管理员信息获取失败' }, { status: 400 });
+    }
+
+    if (admin.role !== 'admin') {
       return NextResponse.json({ error: '非管理员用户' }, { status: 403 });
+    }
+
+    const parkName = admin.park_name;
+    if (!parkName) {
+      return NextResponse.json({ error: '管理员未绑定园区' }, { status: 400 });
     }
 
     // 获取园区内所有企业
     const { data: enterprises, error: enterprisesError } = await supabase
       .from('profiles')
-      .select('id, user_id, company_name')
-      .eq('park_name', admin.park_name)
+      .select('id, user_id, full_name, company_name')
+      .eq('park_name', parkName)
       .eq('role', 'enterprise');
 
-    if (enterprisesError) {
-      console.error('获取企业列表错误:', enterprisesError);
-      return NextResponse.json({ error: '获取企业列表失败' }, { status: 500 });
-    }
-
-    if (!enterprises || enterprises.length === 0) {
+    if (enterprisesError || !enterprises || enterprises.length === 0) {
       return NextResponse.json({ data: [] });
     }
 
@@ -53,93 +57,107 @@ export async function GET(request: Request) {
       .in('user_id', userIds)
       .eq('status', 'approved');
 
-    if (outletsError) {
-      console.error('获取排污口错误:', outletsError);
-      return NextResponse.json({ error: '获取排污口失败' }, { status: 500 });
-    }
-
-    if (!outlets || outlets.length === 0) {
+    if (outletsError || !outlets || outlets.length === 0) {
       return NextResponse.json({ data: [] });
     }
 
     const outletIds = outlets.map(o => o.id);
-    const outletMap = new Map(outlets.map(o => [o.id, o.name]));
+    const outletMap = new Map(outlets.map(o => [o.id, { name: o.name, userId: o.user_id }]));
 
-    // 获取企业的污染物申请和阈值
+    // 获取企业的污染物阈值
     const { data: applications, error: appsError } = await supabase
       .from('pollutant_applications')
       .select('company_id, pollutants')
       .in('company_id', enterpriseIds)
       .eq('status', 'approved');
 
-    if (appsError) {
-      console.error('获取污染物申请错误:', appsError);
-      return NextResponse.json({ error: '获取污染物申请失败' }, { status: 500 });
+    if (appsError || !applications) {
+      return NextResponse.json({ data: [] });
     }
 
-    // 构建污染物阈值映射
-    const thresholdMap = new Map<string, { threshold: number; name: string }>();
-    if (applications) {
-      for (const app of applications) {
-        const pollutants = app.pollutants as Record<string, { threshold: number; unit: string }>;
-        if (pollutants) {
-          for (const [pollutantId, config] of Object.entries(pollutants)) {
-            thresholdMap.set(pollutantId, {
-              threshold: config.threshold,
-              name: pollutantId
-            });
+    // 构建阈值映射：outlet_id -> { pollutant_type -> threshold }
+    const thresholdMap = new Map();
+    for (const app of applications) {
+      const pollutants = app.pollutants || {};
+      // 找到该企业的所有排污口
+      const enterpriseOutlets = outlets.filter(o => {
+        const enterprise = enterprises.find(e => e.user_id === o.user_id);
+        return enterprise && enterprise.id === app.company_id;
+      });
+
+      for (const outlet of enterpriseOutlets) {
+        const outletThresholds: Record<string, number> = {};
+        for (const [pollutantType, pollutantData] of Object.entries(pollutants)) {
+          if (pollutantData && typeof pollutantData === 'object' && 'threshold' in (pollutantData as any)) {
+            outletThresholds[pollutantType] = (pollutantData as any).threshold;
           }
         }
+        thresholdMap.set(outlet.id, outletThresholds);
       }
     }
 
-    console.log('阈值映射:', Array.from(thresholdMap.entries()));
-
-    // 获取所有监测数据中超过阈值的记录
+    // 获取最近的监测数据（每个排污口每个污染物的最新记录）
     const { data: monitoringData, error: monitoringError } = await supabase
       .from('monitoring_data')
       .select('id, outlet_id, pollutant_type, value, monitored_at')
       .in('outlet_id', outletIds)
       .order('monitored_at', { ascending: false })
-      .limit(100);
+      .limit(1000);
 
-    if (monitoringError) {
-      console.error('获取监测数据错误:', monitoringError);
-      return NextResponse.json({ error: '获取监测数据失败' }, { status: 500 });
+    if (monitoringError || !monitoringData || monitoringData.length === 0) {
+      return NextResponse.json({ data: [] });
     }
 
-    console.log('监测数据数量:', monitoringData?.length || 0);
+    // 按排污口和时间分组，检查是否有超过阈值的记录
+    const recordMap = new Map(); // key: "outlet_id_time" -> { outlet, time, values, hasWarning }
 
-    // 筛选超过阈值的记录
-    const warnings = (monitoringData || [])
-      .filter(record => {
-        const thresholdInfo = thresholdMap.get(record.pollutant_type);
-        return thresholdInfo && record.value > thresholdInfo.threshold;
-      })
-      .map(record => {
-        const outletName = outletMap.get(record.outlet_id) || '未知排污口';
-        const enterprise = enterprises.find(e => 
-          outlets.find(o => o.id === record.outlet_id && o.user_id === e.user_id)
-        );
-        const thresholdInfo = thresholdMap.get(record.pollutant_type);
+    for (const record of monitoringData) {
+      const outlet = outletMap.get(record.outlet_id);
+      if (!outlet) continue;
 
-        return {
-          warningTime: record.monitored_at,
-          enterpriseName: enterprise?.company_name || '未知企业',
-          outletName: outletName,
-          pollutantName: record.pollutant_type,
-          warningValue: record.value,
-          threshold: thresholdInfo?.threshold || 0,
-          riskLevel: '超标',
-          status: '未处理'
-        };
-      });
+      const thresholds = thresholdMap.get(record.outlet_id) || {};
+      const threshold = thresholds[record.pollutant_type];
 
-    console.log('预警记录数量:', warnings.length);
+      // 检查是否超过阈值
+      const isExceeded = threshold !== undefined && record.value > threshold;
+
+      const key = `${record.outlet_id}_${record.monitored_at}`;
+      if (!recordMap.has(key)) {
+        const enterprise = enterprises.find(e => e.user_id === outlet.userId);
+        recordMap.set(key, {
+          outletId: record.outlet_id,
+          outletName: outlet.name,
+          enterpriseId: enterprise?.id,
+          enterpriseName: enterprise?.company_name || enterprise?.full_name || '未知企业',
+          time: record.monitored_at,
+          values: {},
+          hasWarning: false,
+        });
+      }
+
+      const entry = recordMap.get(key);
+      entry.values[record.pollutant_type] = record.value;
+
+      // 如果有任何污染物超过阈值，标记为有预警
+      if (isExceeded) {
+        entry.hasWarning = true;
+      }
+    }
+
+    // 只返回有预警的记录
+    const warnings = Array.from(recordMap.values())
+      .filter(entry => entry.hasWarning)
+      .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
+      .slice(0, 50);
+
+    console.log(`预警记录数量：${warnings.length}`);
 
     return NextResponse.json({ data: warnings });
   } catch (error) {
     console.error('预警记录 API 错误:', error);
-    return NextResponse.json({ error: '服务器错误' }, { status: 500 });
+    return NextResponse.json(
+      { error: '服务器内部错误', detail: error instanceof Error ? error.message : '未知错误' },
+      { status: 500 }
+    );
   }
 }

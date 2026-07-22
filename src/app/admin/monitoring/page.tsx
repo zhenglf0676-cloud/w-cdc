@@ -35,15 +35,13 @@ interface RankingData {
 }
 
 interface WarningData {
-  warningTime: string;
-  enterpriseName: string;
+  outletId: string;
   outletName: string;
-  pollutantName: string;
-  warningValue: string;
-  cdc: number;
-  riskLevel: string;
-  riskColor: string;
-  status: string;
+  enterpriseId: string;
+  enterpriseName: string;
+  time: string;
+  values: Record<string, number>;
+  hasWarning: boolean;
 }
 
 interface MonitoringIndicator {
@@ -622,13 +620,13 @@ export default function AdminMonitoringPage() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-slate-200">
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">预警时间</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">时间</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">企业名称</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">排污口</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">预警指标</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">预警值</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">CDC</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">预警级别</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">TN (总氮) (mg/L)</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">COD (化学需氧量) (mg/L)</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">NH₃-N (氨氮) (mg/L)</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">TP (总磷) (mg/L)</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">状态</th>
                   </tr>
                 </thead>
@@ -642,24 +640,16 @@ export default function AdminMonitoringPage() {
                   ) : (
                     warningData.map((warning, index) => (
                       <tr key={index} className="border-b border-slate-100">
-                        <td className="py-3 px-4 text-sm text-slate-600">{formatChinaTime(warning.warningTime)}</td>
+                        <td className="py-3 px-4 text-sm text-slate-900">{formatChinaTime(warning.time)}</td>
                         <td className="py-3 px-4 text-sm font-medium text-slate-900">{warning.enterpriseName}</td>
                         <td className="py-3 px-4 text-sm text-slate-600">{warning.outletName}</td>
-                        <td className="py-3 px-4 text-sm text-slate-600">{warning.pollutantName}</td>
-                        <td className="py-3 px-4 text-sm font-medium text-slate-900">{warning.warningValue}</td>
-                        <td className="py-3 px-4 text-sm font-bold text-slate-900">{warning.cdc.toFixed(2)}</td>
+                        <td className="py-3 px-4 text-sm text-slate-900">{warning.values['TN']?.toFixed(3) || '-'}</td>
+                        <td className="py-3 px-4 text-sm text-slate-900">{warning.values['COD']?.toFixed(3) || '-'}</td>
+                        <td className="py-3 px-4 text-sm text-slate-900">{warning.values['NH3-N']?.toFixed(3) || '-'}</td>
+                        <td className="py-3 px-4 text-sm text-slate-900">{warning.values['TP']?.toFixed(3) || '-'}</td>
                         <td className="py-3 px-4">
-                          <Badge className={getRiskColor(warning.riskLevel)}>
-                            {warning.riskLevel}
-                          </Badge>
-                        </td>
-                        <td className="py-3 px-4">
-                          <Badge variant="outline" className={
-                            warning.status === '未处理' ? 'text-rose-600 border-rose-200' :
-                            warning.status === '处理中' ? 'text-amber-600 border-amber-200' :
-                            'text-emerald-600 border-emerald-200'
-                          }>
-                            {warning.status}
+                          <Badge className="bg-red-100 text-red-700 border-red-200">
+                            危险
                           </Badge>
                         </td>
                       </tr>
@@ -668,15 +658,6 @@ export default function AdminMonitoringPage() {
                 </tbody>
               </table>
             </div>
-
-            {warningData.length > 0 && (
-              <div className="mt-4 text-right">
-                <Button variant="link">
-                  查看全部预警记录
-                  <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              </div>
-            )}
           </CardContent>
         </Card>
       </main>
