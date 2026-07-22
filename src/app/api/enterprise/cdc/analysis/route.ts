@@ -77,12 +77,17 @@ export async function GET(request: Request) {
       .limit(1);
 
     let pollutantList: Array<{ id: string; label: string; threshold: number; unit: string }> = [];
+    const pollutantMap: Record<string, { label: string; threshold: number; unit: string }> = {};
     if (applications && applications.length > 0 && applications[0].pollutants) {
       try {
         const pollutants = typeof applications[0].pollutants === 'string'
           ? JSON.parse(applications[0].pollutants)
           : applications[0].pollutants;
         pollutantList = pollutants;
+        // 创建污染物映射
+        pollutants.forEach((p: { id: string; label: string; threshold: number; unit: string }) => {
+          pollutantMap[p.id] = { label: p.label, threshold: p.threshold, unit: p.unit };
+        });
       } catch (e) {
         console.error('解析污染物失败:', e);
       }
