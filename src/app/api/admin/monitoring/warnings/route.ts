@@ -46,13 +46,14 @@ export async function GET(request: NextRequest) {
     }
 
     const enterpriseIds = enterprises.map(e => e.id);
-    const enterpriseMap = new Map(enterprises.map(e => [e.id, e.company_name]));
+    const userIds = enterprises.map(e => e.user_id);
+    const enterpriseMap = new Map(enterprises.map(e => [e.user_id, e.company_name]));
 
-    // 获取所有排污口
+    // 获取所有排污口（使用 user_id 关联）
     const { data: outlets, error: outletsError } = await client
       .from('discharge_outlets')
       .select('id, name, user_id')
-      .in('user_id', enterpriseIds)
+      .in('user_id', userIds)
       .eq('status', 'approved');
 
     if (outletsError) {

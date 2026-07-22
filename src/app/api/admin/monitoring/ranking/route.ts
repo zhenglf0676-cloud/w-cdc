@@ -81,8 +81,22 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const endDate = searchParams.get('endDate');
 
-    // 默认使用当前日期
-    const toDate = endDate ? new Date(endDate) : new Date();
+    // 获取最新的监测数据日期作为参考日期
+    let toDate = endDate ? new Date(endDate) : new Date();
+    
+    // 如果没有指定日期，使用最新监测数据的日期
+    if (!endDate) {
+      const { data: latestData } = await supabase
+        .from('monitoring_data')
+        .select('monitored_at')
+        .order('monitored_at', { ascending: false })
+        .limit(1);
+      
+      if (latestData && latestData.length > 0) {
+        toDate = new Date(latestData[0].monitored_at);
+      }
+    }
+    
     // 设置"当天"的时间范围（从当天 00:00:00 到 23:59:59）
     const fromDate = new Date(toDate);
     fromDate.setHours(0, 0, 0, 0);
