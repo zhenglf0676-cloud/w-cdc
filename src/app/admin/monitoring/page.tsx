@@ -612,7 +612,7 @@ export default function AdminMonitoringPage() {
         <Card className="mt-6">
           <CardHeader>
             <CardTitle className="text-lg font-semibold text-slate-900">
-              最新预警记录
+              最新预警记录（今日超标）
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -623,37 +623,42 @@ export default function AdminMonitoringPage() {
                     <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">时间</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">企业名称</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">排污口</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">TN (总氮) (mg/L)</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">COD (化学需氧量) (mg/L)</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">NH₃-N (氨氮) (mg/L)</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">TP (总磷) (mg/L)</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">状态</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">超标污染物</th>
                   </tr>
                 </thead>
                 <tbody>
                   {warningData.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="text-center py-8 text-slate-500">
-                        暂无预警记录
+                      <td colSpan={4} className="text-center py-8 text-slate-500">
+                        今日暂无超标记录
                       </td>
                     </tr>
                   ) : (
-                    warningData.map((warning, index) => (
-                      <tr key={index} className="border-b border-slate-100">
-                        <td className="py-3 px-4 text-sm text-slate-900">{formatChinaTime(warning.time)}</td>
-                        <td className="py-3 px-4 text-sm font-medium text-slate-900">{warning.enterpriseName}</td>
-                        <td className="py-3 px-4 text-sm text-slate-600">{warning.outletName}</td>
-                        <td className="py-3 px-4 text-sm text-slate-900">{warning.values['TN']?.toFixed(3) || '-'}</td>
-                        <td className="py-3 px-4 text-sm text-slate-900">{warning.values['COD']?.toFixed(3) || '-'}</td>
-                        <td className="py-3 px-4 text-sm text-slate-900">{warning.values['NH3-N']?.toFixed(3) || '-'}</td>
-                        <td className="py-3 px-4 text-sm text-slate-900">{warning.values['TP']?.toFixed(3) || '-'}</td>
-                        <td className="py-3 px-4">
-                          <Badge className="bg-red-100 text-red-700 border-red-200">
-                            危险
-                          </Badge>
-                        </td>
-                      </tr>
-                    ))
+                    warningData.map((warning, index) => {
+                      // 获取超标的污染物列表
+                      const exceededPollutants = Object.entries(warning.pollutants || {}).map(([type, data]) => ({
+                        type,
+                        value: (data as any).value,
+                        threshold: (data as any).threshold,
+                      }));
+
+                      return (
+                        <tr key={index} className="border-b border-slate-100">
+                          <td className="py-3 px-4 text-sm text-slate-900">{formatChinaTime(warning.time)}</td>
+                          <td className="py-3 px-4 text-sm font-medium text-slate-900">{warning.enterpriseName}</td>
+                          <td className="py-3 px-4 text-sm text-slate-600">{warning.outletName}</td>
+                          <td className="py-3 px-4">
+                            <div className="flex flex-wrap gap-2">
+                              {exceededPollutants.map((p) => (
+                                <Badge key={p.type} className="bg-red-100 text-red-700 border-red-200">
+                                  {p.type}: {p.value.toFixed(3)} mg/L (阈值：{p.threshold} mg/L)
+                                </Badge>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
