@@ -105,9 +105,13 @@ export default function CDCPage() {
     setError(null);
 
     try {
+      // 直接传递日期字符串（YYYY-MM-DD），避免时区转换问题
+      const startDateStr = format(dateRange.from, 'yyyy-MM-dd');
+      const endDateStr = format(dateRange.to, 'yyyy-MM-dd');
+      
       const params = new URLSearchParams({
-        startDate: dateRange.from.toISOString(),
-        endDate: dateRange.to.toISOString()
+        startDate: startDateStr,
+        endDate: endDateStr
       });
 
       const response = await fetch(`/api/enterprise/cdc/analysis?${params}`, {
