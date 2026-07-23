@@ -50,9 +50,11 @@ export default function AdminHome() {
           },
         });
         const enterprisesData = await enterprisesRes.json();
+        console.log('企业数据API响应:', enterprisesData);
         if (enterprisesData.success) {
           setParkName(enterprisesData.data.parkName);
           setEnterprises(enterprisesData.data.enterprises);
+          console.log('设置企业数据:', enterprisesData.data.enterprises.length, '家企业');
         } else {
           console.error('加载企业数据失败:', enterprisesData.error);
         }
@@ -191,7 +193,11 @@ export default function AdminHome() {
 
   // Initialize map
   useEffect(() => {
-    if (loading || enterprises.length === 0 || !mapContainerRef.current) return;
+    console.log('地图初始化检查:', { loading, enterpriseCount: enterprises.length, hasContainer: !!mapContainerRef.current });
+    if (loading || enterprises.length === 0 || !mapContainerRef.current) {
+      console.log('地图初始化条件不满足，跳过');
+      return;
+    }
 
     let mapInstance: any = null;
 
