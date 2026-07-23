@@ -9,11 +9,12 @@ export async function GET(request: NextRequest) {
     }
 
     const token = sessionHeader;
-    const supabase = getSupabaseClient(token);
-
+    // 使用用户token验证身份
+    const authClient = getSupabaseClient(token);
+    
     let user;
     try {
-      const { data: { user: authUser }, error: userError } = await supabase.auth.getUser();
+      const { data: { user: authUser }, error: userError } = await authClient.auth.getUser();
       if (userError) {
         console.error('getUser 错误:', userError.message);
         return NextResponse.json({ error: '认证失败' }, { status: 401 });
@@ -29,10 +30,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '认证失败' }, { status: 401 });
     }
 
+    // 使用服务角色密钥查询数据，绕过RLS策略
+    const supabase = getSupabaseClient();
+
     // 获取用户角色
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role, park_name')
       .eq('user_id', user.id)
       .single();
 
@@ -45,27 +49,24 @@ export async function GET(request: NextRequest) {
 
     if (profile.role === 'admin') {
       // 管理员：获取园区内所有企业的已审批排污口
-      // 先获取管理员的园区名称
-      const { data: adminProfile } = await supabase
-        .from('profiles')
-        .select('park_name')
-        .eq('user_id', user.id)
-        .eq('role', 'admin')
-        .single();
-
-      if (!adminProfile || !adminProfile.park_name) {
+      if (!profile.park_name) {
+        console.log('管理员没有园区名称');
         return NextResponse.json({
           success: true,
           data: []
         });
       }
 
+      console.log('管理员园区:', profile.park_name);
+
       // 获取园区内所有企业用户ID
       const { data: enterpriseProfiles } = await supabase
         .from('profiles')
         .select('user_id')
-        .eq('park_name', adminProfile.park_name)
+        .eq('park_name', profile.park_name)
         .eq('role', 'enterprise');
+
+      console.log('园区内企业数量:', enterpriseProfiles?.length || 0);
 
       const enterpriseUserIds = enterpriseProfiles?.map(p => p.user_id) || [];
 
