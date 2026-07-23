@@ -4,13 +4,16 @@ import { getSupabaseClient } from '@/storage/database/supabase-client';
 // 今日超标预警记录
 export async function GET(request: NextRequest) {
   try {
-    const token = request.headers.get('x-auth-token');
-    const supabase = getSupabaseClient(token || undefined);
+    // 使用服务角色密钥查询数据
+    const supabase = getSupabaseClient();
 
-    // 获取今天的开始时间
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayStart = today.toISOString();
+    // 获取今天的开始时间（中国时间 UTC+8）
+    const now = new Date();
+    const chinaTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+    const todayStart = new Date(Date.UTC(chinaTime.getUTCFullYear(), chinaTime.getUTCMonth(), chinaTime.getUTCDate(), 0, 0, 0, 0)).toISOString();
+    // 转换为UTC时间用于查询
+    const todayStartUTC = new Date(new Date(todayStart).getTime() - 8 * 60 * 60 * 1000).toISOString();
+    console.log('todayStart:', todayStart, 'todayStartUTC:', todayStartUTC);
 
     // 直接查询今日超标的监测数据
     const { data: warningRecords, error: warningError } = await supabase
@@ -24,9 +27,13 @@ export async function GET(request: NextRequest) {
         standard_limit,
         monitored_at
       `)
-      .gte('monitored_at', todayStart)
+      .gte('monitored_at', todayStartUTC)
       .neq('status', 'normal')
       .order('monitored_at', { ascending: false });
+
+    console.log('查询条件:', { todayStartUTC, status: 'normal' });
+    console.log('warningError:', warningError);
+    console.log('warningRecords:', warningRecords?.length);
 
     if (warningError || !warningRecords || warningRecords.length === 0) {
       console.log('今日无超标记录');
