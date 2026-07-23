@@ -68,6 +68,8 @@ export async function GET(request: NextRequest) {
       .in('outlet_id', outletIds)
       .order('monitored_at', { ascending: false });
 
+    console.log('监测数据数量:', monitoringData?.length || 0);
+
     if (!monitoringData || monitoringData.length === 0) {
       return NextResponse.json({ success: true, data: [], enterpriseName: enterprise.company_name });
     }
@@ -79,6 +81,8 @@ export async function GET(request: NextRequest) {
         latestByPollutant[record.pollutant_type] = record;
       }
     });
+
+    console.log('污染物类型:', Object.keys(latestByPollutant));
 
     // 获取污染物阈值信息
     const { data: pollutantApplications, error: pollError } = await client
@@ -120,57 +124,60 @@ export async function GET(request: NextRequest) {
       'tn': 'TN（总氮）'
     };
 
-    // 获取今天的监测数据用于计算统计数据
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    // 获取过去7天的监测数据用于计算统计数据（与企业端CDC分析API一致）
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
 
-    const { data: todayData } = await client
+    const { data: historicalData } = await client
       .from('monitoring_data')
       .select('pollutant_type, value, monitored_at, outlet_id')
       .in('outlet_id', outletIds)
-      .gte('monitored_at', today.toISOString())
-      .lt('monitored_at', tomorrow.toISOString());
+      .gte('monitored_at', sevenDaysAgo.toISOString());
 
-    // 按污染物分组，累加所有排污口的最新值（与CDC分析API一致，但只用今天的数据）
-    const pollutantTodayData: Record<string, Record<string, number>> = {};
+    // 按日期和污染物分组，每天取每个排污口的最新值，累加所有排污口（与企业端CDC分析API一致）
+    const dailyPollutantData: Record<string, Record<string, Record<string, number>>> = {};
     
-    if (todayData) {
-      for (const record of todayData) {
+    if (historicalData) {
+      for (const record of historicalData) {
+        // 使用中国时间（UTC+8）获取日期
+        const date = new Date(new Date(record.monitored_at).getTime() + 8 * 60 * 60 * 1000).toISOString().split('T')[0];
         const pollutantType = record.pollutant_type;
-        if (!pollutantTodayData[pollutantType]) {
-          pollutantTodayData[pollutantType] = {};
-        }
 
-        const currentValue = pollutantTodayData[pollutantType][record.outlet_id] || 0;
+        if (!dailyPollutantData[date]) dailyPollutantData[date] = {};
+        if (!dailyPollutantData[date][pollutantType]) dailyPollutantData[date][pollutantType] = {};
+
+        const currentValue = dailyPollutantData[date][pollutantType][record.outlet_id] || 0;
         const value = parseFloat(record.value);
         if (value > currentValue) {
-          pollutantTodayData[pollutantType][record.outlet_id] = value;
+          dailyPollutantData[date][pollutantType][record.outlet_id] = value;
         }
       }
     }
 
-    // 计算每个污染物的AV、AD、CV、SKEW（使用今天的数据）
+    // 计算每个污染物的AV、AD、CV、SKEW（与企业端CDC分析API一致）
     const calculateStats = (pollutantType: string) => {
-      const outletValues = pollutantTodayData[pollutantType] || {};
-      const values = Object.values(outletValues);
+      const sortedDates = Object.keys(dailyPollutantData).sort();
+      const dailyValues: number[] = [];
       
-      if (values.length === 0) return { av: 0, ad: 0, cv: 0, skew: 0 };
-      
-      // 如果只有一个排污口，则AV就是该值，AD=0, CV=0, SKEW=0
-      if (values.length === 1) {
-        return { av: values[0], ad: 0, cv: 0, skew: 0 };
+      for (const date of sortedDates) {
+        const outletValues = dailyPollutantData[date][pollutantType] || {};
+        const total = Object.values(outletValues).reduce((sum, val) => sum + val, 0);
+        if (total > 0) {
+          dailyValues.push(total);
+        }
       }
+
+      if (dailyValues.length === 0) return { av: 0, ad: 0, cv: 0, skew: 0 };
       
-      const n = values.length;
-      const av = values.reduce((a, b) => a + b, 0) / n;
-      const ad = values.reduce((a, b) => a + Math.abs(b - av), 0) / n;
-      const squaredDiffs = values.map(v => Math.pow(v - av, 2));
+      const n = dailyValues.length;
+      const av = dailyValues.reduce((a, b) => a + b, 0) / n;
+      const ad = dailyValues.reduce((a, b) => a + Math.abs(b - av), 0) / n;
+      const squaredDiffs = dailyValues.map(v => Math.pow(v - av, 2));
       const avgSquaredDiff = squaredDiffs.reduce((a, b) => a + b, 0) / n;
       const sd = Math.sqrt(avgSquaredDiff);
       const cv = av !== 0 ? sd / av : 0;
-      const skew = sd !== 0 ? (values.reduce((a, b) => a + Math.pow(b - av, 3), 0) / n) / Math.pow(sd, 3) : 0;
+      const skew = sd !== 0 ? (dailyValues.reduce((a, b) => a + Math.pow(b - av, 3), 0) / n) / Math.pow(sd, 3) : 0;
       
       return { av, ad, cv, skew };
     };
