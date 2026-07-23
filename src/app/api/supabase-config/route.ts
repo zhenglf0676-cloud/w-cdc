@@ -13,10 +13,11 @@ export async function GET() {
     }
 
     return NextResponse.json({ url, anonKey });
-  } catch (error) {
-    console.error('Failed to get Supabase config:', error);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Failed to get Supabase config:', message);
     return NextResponse.json(
-      { error: 'Failed to get Supabase config' },
+      { error: 'Failed to get Supabase config', details: message },
       { status: 500 }
     );
   }
