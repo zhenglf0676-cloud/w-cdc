@@ -48,6 +48,11 @@ interface WarningData {
   enterpriseId: string;
   enterpriseName: string;
   time: string;
+  monitoredAt: string;
+  pollutantType: string;
+  pollutantName: string;
+  value: number;
+  standardLimit: number;
   pollutants: Record<string, { value: number; threshold: number }>;
   hasWarning: boolean;
 }
@@ -726,25 +731,16 @@ export default function AdminMonitoringPage() {
                     </tr>
                   ) : (
                     warningData.map((warning, index) => {
-                      // 获取超标的污染物列表
-                      const exceededPollutants = Object.entries(warning.pollutants || {}).map(([type, data]) => ({
-                        type,
-                        value: (data as any).value,
-                        threshold: (data as any).threshold,
-                      }));
-
                       return (
                         <tr key={index} className="border-b border-slate-100">
-                          <td className="py-3 px-4 text-sm text-slate-900">{formatChinaTime(warning.time)}</td>
+                          <td className="py-3 px-4 text-sm text-slate-900">{formatChinaTime(warning.monitoredAt)}</td>
                           <td className="py-3 px-4 text-sm font-medium text-slate-900">{warning.enterpriseName}</td>
                           <td className="py-3 px-4 text-sm text-slate-600">{warning.outletName}</td>
                           <td className="py-3 px-4">
                             <div className="flex flex-wrap gap-2">
-                              {exceededPollutants.map((p) => (
-                                <Badge key={p.type} className="bg-red-100 text-red-700 border-red-200">
-                                  {pollutantNameMap[p.type] || p.type}: {p.value.toFixed(3)} mg/L (阈值：{p.threshold} mg/L)
-                                </Badge>
-                              ))}
+                              <Badge className="bg-red-100 text-red-700 border-red-200">
+                                {warning.pollutantName}: {warning.value} mg/L (阈值：{warning.standardLimit} mg/L)
+                              </Badge>
                             </div>
                           </td>
                         </tr>
