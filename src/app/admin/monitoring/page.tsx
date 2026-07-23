@@ -59,6 +59,10 @@ interface MonitoringIndicator {
   status: 'normal' | 'warning' | 'alarm';
   warningThreshold: number;
   alarmThreshold: number;
+  av: number;
+  ad: number;
+  cv: number;
+  skew: number;
 }
 
 export default function AdminMonitoringPage() {
@@ -581,15 +585,15 @@ export default function AdminMonitoringPage() {
                   </CardContent>
                 </Card>
 
-                {/* 实时监测数据 */}
+                {/* 污染物统计数据 */}
                 <Card>
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-lg font-semibold text-slate-900">
-                        实时监测数据（最新）
+                        污染物统计数据
                       </CardTitle>
                       <Button variant="link" size="sm">
-                        查看全部指标
+                        查看详细分析
                         <ChevronRight className="h-4 w-4 ml-1" />
                       </Button>
                     </div>
@@ -598,34 +602,52 @@ export default function AdminMonitoringPage() {
                     <div className="overflow-x-auto">
                       <table className="w-full">
                         <thead>
-                          <tr className="border-b border-slate-200">
-                            <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">监测指标</th>
-                            {monitoringData.map((indicator) => (
-                              <th key={indicator.name} className="text-center py-3 px-4 text-sm font-medium text-slate-600">
-                                {indicator.name} ({indicator.unit})
-                              </th>
-                            ))}
+                          <tr className="border-b border-slate-200 bg-slate-50">
+                            <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">污染物</th>
+                            <th className="text-center py-3 px-4 text-sm font-medium text-slate-600">最新值 (mg/L)</th>
+                            <th className="text-center py-3 px-4 text-sm font-medium text-slate-600">AV (平均值)</th>
+                            <th className="text-center py-3 px-4 text-sm font-medium text-slate-600">AD (均差)</th>
+                            <th className="text-center py-3 px-4 text-sm font-medium text-slate-600">CV (变异系数)</th>
+                            <th className="text-center py-3 px-4 text-sm font-medium text-slate-600">SKEW (偏斜度)</th>
+                            <th className="text-center py-3 px-4 text-sm font-medium text-slate-600">状态</th>
                           </tr>
                         </thead>
                         <tbody>
-                          <tr className="border-b border-slate-200">
-                            <td className="py-3 px-4 text-sm font-medium text-slate-900">最新值</td>
-                            {monitoringData.map((indicator) => (
-                              <td key={indicator.name} className="text-center py-3 px-4 text-sm font-bold text-slate-900">
-                                {indicator.latestValue}
+                          {monitoringData.length === 0 ? (
+                            <tr>
+                              <td colSpan={7} className="text-center py-8 text-slate-500">
+                                暂无监测数据
                               </td>
-                            ))}
-                          </tr>
-                          <tr>
-                            <td className="py-3 px-4 text-sm font-medium text-slate-900">状态</td>
-                            {monitoringData.map((indicator) => (
-                              <td key={indicator.name} className="text-center py-3 px-4">
-                                <Badge className={getStatusColor(indicator.status)}>
-                                  {getStatusText(indicator.status)}
-                                </Badge>
-                              </td>
-                            ))}
-                          </tr>
+                            </tr>
+                          ) : (
+                            monitoringData.map((indicator) => (
+                              <tr key={indicator.name} className="border-b border-slate-100 hover:bg-slate-50">
+                                <td className="py-3 px-4 text-sm font-medium text-slate-900">
+                                  {indicator.name}
+                                </td>
+                                <td className="text-center py-3 px-4 text-sm font-bold text-slate-900">
+                                  {indicator.latestValue.toFixed(4)}
+                                </td>
+                                <td className="text-center py-3 px-4 text-sm text-slate-700">
+                                  {indicator.av.toFixed(4)}
+                                </td>
+                                <td className="text-center py-3 px-4 text-sm text-slate-700">
+                                  {indicator.ad.toFixed(4)}
+                                </td>
+                                <td className="text-center py-3 px-4 text-sm text-slate-700">
+                                  {indicator.cv.toFixed(4)}
+                                </td>
+                                <td className="text-center py-3 px-4 text-sm text-slate-700">
+                                  {indicator.skew.toFixed(4)}
+                                </td>
+                                <td className="text-center py-3 px-4">
+                                  <Badge className={getStatusColor(indicator.status)}>
+                                    {getStatusText(indicator.status)}
+                                  </Badge>
+                                </td>
+                              </tr>
+                            ))
+                          )}
                         </tbody>
                       </table>
                     </div>

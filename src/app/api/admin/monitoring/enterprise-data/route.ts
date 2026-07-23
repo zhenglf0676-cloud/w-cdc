@@ -120,6 +120,55 @@ export async function GET(request: NextRequest) {
       'tn': 'TN（总氮）'
     };
 
+    // 获取过去7天的监测数据用于计算统计数据
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+
+    const { data: historicalData } = await client
+      .from('monitoring_data')
+      .select('pollutant_type, value, monitored_at')
+      .in('outlet_id', outletIds)
+      .gte('monitored_at', sevenDaysAgo.toISOString());
+
+    // 按污染物类型计算统计数据
+    const pollutantStats: Record<string, { values: number[], dailyValues: Record<string, number[]> }> = {};
+    
+    if (historicalData) {
+      historicalData.forEach((record: any) => {
+        const pollutantType = record.pollutant_type;
+        if (!pollutantStats[pollutantType]) {
+          pollutantStats[pollutantType] = { values: [], dailyValues: {} };
+        }
+        
+        const value = parseFloat(record.value);
+        pollutantStats[pollutantType].values.push(value);
+        
+        // 按日期分组
+        const date = new Date(new Date(record.monitored_at).getTime() + 8 * 60 * 60 * 1000).toISOString().split('T')[0];
+        if (!pollutantStats[pollutantType].dailyValues[date]) {
+          pollutantStats[pollutantType].dailyValues[date] = [];
+        }
+        pollutantStats[pollutantType].dailyValues[date].push(value);
+      });
+    }
+
+    // 计算每个污染物的AV、AD、CV、SKEW
+    const calculateStats = (values: number[]) => {
+      if (values.length === 0) return { av: 0, ad: 0, cv: 0, skew: 0 };
+      
+      const n = values.length;
+      const av = values.reduce((a, b) => a + b, 0) / n;
+      const ad = values.reduce((a, b) => a + Math.abs(b - av), 0) / n;
+      const squaredDiffs = values.map(v => Math.pow(v - av, 2));
+      const avgSquaredDiff = squaredDiffs.reduce((a, b) => a + b, 0) / n;
+      const sd = Math.sqrt(avgSquaredDiff);
+      const cv = av !== 0 ? sd / av : 0;
+      const skew = sd !== 0 ? (values.reduce((a, b) => a + Math.pow(b - av, 3), 0) / n) / Math.pow(sd, 3) : 0;
+      
+      return { av, ad, cv, skew };
+    };
+
     // 构建返回数据
     const result = Object.entries(latestByPollutant).map(([pollutantType, record]: [string, any]) => {
       const threshold = thresholdMap[pollutantType];
@@ -133,14 +182,22 @@ export async function GET(request: NextRequest) {
         status = 'warning';
       }
 
+      // 计算该污染物的统计数据
+      const stats = pollutantStats[pollutantType] ? calculateStats(pollutantStats[pollutantType].values) : { av: 0, ad: 0, cv: 0, skew: 0 };
+
       return {
         name: pollutantNameMap[pollutantType] || pollutantType.toUpperCase(),
+        pollutantId: pollutantType,
         unit: threshold?.unit || record.unit || 'mg/L',
         latestValue: value,
         status,
         warningThreshold: thresholdValue * 0.8,
         alarmThreshold: thresholdValue,
-        monitoredAt: record.monitored_at
+        monitoredAt: record.monitored_at,
+        av: stats.av,
+        ad: stats.ad,
+        cv: stats.cv,
+        skew: stats.skew
       };
     });
 
