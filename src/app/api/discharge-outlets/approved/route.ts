@@ -40,12 +40,62 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '用户信息不存在' }, { status: 404 });
     }
 
-    // 获取已审批的排污口
-    const { data: outlets, error: outletsError } = await supabase
-      .from('discharge_outlets')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('status', 'approved');
+    let outlets;
+    let outletsError;
+
+    if (profile.role === 'admin') {
+      // 管理员：获取园区内所有企业的已审批排污口
+      // 先获取管理员的园区名称
+      const { data: adminProfile } = await supabase
+        .from('profiles')
+        .select('park_name')
+        .eq('user_id', user.id)
+        .eq('role', 'admin')
+        .single();
+
+      if (!adminProfile || !adminProfile.park_name) {
+        return NextResponse.json({
+          success: true,
+          data: []
+        });
+      }
+
+      // 获取园区内所有企业用户ID
+      const { data: enterpriseProfiles } = await supabase
+        .from('profiles')
+        .select('user_id')
+        .eq('park_name', adminProfile.park_name)
+        .eq('role', 'enterprise');
+
+      const enterpriseUserIds = enterpriseProfiles?.map(p => p.user_id) || [];
+
+      if (enterpriseUserIds.length === 0) {
+        return NextResponse.json({
+          success: true,
+          data: []
+        });
+      }
+
+      // 获取这些企业的所有已审批排污口
+      const result = await supabase
+        .from('discharge_outlets')
+        .select('*')
+        .in('user_id', enterpriseUserIds)
+        .eq('status', 'approved');
+      
+      outlets = result.data;
+      outletsError = result.error;
+    } else {
+      // 企业用户：只获取自己的已审批排污口
+      const result = await supabase
+        .from('discharge_outlets')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('status', 'approved');
+      
+      outlets = result.data;
+      outletsError = result.error;
+    }
 
     if (outletsError) {
       console.error('获取排污口错误:', outletsError.message);
