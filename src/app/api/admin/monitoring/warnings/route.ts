@@ -1,165 +1,111 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseClient } from '@/storage/database/supabase-client';
 
-export async function GET(request: Request) {
+// 今日超标预警记录
+export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('x-auth-token');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
+    const token = request.headers.get('x-auth-token');
+    const supabase = getSupabaseClient(token || undefined);
 
-    const supabase = getSupabaseClient(authHeader);
+    // 获取今天的开始时间
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayStart = today.toISOString();
 
-    // 获取当前用户信息
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: '用户信息获取失败' }, { status: 400 });
-    }
-
-    // 获取管理员信息
-    const { data: admin, error: adminError } = await supabase
-      .from('profiles')
-      .select('id, user_id, full_name, company_name, park_name, role')
-      .eq('user_id', user.id)
-      .single();
-
-    if (adminError || !admin) {
-      return NextResponse.json({ error: '管理员信息获取失败' }, { status: 400 });
-    }
-
-    if (admin.role !== 'admin') {
-      return NextResponse.json({ error: '非管理员用户' }, { status: 403 });
-    }
-
-    const parkName = admin.park_name;
-    if (!parkName) {
-      return NextResponse.json({ error: '管理员未绑定园区' }, { status: 400 });
-    }
-
-    // 获取园区内所有企业
-    const { data: enterprises, error: enterprisesError } = await supabase
-      .from('profiles')
-      .select('id, user_id, full_name, company_name')
-      .eq('park_name', parkName)
-      .eq('role', 'enterprise');
-
-    if (enterprisesError || !enterprises || enterprises.length === 0) {
-      return NextResponse.json({ data: [] });
-    }
-
-    const enterpriseIds = enterprises.map(e => e.id);
-    const userIds = enterprises.map(e => e.user_id);
-
-    // 获取企业的排污口
-    const { data: outlets, error: outletsError } = await supabase
-      .from('discharge_outlets')
-      .select('id, name, user_id')
-      .in('user_id', userIds)
-      .eq('status', 'approved');
-
-    if (outletsError || !outlets || outlets.length === 0) {
-      return NextResponse.json({ data: [] });
-    }
-
-    const outletMap = new Map(outlets.map(o => [o.id, { id: o.id, name: o.name, userId: o.user_id }]));
-
-    // 获取企业的污染物阈值（从 pollutant_applications）
-    const { data: applications, error: appsError } = await supabase
-      .from('pollutant_applications')
-      .select('company_id, pollutants')
-      .in('company_id', enterpriseIds)
-      .eq('status', 'approved');
-
-    if (appsError || !applications) {
-      return NextResponse.json({ data: [] });
-    }
-
-    // 构建阈值映射：company_id -> { pollutant_type -> threshold }
-    const companyThresholdMap = new Map();
-    for (const app of applications) {
-      const pollutants = app.pollutants || [];
-      const thresholds: Record<string, number> = {};
-      if (Array.isArray(pollutants)) {
-        for (const p of pollutants) {
-          if (p && typeof p === 'object' && p.id && p.threshold) {
-            thresholds[p.id] = p.threshold;
-          }
-        }
-      }
-      companyThresholdMap.set(app.company_id, thresholds);
-    }
-
-    // 获取今天的监测数据（中国时间转换为 UTC）
-    const now = new Date();
-    // 中国时间今天 00:00 = UTC 时间昨天 16:00
-    const todayStart = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() - 1, 16, 0, 0));
-    // 中国时间今天 24:00 = UTC 时间今天 16:00
-    const todayEnd = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate(), 16, 0, 0));
-
-    const { data: monitoringData, error: monitoringError } = await supabase
+    // 直接查询今日超标的监测数据
+    const { data: warningRecords, error: warningError } = await supabase
       .from('monitoring_data')
-      .select('id, outlet_id, pollutant_type, value, monitored_at')
-      .in('outlet_id', outlets.map(o => o.id))
-      .gte('monitored_at', todayStart.toISOString())
-      .lt('monitored_at', todayEnd.toISOString())
+      .select(`
+        id,
+        outlet_id,
+        pollutant_type,
+        value,
+        status,
+        standard_limit,
+        monitored_at
+      `)
+      .gte('monitored_at', todayStart)
+      .neq('status', 'normal')
       .order('monitored_at', { ascending: false });
 
-    if (monitoringError || !monitoringData) {
-      console.log('监测数据查询失败:', monitoringError);
+    if (warningError || !warningRecords || warningRecords.length === 0) {
+      console.log('今日无超标记录');
       return NextResponse.json({ data: [] });
     }
-    console.log('监测数据数量:', monitoringData.length);
 
-    // 按排污口和时间分组，检查每个记录是否有超标的污染物
-    const groupedData = new Map<string, any>();
-    
-    for (const record of monitoringData) {
-      const outlet = outletMap.get(record.outlet_id);
-      if (!outlet) continue;
+    console.log('今日超标记录数量:', warningRecords.length);
 
-      // 找到对应的企业
-      const enterprise = enterprises.find(e => e.user_id === outlet.userId);
-      if (!enterprise) continue;
+    // 获取所有相关的排污口ID
+    const outletIds = [...new Set(warningRecords.map((r: { outlet_id: string }) => r.outlet_id))];
 
-      // 获取该企业的阈值
-      const thresholds = companyThresholdMap.get(enterprise.id) || {};
-      const threshold = thresholds[record.pollutant_type];
+    // 查询排污口信息
+    const { data: outlets } = await supabase
+      .from('discharge_outlets')
+      .select('id, name, user_id')
+      .in('id', outletIds);
 
-      // 检查是否超过阈值
-      if (threshold && record.value > threshold) {
-        // 使用 outlet_id 和 monitored_at 作为分组键
-        const timeKey = record.monitored_at;
-        const groupKey = `${outlet.id}_${timeKey}`;
-        
-        if (!groupedData.has(groupKey)) {
-          groupedData.set(groupKey, {
-            outletId: outlet.id,
-            outletName: outlet.name,
-            enterpriseId: enterprise.id,
-            enterpriseName: enterprise.company_name,
-            time: record.monitored_at,
-            pollutants: {},
-            hasWarning: true,
-          });
-        }
-
-        const group = groupedData.get(groupKey);
-        group.pollutants[record.pollutant_type] = {
-          value: record.value,
-          threshold: threshold,
-        };
-      }
+    if (!outlets || outlets.length === 0) {
+      return NextResponse.json({ data: [] });
     }
 
-    // 转换为数组并按时间排序
-    const warnings = Array.from(groupedData.values())
-      .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+    // 创建排污口映射
+    const outletMap = new Map(outlets.map((o: { id: string; name: string; user_id: string }) => [o.id, o]));
 
-    return NextResponse.json({ data: warnings });
-  } catch (error: any) {
-    return NextResponse.json(
-      { error: '预警记录 API 错误', detail: error.message },
-      { status: 500 }
-    );
+    // 获取所有相关的企业ID
+    const userIds = [...new Set(outlets.map((o: { user_id: string }) => o.user_id))];
+
+    // 查询企业信息
+    const { data: enterprises } = await supabase
+      .from('profiles')
+      .select('id, user_id, company_name')
+      .in('user_id', userIds);
+
+    if (!enterprises || enterprises.length === 0) {
+      return NextResponse.json({ data: [] });
+    }
+
+    // 创建企业映射
+    const enterpriseMap = new Map(enterprises.map((e: { user_id: string; company_name: string }) => [e.user_id, e]));
+
+    // 污染物名称映射
+    const pollutantNameMap: Record<string, string> = {
+      'cod': 'COD（化学需氧量）',
+      'nh3n': 'NH₃-N（氨氮）',
+      'tp': 'TP（总磷）',
+      'tn': 'TN（总氮）'
+    };
+
+    // 构建返回数据
+    const result = warningRecords.map((record: {
+      id: string;
+      outlet_id: string;
+      pollutant_type: string;
+      value: number;
+      status: string;
+      standard_limit: number | null;
+      monitored_at: string;
+    }) => {
+      const outlet = outletMap.get(record.outlet_id);
+      const enterprise = outlet ? enterpriseMap.get(outlet.user_id) : null;
+      
+      return {
+        id: record.id,
+        enterpriseName: enterprise?.company_name || '未知企业',
+        outletName: outlet?.name || '未知排污口',
+        pollutantType: record.pollutant_type,
+        pollutantName: pollutantNameMap[record.pollutant_type] || record.pollutant_type,
+        value: record.value,
+        standardLimit: record.standard_limit || 0,
+        status: record.status,
+        monitoredAt: record.monitored_at
+      };
+    });
+
+    console.log('返回预警记录数量:', result.length);
+
+    return NextResponse.json({ data: result });
+  } catch (error) {
+    console.error('获取预警记录失败:', error);
+    return NextResponse.json({ data: [] });
   }
 }

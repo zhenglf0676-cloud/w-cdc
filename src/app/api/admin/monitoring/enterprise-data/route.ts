@@ -183,6 +183,7 @@ export async function GET(request: NextRequest) {
     };
 
     // 构建返回数据
+    console.log('latestByPollutant keys:', Object.keys(latestByPollutant));
     const result = Object.entries(latestByPollutant).map(([pollutantType, record]: [string, any]) => {
       const threshold = thresholdMap[pollutantType];
       const value = parseFloat(record.value);
@@ -214,7 +215,8 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    console.log('返回数据:', result);
+    console.log('返回数据数量:', result.length);
+    console.log('返回数据:', JSON.stringify(result, null, 2));
 
     return NextResponse.json({
       success: true,

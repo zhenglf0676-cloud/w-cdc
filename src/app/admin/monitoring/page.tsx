@@ -142,6 +142,8 @@ export default function AdminMonitoringPage() {
 
       if (res.ok) {
         const data = await res.json();
+        console.log('API返回数据:', data);
+        console.log('data.data:', data.data);
         setMonitoringData(data.data || []);
       } else {
         console.error('获取监测数据失败:', await res.text());
