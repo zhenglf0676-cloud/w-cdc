@@ -9,6 +9,7 @@ import { eq } from 'drizzle-orm';
  */
 export async function GET(request: Request) {
   try {
+    // 使用服务角色密钥查询数据，绕过RLS策略
     const supabase = getSupabaseClient();
 
     // 从请求头获取 token
@@ -43,7 +44,7 @@ export async function GET(request: Request) {
     const { data: enterprises, error: queryError } = await supabase
       .from('profiles')
       .select('*')
-      .eq('park_name', adminProfile.full_name)
+      .eq('park_name', adminProfile.park_name)
       .eq('role', 'enterprise');
 
     if (queryError) {
@@ -71,7 +72,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       success: true,
       data: {
-        parkName: adminProfile.full_name,
+        parkName: adminProfile.park_name,
         enterprises: enterprisesWithOutletCount,
       },
     });
