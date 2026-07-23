@@ -120,42 +120,48 @@ export async function GET(request: NextRequest) {
       'tn': 'TN（总氮）'
     };
 
-    // 获取过去7天的监测数据用于计算统计数据
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    sevenDaysAgo.setHours(0, 0, 0, 0);
+    // 获取今天的监测数据用于计算统计数据
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
 
-    const { data: historicalData } = await client
+    const { data: todayData } = await client
       .from('monitoring_data')
-      .select('pollutant_type, value, monitored_at')
+      .select('pollutant_type, value, monitored_at, outlet_id')
       .in('outlet_id', outletIds)
-      .gte('monitored_at', sevenDaysAgo.toISOString());
+      .gte('monitored_at', today.toISOString())
+      .lt('monitored_at', tomorrow.toISOString());
 
-    // 按污染物类型计算统计数据
-    const pollutantStats: Record<string, { values: number[], dailyValues: Record<string, number[]> }> = {};
+    // 按污染物分组，累加所有排污口的最新值（与CDC分析API一致，但只用今天的数据）
+    const pollutantTodayData: Record<string, Record<string, number>> = {};
     
-    if (historicalData) {
-      historicalData.forEach((record: any) => {
+    if (todayData) {
+      for (const record of todayData) {
         const pollutantType = record.pollutant_type;
-        if (!pollutantStats[pollutantType]) {
-          pollutantStats[pollutantType] = { values: [], dailyValues: {} };
+        if (!pollutantTodayData[pollutantType]) {
+          pollutantTodayData[pollutantType] = {};
         }
-        
+
+        const currentValue = pollutantTodayData[pollutantType][record.outlet_id] || 0;
         const value = parseFloat(record.value);
-        pollutantStats[pollutantType].values.push(value);
-        
-        // 按日期分组
-        const date = new Date(new Date(record.monitored_at).getTime() + 8 * 60 * 60 * 1000).toISOString().split('T')[0];
-        if (!pollutantStats[pollutantType].dailyValues[date]) {
-          pollutantStats[pollutantType].dailyValues[date] = [];
+        if (value > currentValue) {
+          pollutantTodayData[pollutantType][record.outlet_id] = value;
         }
-        pollutantStats[pollutantType].dailyValues[date].push(value);
-      });
+      }
     }
 
-    // 计算每个污染物的AV、AD、CV、SKEW
-    const calculateStats = (values: number[]) => {
+    // 计算每个污染物的AV、AD、CV、SKEW（使用今天的数据）
+    const calculateStats = (pollutantType: string) => {
+      const outletValues = pollutantTodayData[pollutantType] || {};
+      const values = Object.values(outletValues);
+      
       if (values.length === 0) return { av: 0, ad: 0, cv: 0, skew: 0 };
+      
+      // 如果只有一个排污口，则AV就是该值，AD=0, CV=0, SKEW=0
+      if (values.length === 1) {
+        return { av: values[0], ad: 0, cv: 0, skew: 0 };
+      }
       
       const n = values.length;
       const av = values.reduce((a, b) => a + b, 0) / n;
@@ -182,8 +188,8 @@ export async function GET(request: NextRequest) {
         status = 'warning';
       }
 
-      // 计算该污染物的统计数据
-      const stats = pollutantStats[pollutantType] ? calculateStats(pollutantStats[pollutantType].values) : { av: 0, ad: 0, cv: 0, skew: 0 };
+      // 计算该污染物的统计数据（与CDC分析API一致）
+      const stats = calculateStats(pollutantType);
 
       return {
         name: pollutantNameMap[pollutantType] || pollutantType.toUpperCase(),
