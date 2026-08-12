@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     default: '地下水监测网站',
     template: '%s | 地下水监测',
   },
-  description: '地下水监测排污预警系统 - 实时监控、智能预警、科学管理',
+  description: '基于CDC模型的工业园区地下水监测系统 - 实时监控、智能预警、科学管理',
 };
 
 export default function RootLayout({
