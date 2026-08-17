@@ -87,7 +87,7 @@ export function EnterpriseSidebar({ activeItem = 'home' }: EnterpriseSidebarProp
       <div className="flex h-14 items-center gap-2 border-b border-white/10 px-4">
         <Building2 className="h-6 w-6 shrink-0 text-sky-400" />
         {!collapsed && (
-          <span className="text-sm font-semibold whitespace-nowrap">基于CDC模型的工业园区地下水监测系统</span>
+          <span className="text-xs font-semibold leading-tight">基于CDC模型的工业园区地下水监测系统</span>
         )}
       </div>
 
