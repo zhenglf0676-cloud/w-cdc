@@ -79,7 +79,7 @@ export function AdminSidebar() {
             <div className="flex h-8 w-8 items-center justify-center rounded bg-[#0EA5E9]">
               <Activity className="h-5 w-5" />
             </div>
-            <span className="text-sm font-semibold">园区地下水环境监测平台</span>
+            <span className="text-sm font-semibold">基于CDC模型的工业园区地下水监测系统</span>
           </div>
         )}
         {collapsed && (

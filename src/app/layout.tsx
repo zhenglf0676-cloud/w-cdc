@@ -6,8 +6,8 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: {
-    default: '地下水监测网站',
-    template: '%s | 地下水监测',
+    default: '基于CDC模型的工业园区地下水监测系统',
+    template: '%s | 基于CDC模型的工业园区地下水监测系统',
   },
   description: '基于CDC模型的工业园区地下水监测系统 - 实时监控、智能预警、科学管理',
 };
