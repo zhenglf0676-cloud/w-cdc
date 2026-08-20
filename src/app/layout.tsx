@@ -6,10 +6,10 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: {
-    default: '基于CDC模型的工业园区地下水监测系统',
-    template: '%s | 基于CDC模型的工业园区地下水监测系统',
+    default: '基于虚拟质点系与高维矩张量耦合的水污染动态评估系统',
+    template: '%s | 基于虚拟质点系与高维矩张量耦合的水污染动态评估系统',
   },
-  description: '基于CDC模型的工业园区地下水监测系统 - 实时监控、智能预警、科学管理',
+  description: '基于虚拟质点系与高维矩张量耦合的水污染动态评估系统 - 实时监控、智能预警、科学管理',
 };
 
 export default function RootLayout({

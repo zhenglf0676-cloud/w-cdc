@@ -44,7 +44,7 @@ s1.addShape(pptx.ShapeType.ellipse, { x: -2, y: 5.5, w: 4, h: 4, fill: { color: 
 s1.addShape(pptx.ShapeType.rect, { x: 0.8, y: 0, w: 0.06, h: 7.5, fill: { color: C.accent } });
 
 // 主标题
-s1.addText('基于CDC模型的工业园区地下水监测系统', {
+s1.addText('基于虚拟质点系与高维矩张量耦合的水污染动态评估系统', {
   x: 1.5, y: 2.2, w: 10, h: 1.2,
   fontSize: 42, fontFace: 'Microsoft YaHei', color: C.white, bold: true
 });

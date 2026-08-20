@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils';
 import { LocationPicker } from '@/components/location-picker';
 
 const APP_ICON_URL = 'https://coze-coding-project.tos.coze.site/gen_project_icon/2026-07-19/7664132817533763599_1784448963.png?sign=4906513018-895757e6df-0-736898d83ce3829565980b6ed3d392d92eb800346f56fde50229a2899b5a2cc6';
-const APP_NAME = '基于CDC模型的工业园区地下水监测系统';
+const APP_NAME = '基于虚拟质点系与高维矩张量耦合的水污染动态评估系统';
 
 const highlights = [
   { label: '实时监测', desc: '7天周期数据采集与分析' },

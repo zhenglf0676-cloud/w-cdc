@@ -75,7 +75,7 @@ for (const filePath of files) {
 }
 
 const doc = new Document({
-  title: '基于CDC模型的工业园区地下水监测系统 源代码',
+  title: '基于虚拟质点系与高维矩张量耦合的水污染动态评估系统 源代码',
   description: '软件著作权申请用源代码',
   styles: {
     default: {
@@ -99,7 +99,7 @@ const doc = new Document({
 });
 
 const buffer = await Packer.toBuffer(doc);
-const outPath = '/workspace/projects/public/源代码-基于CDC模型的工业园区地下水监测系统.docx';
+const outPath = '/workspace/projects/public/源代码-基于虚拟质点系与高维矩张量耦合的水污染动态评估系统.docx';
 fs.writeFileSync(outPath, buffer);
 console.log(`文档已生成: ${outPath}`);
 console.log(`文件大小: ${(buffer.length / 1024).toFixed(1)} KB`);
