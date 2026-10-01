@@ -7,6 +7,49 @@ export async function GET(request: NextRequest) {
     // 使用服务角色密钥查询数据
     const supabase = getSupabaseClient();
 
+    // 在服务角色查询监测记录前验证身份，并确定管理员所属园区。
+    const token = request.headers.get('x-auth-token');
+    if (!token) {
+      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    }
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    }
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('role, park_name')
+      .eq('user_id', user.id)
+      .single();
+    if (profileError || !profile || profile.role !== 'admin') {
+      return NextResponse.json({ error: '需要管理员权限' }, { status: 403 });
+    }
+    if (!profile.park_name) {
+      return NextResponse.json({ error: '未设置园区名称' }, { status: 400 });
+    }
+
+    const { data: enterprises, error: enterpriseError } = await supabase
+      .from('profiles')
+      .select('id, user_id, company_name')
+      .eq('role', 'enterprise')
+      .eq('park_name', profile.park_name);
+    if (enterpriseError) throw enterpriseError;
+    if (!enterprises || enterprises.length === 0) {
+      return NextResponse.json({ data: [] });
+    }
+    const userIds = enterprises.map((e: { user_id: string }) => e.user_id);
+    const { data: outlets, error: outletError } = await supabase
+      .from('discharge_outlets')
+      .select('id, name, user_id')
+      .in('user_id', userIds);
+    if (outletError) throw outletError;
+    if (!outlets || outlets.length === 0) {
+      return NextResponse.json({ data: [] });
+    }
+    const outletIds = outlets.map((o: { id: string }) => o.id);
+    const outletMap = new Map(outlets.map((o: { id: string; name: string; user_id: string }) => [o.id, o]));
+    const enterpriseMap = new Map(enterprises.map((e: { user_id: string; company_name: string }) => [e.user_id, e]));
+
     // 获取今天的开始时间（中国时间 UTC+8）
     const now = new Date();
     const chinaTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
@@ -27,6 +70,7 @@ export async function GET(request: NextRequest) {
         standard_limit,
         monitored_at
       `)
+      .in('outlet_id', outletIds)
       .gte('monitored_at', todayStartUTC)
       .neq('status', 'normal')
       .order('monitored_at', { ascending: false });
@@ -42,38 +86,6 @@ export async function GET(request: NextRequest) {
 
     console.log('今日超标记录数量:', warningRecords.length);
 
-    // 获取所有相关的排污口ID
-    const outletIds = [...new Set(warningRecords.map((r: { outlet_id: string }) => r.outlet_id))];
-
-    // 查询排污口信息
-    const { data: outlets } = await supabase
-      .from('discharge_outlets')
-      .select('id, name, user_id')
-      .in('id', outletIds);
-
-    if (!outlets || outlets.length === 0) {
-      return NextResponse.json({ data: [] });
-    }
-
-    // 创建排污口映射
-    const outletMap = new Map(outlets.map((o: { id: string; name: string; user_id: string }) => [o.id, o]));
-
-    // 获取所有相关的企业ID
-    const userIds = [...new Set(outlets.map((o: { user_id: string }) => o.user_id))];
-
-    // 查询企业信息
-    const { data: enterprises } = await supabase
-      .from('profiles')
-      .select('id, user_id, company_name')
-      .in('user_id', userIds);
-
-    if (!enterprises || enterprises.length === 0) {
-      return NextResponse.json({ data: [] });
-    }
-
-    // 创建企业映射
-    const enterpriseMap = new Map(enterprises.map((e: { user_id: string; company_name: string }) => [e.user_id, e]));
-
     // 污染物名称映射
     const pollutantNameMap: Record<string, string> = {
       'cod': 'COD（化学需氧量）',
@@ -83,7 +95,9 @@ export async function GET(request: NextRequest) {
     };
 
     // 构建返回数据
-    const result = warningRecords.map((record: {
+    const result = warningRecords.filter((record: { value: number; standard_limit: number | null }) =>
+      record.standard_limit != null && Number(record.value) > Number(record.standard_limit)
+    ).map((record: {
       id: string;
       outlet_id: string;
       pollutant_type: string;

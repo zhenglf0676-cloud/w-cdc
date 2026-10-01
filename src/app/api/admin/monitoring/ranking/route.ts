@@ -135,6 +135,7 @@ export async function GET(request: Request) {
 
       // 按日期和污染物分组，每天取每个排污口的最新值，累加所有排污口
       const dailyPollutantData: Record<string, Record<string, Record<string, number>>> = {};
+      const dailyPollutantDataLatestTimes: Record<string, number> = {};
       const outletMap: Record<string, string> = {};
       outlets.forEach(o => { outletMap[o.id] = o.name; });
 
@@ -148,9 +149,13 @@ export async function GET(request: Request) {
         if (!dailyPollutantData[date]) dailyPollutantData[date] = {};
         if (!dailyPollutantData[date][pollutantType]) dailyPollutantData[date][pollutantType] = {};
 
-        const currentValue = dailyPollutantData[date][pollutantType][record.outlet_id] || 0;
-        if (record.value > currentValue) {
-          dailyPollutantData[date][pollutantType][record.outlet_id] = record.value;
+        // 按监测时间选择当天最新记录；较小值或零值也可以覆盖旧值。
+        const recordTime = new Date(record.monitored_at).getTime();
+        const recordKey = JSON.stringify([date, pollutantType, record.outlet_id]);
+        const latestTime = dailyPollutantDataLatestTimes[recordKey];
+        if (latestTime === undefined || recordTime > latestTime) {
+          dailyPollutantDataLatestTimes[recordKey] = recordTime;
+          dailyPollutantData[date][pollutantType][record.outlet_id] = Number(record.value);
         }
       }
 

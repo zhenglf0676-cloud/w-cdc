@@ -115,6 +115,7 @@ export async function GET(request: NextRequest) {
 
     // 按日期和污染物分组，每天取每个排污口的最新值，累加所有排污口（与企业端CDC分析API一致）
     const dailyPollutantData: Record<string, Record<string, Record<string, number>>> = {};
+    const dailyPollutantDataLatestTimes: Record<string, number> = {};
     
     if (historicalData) {
       for (const record of historicalData) {
@@ -125,10 +126,13 @@ export async function GET(request: NextRequest) {
         if (!dailyPollutantData[date]) dailyPollutantData[date] = {};
         if (!dailyPollutantData[date][pollutantType]) dailyPollutantData[date][pollutantType] = {};
 
-        const currentValue = dailyPollutantData[date][pollutantType][record.outlet_id] || 0;
-        const value = parseFloat(record.value);
-        if (value > currentValue) {
-          dailyPollutantData[date][pollutantType][record.outlet_id] = value;
+        // 按监测时间选择当天最新记录；较小值或零值也可以覆盖旧值。
+        const recordTime = new Date(record.monitored_at).getTime();
+        const recordKey = JSON.stringify([date, pollutantType, record.outlet_id]);
+        const latestTime = dailyPollutantDataLatestTimes[recordKey];
+        if (latestTime === undefined || recordTime > latestTime) {
+          dailyPollutantDataLatestTimes[recordKey] = recordTime;
+          dailyPollutantData[date][pollutantType][record.outlet_id] = Number(record.value);
         }
       }
     }
@@ -168,10 +172,8 @@ export async function GET(request: NextRequest) {
       const thresholdValue = threshold?.threshold || 0;
       
       let status = 'normal';
-      if (value >= thresholdValue) {
+      if (value > thresholdValue) {
         status = 'alarm';
-      } else if (value >= thresholdValue * 0.8) {
-        status = 'warning';
       }
 
       // 计算该污染物的统计数据（与CDC分析API一致）
@@ -183,7 +185,7 @@ export async function GET(request: NextRequest) {
         unit: threshold?.unit || record.unit || 'mg/L',
         latestValue: value,
         status,
-        warningThreshold: thresholdValue * 0.8,
+        warningThreshold: thresholdValue,
         alarmThreshold: thresholdValue,
         monitoredAt: record.monitored_at,
         av: stats.av,
