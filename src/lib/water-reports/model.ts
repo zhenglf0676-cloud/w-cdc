@@ -1,16 +1,16 @@
+import { chinaDay, chinaPeriod } from '../china-time';
+export { chinaDay } from '../china-time';
 export type Role = 'enterprise' | 'admin';
 export type Company = { id: string; user_id: string; company_name: string; park_name: string };
 export type Outlet = { id: string; name: string; user_id: string };
 export type Reading = { id: string; outlet_id: string; pollutant_type: string; value: number; unit: string | null; standard_limit: number | null; monitored_at: string };
 export type Pollutant = { id: string; label: string; unit: string };
 export type Stats = { av: number; ad: number; cv: number; skew: number };
-export const chinaDay = (date: string) => new Date(new Date(date).getTime() + 28800000).toISOString().slice(0, 10);
 export const exceeded = (r: Reading) => r.standard_limit !== null && Number.isFinite(Number(r.standard_limit)) && Number(r.value) > Number(r.standard_limit);
 export function period(start: unknown, end: unknown) {
-  const valid = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && Number.isFinite(Date.parse(v)) && new Date(v).toISOString().slice(0, 10) === v;
-  if (!valid(start) || !valid(end) || start > end) throw new Error('请选择有效的起止日期');
-  if ((Date.parse(end) - Date.parse(start)) / 86400000 > 365) throw new Error('一次最多生成366天的报告');
-  return { start, end, from: new Date(start + 'T00:00:00+08:00').toISOString(), to: new Date(Date.parse(end + 'T00:00:00+08:00') + 86400000).toISOString() };
+  const range = chinaPeriod(start, end);
+  if (range.days > 366) throw new Error('一次最多生成366天的报告');
+  return range;
 }
 export function dailyLatest(records: Reading[]) {
   const latest = new Map<string, Reading>();

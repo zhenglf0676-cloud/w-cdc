@@ -1,6 +1,7 @@
+import { recentChinaDays } from '@/lib/china-time';
 import { NextResponse } from 'next/server';
 import { getSupabaseClient } from '@/storage/database/supabase-client';
-import { chinaDay, exceeded, type Reading } from '@/lib/water-reports/model';
+import { exceeded, type Reading } from '@/lib/water-reports/model';
 export async function GET(request: Request) {
   const headers = { 'Cache-Control': 'private, no-store' };
   const token = request.headers.get('x-auth-token');
@@ -32,11 +33,11 @@ export async function GET(request: Request) {
       }
     }
     const now = new Date().toISOString();
-    const from = new Date(chinaDay(now) + 'T00:00:00+08:00').toISOString();
+    const range = recentChinaDays(1, new Date(now));
     const warnings: { id: string; at: string }[] = [];
     for (let i = 0; i < ids.length; i += 100) {
       for (let offset = 0; ; offset += 500) {
-        const { data, error } = await client.from('monitoring_data').select('id, value, standard_limit, monitored_at').in('outlet_id', ids.slice(i, i + 100)).gte('monitored_at', from).lte('monitored_at', now).order('id').range(offset, offset + 499);
+        const { data, error } = await client.from('monitoring_data').select('id, value, standard_limit, monitored_at').in('outlet_id', ids.slice(i, i + 100)).gte('monitored_at', range.from).lt('monitored_at', range.to).lte('monitored_at', now).order('id').range(offset, offset + 499);
         if (error) throw error;
         for (const r of data ?? []) if (exceeded(r as Reading)) warnings.push({ id: r.id, at: r.monitored_at });
         if (!data || data.length < 500) break;

@@ -1,3 +1,4 @@
+import { recentChinaDays } from '@/lib/china-time';
 import { NextResponse } from 'next/server';
 import { getSupabaseCredentials, getSupabaseServiceRoleKey, getSupabaseClient } from '@/storage/database/supabase-client';
 import { createClient } from '@supabase/supabase-js';
@@ -42,7 +43,8 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const enterpriseId = searchParams.get('enterpriseId');
-    const days = parseInt(searchParams.get('days') || '7');
+    const days = Number(searchParams.get('days') || '7');
+    if (!Number.isInteger(days) || days < 1) return NextResponse.json({ error: '天数必须为正整数' }, { status: 400 });
 
     if (!enterpriseId) {
       return NextResponse.json({ error: '缺少企业 ID' }, { status: 400 });
@@ -74,17 +76,14 @@ export async function GET(request: Request) {
     const outletIds = outlets.map(o => o.id);
 
     // 获取时间范围内的监测数据（与企业端 CDC API 保持一致）
-    const now = new Date();
-    const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-    startDate.setUTCHours(0, 0, 0, 0);
-    now.setUTCHours(23, 59, 59, 999);
+    const range = recentChinaDays(days);
 
     const { data: monitoringData, error: dataError } = await supabase
       .from('monitoring_data')
       .select('id, outlet_id, pollutant_type, value, monitored_at')
       .in('outlet_id', outletIds)
-      .gte('monitored_at', startDate.toISOString())
-      .lte('monitored_at', now.toISOString())
+      .gte('monitored_at', range.from)
+      .lt('monitored_at', range.to)
       .order('monitored_at', { ascending: true });
 
     if (dataError) {
@@ -147,6 +146,7 @@ export async function GET(request: Request) {
       const outletData = pollutantData.outlets.get(outletId)!;
       outletData.data.push({
         time: new Date(record.monitored_at).toLocaleString('zh-CN', {
+          timeZone: 'Asia/Shanghai',
           month: '2-digit',
           day: '2-digit',
           hour: '2-digit',
