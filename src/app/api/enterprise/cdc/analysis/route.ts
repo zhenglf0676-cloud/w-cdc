@@ -1,3 +1,4 @@
+import { chinaDay, chinaPeriod, recentChinaDays } from '@/lib/china-time';
 import { NextResponse } from 'next/server';
 import { getSupabaseClient } from '@/storage/database/supabase-client';
 
@@ -38,18 +39,12 @@ export async function GET(request: Request) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
 
-    let fromDate: Date, toDate: Date;
-    if (startDate && endDate) {
-      fromDate = new Date(startDate);
-      toDate = new Date(endDate);
-    } else {
-      toDate = new Date();
-      fromDate = new Date(toDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+    let range: ReturnType<typeof chinaPeriod>;
+    try {
+      range = startDate !== null || endDate !== null ? chinaPeriod(startDate, endDate) : recentChinaDays(7);
+    } catch {
+      return NextResponse.json({ error: '请选择有效的起止日期' }, { status: 400 });
     }
-
-    // 设置 UTC 时间范围（中国时间 UTC+8）
-    fromDate.setUTCHours(0, 0, 0, 0);
-    toDate.setUTCHours(23, 59, 59, 999);
 
     // 获取企业的已审批排污口
     const { data: outlets, error: outletsError } = await supabase
@@ -109,8 +104,8 @@ export async function GET(request: Request) {
       .from('monitoring_data')
       .select('outlet_id, pollutant_type, value, monitored_at')
       .in('outlet_id', outletIds)
-      .gte('monitored_at', fromDate.toISOString())
-      .lte('monitored_at', toDate.toISOString());
+      .gte('monitored_at', range.from)
+      .lt('monitored_at', range.to);
 
     if (monitoringError) {
       console.error('获取监测数据失败:', monitoringError);
@@ -127,7 +122,7 @@ export async function GET(request: Request) {
       if (!outletMap[record.outlet_id]) continue;
 
       // 使用中国时间（UTC+8）获取日期
-      const date = new Date(new Date(record.monitored_at).getTime() + 8 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const date = chinaDay(record.monitored_at);
       const pollutantType = record.pollutant_type;
 
       if (!dailyPollutantData[date]) dailyPollutantData[date] = {};
@@ -200,8 +195,8 @@ export async function GET(request: Request) {
         .from('monitoring_data')
         .select('outlet_id, pollutant_type, value, monitored_at')
         .in('outlet_id', entOutletIds)
-        .gte('monitored_at', fromDate.toISOString())
-        .lte('monitored_at', toDate.toISOString());
+        .gte('monitored_at', range.from)
+        .lt('monitored_at', range.to);
 
       if (!entMonitoringData || entMonitoringData.length === 0) continue;
 
@@ -212,7 +207,7 @@ export async function GET(request: Request) {
 
       for (const record of entMonitoringData) {
         if (!entOutletMap[record.outlet_id]) continue;
-        const date = new Date(new Date(record.monitored_at).getTime() + 8 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const date = chinaDay(record.monitored_at);
         const pollutantType = record.pollutant_type;
 
         if (!entDailyPollutantData[date]) entDailyPollutantData[date] = {};
@@ -438,9 +433,9 @@ export async function GET(request: Request) {
         enterpriseName: profile.company_name || '',
         parkName: profile.park_name || '',
         analysisPeriod: {
-          days: 7,
-          startDate: fromDate.toISOString().split('T')[0],
-          endDate: toDate.toISOString().split('T')[0]
+          days: range.days,
+          startDate: range.start,
+          endDate: range.end
         },
         overallCDC: Math.round(overallCDC * 100) / 100,
         lastPeriodCDC: 0,

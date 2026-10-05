@@ -3,6 +3,7 @@ import { Inspector } from 'react-dev-inspector';
 import { SupabaseConfigProvider } from '@/lib/supabase-config-inject';
 import { AuthProvider } from '@/lib/auth-context';
 import './globals.css';
+import { WaterAssistant } from '@/components/water-assistant/water-assistant';
 
 export const metadata: Metadata = {
   title: {
@@ -26,6 +27,7 @@ export default function RootLayout({
           <AuthProvider>
             {isDev && <Inspector />}
             {children}
+            <WaterAssistant />
           </AuthProvider>
         </SupabaseConfigProvider>
       </body>

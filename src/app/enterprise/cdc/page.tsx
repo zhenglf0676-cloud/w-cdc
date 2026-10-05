@@ -14,7 +14,7 @@ import {
   TrendingDown,
   Loader2,
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { recentChinaDays, shiftChinaDay } from '@/lib/china-time';
 
 // 污染物颜色映射
 const POLLUTANT_COLORS = [
@@ -85,11 +85,12 @@ export default function CDCPage() {
   const router = useRouter();
   const { user, session, isLoading } = useAuth();
   
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
-    from: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-    to: new Date()
-  });
+  const [selectedDate, setSelectedDate] = useState('');
+  const [dateRange, setDateRange] = useState({ from: '', to: '' });
+  useEffect(() => {
+    const range = recentChinaDays(7);
+    setSelectedDate(range.end); setDateRange({ from: range.start, to: range.end });
+  }, []);
   const [cdcData, setCdcData] = useState<CDCAnalysisData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -126,8 +127,8 @@ export default function CDCPage() {
 
     try {
       // 直接传递日期字符串（YYYY-MM-DD），避免时区转换问题
-      const startDateStr = format(dateRange.from, 'yyyy-MM-dd');
-      const endDateStr = format(dateRange.to, 'yyyy-MM-dd');
+      const startDateStr = dateRange.from;
+      const endDateStr = dateRange.to;
       
       const params = new URLSearchParams({
         startDate: startDateStr,
@@ -256,8 +257,8 @@ export default function CDCPage() {
     
     // 格式化日期显示
     const formatDate = (dateStr: string) => {
-      const date = new Date(dateStr);
-      return `${date.getMonth() + 1}/${date.getDate()}`;
+      const [, month, day] = dateStr.split('-');
+      return `${Number(month)}/${Number(day)}`;
     };
 
     // 计算 Y 轴最大值（至少显示到 2.0，以便显示所有风险等级）
@@ -390,27 +391,25 @@ export default function CDCPage() {
           <div className="mb-3 flex items-center gap-2">
             <CalendarIcon className="h-4 w-4 text-slate-500" />
             <h3 className="font-semibold text-slate-900">分析周期</h3>
-            <span className="text-xs text-slate-500 ml-2">（选择日期后自动往前取 7 天计算）</span>
+            <span className="text-xs text-slate-500 ml-2">（北京时间，含所选日期共 7 天）</span>
           </div>
           <div className="flex items-center gap-4">
             <div>
               <label className="mb-1 block text-xs text-slate-500">选择日期</label>
               <input
                 type="date"
-                value={format(selectedDate, 'yyyy-MM-dd')}
+                value={selectedDate}
                 onChange={(e) => {
-                  const newDate = new Date(e.target.value);
-                  setSelectedDate(newDate);
-                  // 自动计算 7 天范围：从选择日期往前 7 天到选择日期
-                  const fromDate = new Date(newDate);
-                  fromDate.setDate(fromDate.getDate() - 7);
-                  setDateRange({ from: fromDate, to: newDate });
+                  const selected = e.target.value;
+                  if (!selected) return;
+                  setSelectedDate(selected);
+                  setDateRange({ from: shiftChinaDay(selected, -6), to: selected });
                 }}
                 className="rounded-md border border-slate-200 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
               />
             </div>
             <div className="text-xs text-slate-500 mt-5">
-              计算周期：{format(dateRange.from, 'yyyy/MM/dd')} - {format(dateRange.to, 'yyyy/MM/dd')}（7 天）
+              计算周期：{dateRange.from.replaceAll('-', '/')} - {dateRange.to.replaceAll('-', '/')}（7 天）
             </div>
             <button
               onClick={fetchCDCData}

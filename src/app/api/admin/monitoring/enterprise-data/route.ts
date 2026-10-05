@@ -1,3 +1,4 @@
+import { recentChinaDays, chinaDay } from '@/lib/china-time';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseClient } from '@/storage/database/supabase-client';
 
@@ -103,15 +104,14 @@ export async function GET(request: NextRequest) {
     };
 
     // 获取过去7天的监测数据用于计算统计数据（与企业端CDC分析API一致）
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    sevenDaysAgo.setHours(0, 0, 0, 0);
+    const range = recentChinaDays(7);
 
     const { data: historicalData } = await client
       .from('monitoring_data')
       .select('pollutant_type, value, monitored_at, outlet_id')
       .in('outlet_id', outletIds)
-      .gte('monitored_at', sevenDaysAgo.toISOString());
+      .gte('monitored_at', range.from)
+      .lt('monitored_at', range.to);
 
     // 按日期和污染物分组，每天取每个排污口的最新值，累加所有排污口（与企业端CDC分析API一致）
     const dailyPollutantData: Record<string, Record<string, Record<string, number>>> = {};
@@ -120,7 +120,7 @@ export async function GET(request: NextRequest) {
     if (historicalData) {
       for (const record of historicalData) {
         // 使用中国时间（UTC+8）获取日期
-        const date = new Date(new Date(record.monitored_at).getTime() + 8 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const date = chinaDay(record.monitored_at);
         const pollutantType = record.pollutant_type;
 
         if (!dailyPollutantData[date]) dailyPollutantData[date] = {};

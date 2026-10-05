@@ -689,8 +689,7 @@ export default function MonitoringPage() {
                               <td className="px-4 py-3 text-slate-600">
                                 {(() => {
                                   const date = new Date(time);
-                                  const localDate = new Date(date.getTime() + 8 * 60 * 60 * 1000);
-                                  return localDate.toLocaleString('zh-CN');
+                                  return date.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false });
                                 })()}
                               </td>
                               {approvedPollutants.map((p) => {
@@ -872,11 +871,9 @@ function ChartOption({
       data: times.map(t => {
         const date = new Date(t);
         if (timeRange === 'today') {
-          // 手动添加 8 小时（CST 时区）
-          const localDate = new Date(date.getTime() + 8 * 60 * 60 * 1000);
-          return localDate.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+          return date.toLocaleTimeString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false, hour: '2-digit', minute: '2-digit' });
         }
-        return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' });
+        return date.toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai', month: '2-digit', day: '2-digit' });
       }),
     },
     yAxis: {

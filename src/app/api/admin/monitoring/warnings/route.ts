@@ -1,3 +1,4 @@
+import { recentChinaDays } from '@/lib/china-time';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseClient } from '@/storage/database/supabase-client';
 
@@ -50,13 +51,7 @@ export async function GET(request: NextRequest) {
     const outletMap = new Map(outlets.map((o: { id: string; name: string; user_id: string }) => [o.id, o]));
     const enterpriseMap = new Map(enterprises.map((e: { user_id: string; company_name: string }) => [e.user_id, e]));
 
-    // 获取今天的开始时间（中国时间 UTC+8）
-    const now = new Date();
-    const chinaTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
-    const todayStart = new Date(Date.UTC(chinaTime.getUTCFullYear(), chinaTime.getUTCMonth(), chinaTime.getUTCDate(), 0, 0, 0, 0)).toISOString();
-    // 转换为UTC时间用于查询
-    const todayStartUTC = new Date(new Date(todayStart).getTime() - 8 * 60 * 60 * 1000).toISOString();
-    console.log('todayStart:', todayStart, 'todayStartUTC:', todayStartUTC);
+    const range = recentChinaDays(1);
 
     // 直接查询今日超标的监测数据
     const { data: warningRecords, error: warningError } = await supabase
@@ -71,11 +66,12 @@ export async function GET(request: NextRequest) {
         monitored_at
       `)
       .in('outlet_id', outletIds)
-      .gte('monitored_at', todayStartUTC)
+      .gte('monitored_at', range.from)
+      .lt('monitored_at', range.to)
       .neq('status', 'normal')
       .order('monitored_at', { ascending: false });
 
-    console.log('查询条件:', { todayStartUTC, status: 'normal' });
+    console.log('查询条件:', { from: range.from, to: range.to, status: 'normal' });
     console.log('warningError:', warningError);
     console.log('warningRecords:', warningRecords?.length);
 

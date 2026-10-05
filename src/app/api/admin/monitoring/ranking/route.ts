@@ -1,3 +1,4 @@
+import { recentChinaDays, chinaDay } from '@/lib/china-time';
 import { NextResponse } from 'next/server';
 import { getSupabaseClient } from '@/storage/database/supabase-client';
 
@@ -100,11 +101,7 @@ export async function GET(request: Request) {
     }
 
     // 获取 7 天的监测数据（中国时间 UTC+8）
-    const now = new Date();
-    const toDate = new Date(now);
-    toDate.setUTCHours(23, 59, 59, 999);
-    const fromDate = new Date(toDate.getTime() - 7 * 24 * 60 * 60 * 1000);
-    fromDate.setUTCHours(0, 0, 0, 0);
+    const range = recentChinaDays(7);
 
     // 获取所有相关排污口的监测数据
     const allOutletIds = Object.values(enterpriseOutletMap).flat().map(o => o.id);
@@ -116,8 +113,8 @@ export async function GET(request: Request) {
       .from('monitoring_data')
       .select('outlet_id, pollutant_type, value, monitored_at')
       .in('outlet_id', allOutletIds)
-      .gte('monitored_at', fromDate.toISOString())
-      .lte('monitored_at', toDate.toISOString());
+      .gte('monitored_at', range.from)
+      .lt('monitored_at', range.to);
 
     if (monitoringError) {
       console.error('获取监测数据失败:', monitoringError);
@@ -143,7 +140,7 @@ export async function GET(request: Request) {
         if (!outletMap[record.outlet_id]) continue;
 
         // 使用中国时间（UTC+8）获取日期
-        const date = new Date(new Date(record.monitored_at).getTime() + 8 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const date = chinaDay(record.monitored_at);
         const pollutantType = record.pollutant_type;
 
         if (!dailyPollutantData[date]) dailyPollutantData[date] = {};
