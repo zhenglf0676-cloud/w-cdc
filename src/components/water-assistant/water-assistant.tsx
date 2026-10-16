@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/lib/auth-context';
 import styles from './water-assistant.module.css';
+import { AiChat } from './ai-chat';
 
 type Point = { x: number; y: number };
 const day = (n: number) => new Date(n + 28800000).toISOString().slice(0, 10);
@@ -135,6 +136,7 @@ export function WaterAssistant() {
     {open && <section ref={panel} tabIndex={-1} className={styles.panel} style={{ left: Math.max(12, Math.min(window.innerWidth - 362, position.x > 360 ? position.x - 360 : position.x + 160)), top: Math.max(12, Math.min(window.innerHeight - 450, position.y - 100)) }} aria-label="小水滴操作面板">
       <div className="flex items-center justify-between"><h2 className="font-semibold text-teal-900">小水滴 · {role === 'admin' ? '园区助手' : '企业助手'}</h2><Button size="icon" variant="ghost" aria-label="收起面板" onClick={() => { setOpen(false); pet.current?.focus(); }}><X className="size-4" /></Button></div>
       <p className="text-sm text-slate-500">{role === 'admin' ? '生成所属园区的监测报告' : '生成本企业的监测报告'}</p>
+      <AiChat key={session.user.id} token={session.access_token} userId={session.user.id} />
       <div className="mt-4 grid grid-cols-2 gap-3"><div><Label htmlFor="water-start">开始日期</Label><Input id="water-start" type="date" value={startDate} max={endDate || undefined} onChange={e => setStart(e.target.value)} disabled={busy} /></div><div><Label htmlFor="water-end">结束日期</Label><Input id="water-end" type="date" value={endDate} min={startDate || undefined} onChange={e => setEnd(e.target.value)} disabled={busy} /></div></div>
       <Button className="mt-4 w-full bg-teal-700 hover:bg-teal-800" disabled={busy || demoStep !== null || !startDate || !endDate || startDate > endDate} onClick={generate}>{busy ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}{busy ? '正在生成报告…' : '生成Word报告'}</Button>
       {download && <a className="mt-2 block text-center text-sm text-teal-700 underline" href={download} download={filename}>再次下载报告</a>}
