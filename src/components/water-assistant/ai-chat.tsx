@@ -3,8 +3,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Droplets, FileSpreadsheet, Loader2, Paperclip, Send, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { AnalysisEvidence } from './analysis-evidence';
+import type { KnowledgeSource } from '@/lib/water-assistant/knowledge';
 
-type Message = { role: 'user' | 'assistant'; content: string; evidence?: unknown[] };
+type Message = { role: 'user' | 'assistant'; content: string; evidence?: unknown[]; sources?: KnowledgeSource[] };
 type ImportPreview = { success: boolean; count: number; errorCount: number; errors: string[]; warnings: string[]; approvedOutlets: string[]; approvedPollutants: string[]; sample: { outlet: string; time: string; pollutant: string; value: number; unit: string; threshold: number }[] };
 export function AiChat({ token, userId, scope, canImport }: { token: string; userId: string; scope: string; canImport: boolean }) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -70,7 +72,7 @@ export function AiChat({ token, userId, scope, canImport }: { token: string; use
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || '分析失败');
       if (controller.signal.aborted) return;
-      setMessages([...next, { role: 'assistant', content: data.answer, evidence: data.evidence }]); setQuestion('');
+      setMessages([...next, { role: 'assistant', content: data.answer, evidence: data.evidence, sources: data.sources }]); setQuestion('');
     } catch (e) { if (!controller.signal.aborted) setError(e instanceof Error ? e.message : '网络异常，请重试'); }
     finally { if (pending.current === controller) { setBusy(false); pending.current = null; } }
   }
@@ -85,16 +87,17 @@ export function AiChat({ token, userId, scope, canImport }: { token: string; use
     <div ref={conversation} className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-5" role="log" aria-label="小水滴对话记录" aria-live="polite">
       {!messages.length && <div className="rounded-2xl border border-teal-100 bg-teal-50/60 p-4 text-sm text-slate-700">
         <p className="font-medium text-teal-900">嗨，我是小水滴！</p>
-        <p className="mt-2 leading-relaxed">直接告诉我你想了解的水质情况，也可以像聊天一样继续追问。我只会读取你有权限查看的数据。</p>
+        <p className="mt-2 leading-relaxed">直接问我监测情况、系统操作或标准适用范围，也可以像聊天一样继续追问。我只会读取你有权限查看的数据。</p>
         <div className="mt-4 flex flex-wrap gap-2">
-          {['分析近7天的水质异常', '最近一个月有什么变化？', '对比本周与上周的数据'].map(example => <Button key={example} type="button" size="sm" variant="outline" className="h-auto whitespace-normal rounded-full border-teal-200 bg-white py-1.5 text-left text-xs text-teal-800" onClick={() => { setQuestion(example); input.current?.focus(); }}>{example}</Button>)}
+          {(scope === '所属园区' ? ['园区近7天哪些企业有超阈值记录？', 'GB/T 14848适用于排污口吗？', '如何核查异常监测值？'] : ['分析本企业近7天的异常', '我的排污口和审批阈值是什么？', 'CDC指标是什么意思？']).map(example => <Button key={example} type="button" size="sm" variant="outline" className="h-auto whitespace-normal rounded-full border-teal-200 bg-white py-1.5 text-left text-xs text-teal-800" onClick={() => { setQuestion(example); input.current?.focus(); }}>{example}</Button>)}
         </div>
       </div>}
       {messages.map((m, i) => <div key={i} className={`flex gap-2 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
         {m.role === 'assistant' && <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-teal-100 text-teal-700"><Droplets className="size-4" /></span>}
         <div className={`max-w-[88%] rounded-2xl px-3.5 py-3 text-sm leading-relaxed shadow-sm ${m.role === 'user' ? 'rounded-tr-sm bg-teal-700 text-white' : 'rounded-tl-sm border border-slate-100 bg-slate-50 text-slate-800'}`}>
           <p className="whitespace-pre-wrap break-words">{m.content}</p>
-          {!!m.evidence?.length && <details className="mt-3 border-t border-teal-100 pt-2"><summary className="cursor-pointer text-xs font-medium text-teal-700">查看计算结果与记录证据</summary><pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-white p-2 text-xs text-slate-600">{JSON.stringify(m.evidence, null, 2)}</pre></details>}
+          <AnalysisEvidence evidence={m.evidence} admin={scope === '所属园区'} />
+          {!!m.sources?.length && <div className="mt-3 space-y-2 border-t border-teal-100 pt-3" aria-label="参考资料"><p className="text-xs font-medium text-teal-800">资料依据</p>{m.sources.map(source => <details key={source.id} className="rounded-lg border border-slate-200 bg-white p-2 text-xs"><summary className="cursor-pointer text-slate-700">{source.title} · {source.section}</summary><p className="mt-2 text-slate-600">{source.excerpt}</p><p className="mt-1 text-slate-500">{source.version}</p>{source.url && <a href={source.url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-teal-700 underline">查看官方来源</a>}</details>)}</div>}
         </div>
       </div>)}
       {busy && <div role="status" className="flex items-center gap-2 text-sm text-teal-700"><Loader2 className="size-4 animate-spin" />正在查询并分析数据… <Button size="sm" variant="ghost" onClick={() => { pending.current?.abort(); setBusy(false); }}>取消</Button></div>}
