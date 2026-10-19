@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { z } from 'zod';
 
@@ -21,6 +22,36 @@ const history = z.object({
   results: z.array(z.object({ company: z.string(), currentCDC: z.number().nullable(), previousCDC: z.number().nullable(), currentRecords: z.number(), previousRecords: z.number(), currentExceedances: z.number(), previousExceedances: z.number(), pollutants: z.array(metric) })),
 });
 const fmt = (value: number | null | undefined) => value === null || value === undefined ? '—' : Number(value.toFixed(3)).toString();
+type Metric = z.infer<typeof metric>;
+
+function HistoryMetric({ item, initiallyOpen }: { item: Metric; initiallyOpen: boolean }) {
+  const [expanded, setExpanded] = useState(initiallyOpen);
+  const days = [...new Set([...item.normalReference.daily, ...item.currentDaily].map(point => point.date))].sort();
+  const option = { color: ['#0ea5e9', '#f59e0b'], tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+    legend: { bottom: 0, textStyle: { fontSize: 10 } }, grid: { left: '3%', right: '5%', top: '7%', bottom: 38, containLabel: true },
+    xAxis: { type: 'category', data: days.map(day => day.slice(5)), boundaryGap: false }, yAxis: { type: 'value', name: item.unit },
+    series: [
+      { name: '历史参考日汇总', type: 'line', smooth: true, symbolSize: 5, data: days.map(day => item.normalReference.daily.find(p => p.date === day)?.value ?? null) },
+      { name: '当前日汇总', type: 'line', smooth: true, symbolSize: 5, data: days.map(day => item.currentDaily.find(p => p.date === day)?.value ?? null) },
+    ] };
+  return <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+    <button type="button" className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-3 py-2.5 text-left hover:bg-teal-50/50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-teal-600" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>
+      <span className="font-semibold text-slate-800">{item.label} <span className="font-normal text-slate-500">· {item.unit}</span></span>
+      <span className="flex flex-wrap items-center gap-2 text-slate-600">
+        {item.comparable && item.current.stats && item.normalReference.stats && <span>AV {fmt(item.normalReference.stats.av)} → {fmt(item.current.stats.av)} · CV {fmt(item.normalReference.stats.cv)} → {fmt(item.current.stats.cv)}</span>}
+        {item.current.exceedances > 0 && <span className="rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-800">{item.current.exceedances} 条超上限</span>}
+        <span className="font-medium text-teal-700">{expanded ? '收起' : '查看曲线与指标'}</span>
+      </span>
+    </button>
+    {expanded && <div className="space-y-2 border-t border-slate-100 px-3 py-3 text-slate-600">
+      <p>历史正常参考 {item.normalReference.days} 天；当前有效 {item.current.positiveDays} 天；当前超上限 {item.current.exceedances} 条。</p>
+      {item.comparable && item.current.stats && item.normalReference.stats ? <div className="grid gap-x-3 gap-y-1 sm:grid-cols-2"><span>AV：{fmt(item.normalReference.stats.av)} → {fmt(item.current.stats.av)} {typeof item.change?.avPercent === 'number' ? `(${fmt(item.change.avPercent)}%)` : ''}</span><span>AD：{fmt(item.normalReference.stats.ad)} → {fmt(item.current.stats.ad)}</span><span>CV：{fmt(item.normalReference.stats.cv)} → {fmt(item.current.stats.cv)}</span><span>SKEW：{fmt(item.normalReference.stats.skew)} → {fmt(item.current.stats.skew)}</span></div> : <p className="text-amber-700">{item.note ?? '暂无可比的历史正常参考。'}</p>}
+      {!!item.outletWarnings.length && <p className="text-amber-800">异常排污口：{item.outletWarnings.map(o => `${o.name} ${o.count} 条`).join('、')}</p>}
+      {!!days.length && <ReactECharts option={option} style={{ height: 205 }} notMerge lazyUpdate />}
+      {!!days.length && <p className="text-slate-500">曲线为企业各排污口当天最新值的合计，仅用于平台波动指标计算，并非单个排污口浓度。</p>}
+    </div>}
+  </section>;
+}
 
 export function HistoryEvidence({ evidence }: { evidence?: unknown[] }) {
   const reports = (evidence ?? []).flatMap(item => { const parsed = history.safeParse(item); return parsed.success ? [parsed.data] : []; });
@@ -35,24 +66,7 @@ export function HistoryEvidence({ evidence }: { evidence?: unknown[] }) {
         <p className="font-semibold text-teal-900">{company.company}</p>
         <div className="flex flex-wrap gap-2 text-slate-600"><span>当前 {company.currentRecords} 条 / 超上限 {company.currentExceedances} 条</span><span>历史 {company.previousRecords} 条 / 超上限 {company.previousExceedances} 条</span></div>
         <p className="text-slate-600">页面口径 CDC：当前 {fmt(company.currentCDC)}，历史 {fmt(company.previousCDC)} <span className="text-amber-700">（两期分别归一化，不据此直接判定风险升降）</span></p>
-        {company.pollutants.slice(0, 5).map(item => {
-          const days = [...new Set([...item.normalReference.daily, ...item.currentDaily].map(point => point.date))].sort();
-          const option = { color: ['#0ea5e9', '#f59e0b'], tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
-            legend: { bottom: 0, textStyle: { fontSize: 10 } }, grid: { left: '3%', right: '5%', top: '7%', bottom: 38, containLabel: true },
-            xAxis: { type: 'category', data: days.map(day => day.slice(5)), boundaryGap: false }, yAxis: { type: 'value', name: item.unit },
-            series: [
-              { name: '历史参考日汇总', type: 'line', smooth: true, symbolSize: 5, data: days.map(day => item.normalReference.daily.find(p => p.date === day)?.value ?? null) },
-              { name: '当前日汇总', type: 'line', smooth: true, symbolSize: 5, data: days.map(day => item.currentDaily.find(p => p.date === day)?.value ?? null) },
-            ] };
-          return <div key={item.pollutant} className="space-y-1 border-t border-slate-100 pt-2">
-            <p className="font-medium text-slate-800">{item.label} · {item.unit}</p>
-            <p className="text-slate-600">历史正常参考 {item.normalReference.days} 天；当前有效 {item.current.positiveDays} 天；当前超上限 {item.current.exceedances} 条。</p>
-            {item.comparable && item.current.stats && item.normalReference.stats ? <div className="grid grid-cols-2 gap-1 text-slate-600"><span>AV：{fmt(item.normalReference.stats.av)} → {fmt(item.current.stats.av)} {typeof item.change?.avPercent === 'number' ? `(${fmt(item.change.avPercent)}%)` : ''}</span><span>AD：{fmt(item.normalReference.stats.ad)} → {fmt(item.current.stats.ad)}</span><span>CV：{fmt(item.normalReference.stats.cv)} → {fmt(item.current.stats.cv)}</span><span>SKEW：{fmt(item.normalReference.stats.skew)} → {fmt(item.current.stats.skew)}</span></div> : <p className="text-amber-700">{item.note ?? '暂无可比的历史正常参考。'}</p>}
-            {!!item.outletWarnings.length && <p className="text-amber-800">异常排污口：{item.outletWarnings.map(o => `${o.name} ${o.count} 条`).join('、')}</p>}
-            {!!days.length && <ReactECharts option={option} style={{ height: 205 }} notMerge lazyUpdate />}
-            {!!days.length && <p className="text-slate-500">曲线为企业各排污口当天最新值的合计，仅用于平台波动指标计算，并非单个排污口浓度。</p>}
-          </div>;
-        })}
+        {company.pollutants.slice(0, 5).map((item, index) => <HistoryMetric key={item.pollutant} item={item} initiallyOpen={index === Math.max(0, company.pollutants.findIndex(p => p.current.exceedances > 0))} />)}
         {company.pollutants.length > 5 && <p className="text-slate-500">显示前 5 个指标；完整结果见下方证据。</p>}
       </div>)}
       {!report.results.length && <p className="text-xs text-slate-500">未找到授权范围内匹配的企业。</p>}

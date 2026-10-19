@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
-import { chinaDay, chinaPeriod, recentChinaDays } from '../src/lib/china-time';
+import { chinaDay, chinaDateTime, chinaPeriod, recentChinaDays } from '../src/lib/china-time';
 import { period, dailyLatest, type Reading } from '../src/lib/water-reports/model';
 test('Beijing midnight includes the first instant and excludes next midnight without overlap', () => {
   const r = chinaPeriod('2026-10-05', '2026-10-05');
@@ -14,6 +14,7 @@ test('seven calendar days include today; UTC afternoon is already next Beijing d
   assert.equal(r.start,'2026-09-29'); assert.equal(r.end,'2026-10-05');
   assert.equal(Date.parse(r.to)-Date.parse(r.from),7*86400000);
   assert.equal(chinaDay('2026-10-04T18:00:00Z'),'2026-10-05');
+  assert.equal(chinaDateTime('2026-10-19T01:00:00.000Z'),'2026-10-19 09:00');
 });
 test('leap day, year transition and invalid date inputs', () => {
   assert.equal(recentChinaDays(7,new Date('2026-01-01T00:00:00+08:00')).start,'2025-12-26');

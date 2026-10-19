@@ -45,6 +45,14 @@ export function AnalysisEvidence({ evidence, admin }: { evidence?: unknown[]; ad
             const visible = selected.slice(0, 5);
             const dates = [...new Set(visible.flatMap(row => row.daily.map(day => day.date)))].sort();
             if (!dates.length) return null;
+            if (dates.length === 1) return <div key={unit} className="rounded-xl border border-slate-200 bg-white p-3 text-xs" aria-label="单日监测摘要">
+              <p className="font-semibold text-slate-700">{dates[0]} · {unit} 单日摘要</p>
+              <div className="mt-2 space-y-1.5">{visible.map((row, i) => <div key={`${row.company}-${row.outlet}-${row.pollutant}-${i}`} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-t border-slate-100 pt-1.5 text-slate-600">
+                <span className="font-medium text-slate-800">{row.outlet ?? row.company} · {row.approvedName ?? row.pollutant}</span>
+                <span>当日均值 {Number(row.daily[0].mean.toFixed(3))} {unit === '未标单位' ? '' : unit} · <strong className={row.exceedances ? 'text-amber-800' : 'font-normal'}>{row.exceedances} 条超审批上限</strong></span>
+              </div>)}</div>
+              {selected.length > visible.length && <p className="mt-2 text-slate-500">这里只显示前 {visible.length} 项，其他结果见下方证据。</p>}
+            </div>;
             const option = {
               color: palette,
               tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
