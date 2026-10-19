@@ -4,6 +4,7 @@ import { Droplets, FileSpreadsheet, Loader2, Paperclip, Send, X } from 'lucide-r
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AnalysisEvidence } from './analysis-evidence';
+import { HistoryEvidence } from './history-evidence';
 import type { KnowledgeSource } from '@/lib/water-assistant/knowledge';
 
 type Message = { role: 'user' | 'assistant'; content: string; evidence?: unknown[]; sources?: KnowledgeSource[] };
@@ -89,7 +90,7 @@ export function AiChat({ token, userId, scope, canImport }: { token: string; use
         <p className="font-medium text-teal-900">嗨，我是小水滴！</p>
         <p className="mt-2 leading-relaxed">直接问我监测情况、系统操作或标准适用范围，也可以像聊天一样继续追问。我只会读取你有权限查看的数据。</p>
         <div className="mt-4 flex flex-wrap gap-2">
-          {(scope === '所属园区' ? ['园区近7天哪些企业有超阈值记录？', 'GB/T 14848适用于排污口吗？', '如何核查异常监测值？'] : ['分析本企业近7天的异常', '我的排污口和审批阈值是什么？', 'CDC指标是什么意思？']).map(example => <Button key={example} type="button" size="sm" variant="outline" className="h-auto whitespace-normal rounded-full border-teal-200 bg-white py-1.5 text-left text-xs text-teal-800" onClick={() => { setQuestion(example); input.current?.focus(); }}>{example}</Button>)}
+          {(scope === '所属园区' ? ['园区哪些企业比历史正常时期波动更大？', '近7天哪些企业有超阈值记录？', 'GB/T 14848适用于排污口吗？'] : ['现在和以前正常时相比，哪些污染物波动变大？', '本企业近7天和历史CDC有什么变化？', '我的排污口和审批阈值是什么？']).map(example => <Button key={example} type="button" size="sm" variant="outline" className="h-auto whitespace-normal rounded-full border-teal-200 bg-white py-1.5 text-left text-xs text-teal-800" onClick={() => { setQuestion(example); input.current?.focus(); }}>{example}</Button>)}
         </div>
       </div>}
       {messages.map((m, i) => <div key={i} className={`flex gap-2 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -97,6 +98,7 @@ export function AiChat({ token, userId, scope, canImport }: { token: string; use
         <div className={`max-w-[88%] rounded-2xl px-3.5 py-3 text-sm leading-relaxed shadow-sm ${m.role === 'user' ? 'rounded-tr-sm bg-teal-700 text-white' : 'rounded-tl-sm border border-slate-100 bg-slate-50 text-slate-800'}`}>
           <p className="whitespace-pre-wrap break-words">{m.content}</p>
           <AnalysisEvidence evidence={m.evidence} admin={scope === '所属园区'} />
+          <HistoryEvidence evidence={m.evidence} />
           {!!m.sources?.length && <div className="mt-3 space-y-2 border-t border-teal-100 pt-3" aria-label="参考资料"><p className="text-xs font-medium text-teal-800">资料依据</p>{m.sources.map(source => <details key={source.id} className="rounded-lg border border-slate-200 bg-white p-2 text-xs"><summary className="cursor-pointer text-slate-700">{source.title} · {source.section}</summary><p className="mt-2 text-slate-600">{source.excerpt}</p><p className="mt-1 text-slate-500">{source.version}</p>{source.url && <a href={source.url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-teal-700 underline">查看官方来源</a>}</details>)}</div>}
         </div>
       </div>)}
