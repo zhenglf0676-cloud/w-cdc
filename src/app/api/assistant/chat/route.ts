@@ -98,10 +98,10 @@ export async function POST(request: Request) {
             const currentCompanies = new Map((currentReport?.companies ?? []).filter(c => own.has(c.id)).map(c => [c.id, c]));
             const oldCompanies = new Map((baselineReport?.companies ?? []).filter(c => own.has(c.id)).map(c => [c.id, c]));
             const comparisons = selected.map(c => compareCompanyPeriods(c.company_name, currentCompanies.get(c.id), oldCompanies.get(c.id)));
-            const ranked = comparisons.sort((a, b) => b.currentExceedances - a.currentExceedances).slice(0, 10);
+            const ranked = comparisons.sort((a, b) => b.currentExceedances - a.currentExceedances).slice(0, scope.role === 'admin' ? 5 : 1);
             output = { comparison: true, current: { startDate: ranges.current.start, endDate: ranges.current.end }, baseline: { startDate: ranges.baseline.start, endDate: ranges.baseline.end },
               totalCompanies: selected.length, results: ranked,
-              note: `历史正常参考仅采用有审批上限、该指标当天全部记录未超上限且单位一致的日期，pH不做上下限正常判定；至少4个有效日才判断AV/AD/CV/SKEW变化。CDC使用现有公式，分别按两期园区样本归一化，两期数值仅供参考，不宜直接相减判风险。${selected.length > ranked.length ? '仅返回超上限次数较多的前10家企业，指定企业全名可进一步查询。' : ''}` };
+              note: `历史正常参考仅采用有审批上限、该指标当天全部记录未超上限且单位一致的日期，pH不做上下限正常判定；至少4个有效日才判断AV/AD/CV/SKEW变化。CDC使用现有公式，分别按两期园区样本归一化，两期数值仅供参考，不宜直接相减判风险。${selected.length > ranked.length ? `仅返回超上限次数较多的前${ranked.length}家企业，指定企业全名可进一步查询。` : ''}` };
             if (JSON.stringify(output).length > 60000) throw new Error('too much data');
             evidence.push(output);
           }
