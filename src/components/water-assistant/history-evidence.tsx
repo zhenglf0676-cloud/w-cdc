@@ -36,10 +36,10 @@ function HistoryMetric({ item, initiallyOpen }: { item: Metric; initiallyOpen: b
     ] };
   return <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
     <button type="button" className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-3 py-2.5 text-left hover:bg-teal-50/50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-teal-600" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>
-      <span className="font-semibold text-slate-800">{item.label} <span className="font-normal text-slate-500">· {item.unit}</span></span>
+      <span className="text-sm font-bold text-slate-900">{item.label} <span className="text-xs font-normal text-slate-500">· {item.unit}</span></span>
       <span className="flex flex-wrap items-center gap-2 text-slate-600">
         {item.comparable && item.current.stats && item.normalReference.stats && <span>AV {fmt(item.normalReference.stats.av)} → {fmt(item.current.stats.av)} · CV {fmt(item.normalReference.stats.cv)} → {fmt(item.current.stats.cv)}</span>}
-        {item.current.exceedances > 0 && <span className="rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-800">{item.current.exceedances} 条超上限</span>}
+        {item.current.exceedances > 0 && <span className="rounded-full bg-amber-50 px-2 py-0.5 font-bold text-amber-800">{item.current.exceedances} 条超上限</span>}
         <span className="font-medium text-teal-700">{expanded ? '收起' : '查看曲线与指标'}</span>
       </span>
     </button>
@@ -59,12 +59,12 @@ export function HistoryEvidence({ evidence }: { evidence?: unknown[] }) {
   return <div className="mt-3 space-y-3 border-t border-teal-100 pt-3" aria-label="历史正常参考与当前期对比">
     {reports.map((report, i) => <section key={i} className="space-y-3">
       <div className="rounded-xl border border-teal-100 bg-white p-3 text-xs text-slate-700">
-        <p className="font-medium text-teal-900">当前 {report.current.startDate}—{report.current.endDate}</p>
+        <p className="text-[13px] font-bold text-teal-900">当前 {report.current.startDate}—{report.current.endDate}</p>
         <p className="mt-1">历史参考 {report.baseline.startDate}—{report.baseline.endDate} · {report.totalCompanies} 家授权企业</p>
       </div>
       {report.results.map(company => <div key={company.company} className="space-y-2 rounded-xl border border-slate-200 bg-white p-3 text-xs">
-        <p className="font-semibold text-teal-900">{company.company}</p>
-        <div className="flex flex-wrap gap-2 text-slate-600"><span>当前 {company.currentRecords} 条 / 超上限 {company.currentExceedances} 条</span><span>历史 {company.previousRecords} 条 / 超上限 {company.previousExceedances} 条</span></div>
+        <p className="text-sm font-bold text-teal-900">{company.company}</p>
+        <div className="flex flex-wrap gap-2 text-slate-600"><span>当前 {company.currentRecords} 条 / <strong className={company.currentExceedances ? 'font-bold text-amber-800' : 'font-medium text-slate-700'}>超上限 {company.currentExceedances} 条</strong></span><span>历史 {company.previousRecords} 条 / 超上限 {company.previousExceedances} 条</span></div>
         <p className="text-slate-600">页面口径 CDC：当前 {fmt(company.currentCDC)}，历史 {fmt(company.previousCDC)} <span className="text-amber-700">（两期分别归一化，不据此直接判定风险升降）</span></p>
         {company.pollutants.slice(0, 5).map((item, index) => <HistoryMetric key={item.pollutant} item={item} initiallyOpen={index === Math.max(0, company.pollutants.findIndex(p => p.current.exceedances > 0))} />)}
         {company.pollutants.length > 5 && <p className="text-slate-500">显示前 5 个指标；完整结果见下方证据。</p>}

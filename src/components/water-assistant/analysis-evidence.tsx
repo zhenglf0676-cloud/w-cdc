@@ -27,7 +27,7 @@ export function AnalysisEvidence({ evidence, admin }: { evidence?: unknown[]; ad
       const rows = analysis.results.flatMap(company => company.summaries.map(s => ({ ...s, company: company.company })));
       const groups = [...new Set(rows.map(r => r.unit ?? '未标单位'))].slice(0, 3);
       return <section key={`${analysis.startDate}-${analysis.endDate}-${index}`} className="space-y-2" aria-label="监测分析图表">
-        <p className="text-xs font-medium text-teal-800">{analysis.startDate} 至 {analysis.endDate} · 监测趋势</p>
+        <p className="text-[13px] font-bold text-teal-900">{analysis.startDate} 至 {analysis.endDate} · 监测趋势</p>
         {admin && <div className="space-y-1 rounded-xl border border-teal-100 bg-white p-2" aria-label="所属园区企业统计">
           <p className="text-xs font-medium text-teal-800">所属园区企业概览 · 按超审批上限次数排序</p>
           {[...analysis.results].sort((a, b) => b.summaries.reduce((sum, s) => sum + s.exceedances, 0) - a.summaries.reduce((sum, s) => sum + s.exceedances, 0)).slice(0, 8).map(company => <div key={company.company} className="flex flex-wrap justify-between gap-1 border-t border-slate-100 py-1 text-xs text-slate-600"><span className="font-medium text-slate-700">{company.company}</span><span>{company.approvedOutlets?.length ?? 0} 个已审批排污口 · {company.summaries.reduce((sum, s) => sum + s.count, 0)} 条记录 · <strong className="text-amber-700">{company.summaries.reduce((sum, s) => sum + s.exceedances, 0)} 条超上限</strong></span></div>)}
@@ -36,8 +36,8 @@ export function AnalysisEvidence({ evidence, admin }: { evidence?: unknown[]; ad
         </div>}
         {rows.length ? <>
           <div className="flex flex-wrap gap-2 text-xs text-slate-600">
-            <span className="rounded-lg bg-white px-2 py-1">{rows.reduce((sum, r) => sum + r.count, 0)} 条记录</span>
-            <span className="rounded-lg bg-amber-50 px-2 py-1 text-amber-800">{rows.reduce((sum, r) => sum + r.exceedances, 0)} 条超审批上限</span>
+            <span className="rounded-lg bg-white px-2 py-1 font-medium">{rows.reduce((sum, r) => sum + r.count, 0)} 条记录</span>
+            <span className={rows.some(r => r.exceedances) ? 'rounded-lg bg-amber-50 px-2 py-1 font-bold text-amber-800' : 'rounded-lg bg-white px-2 py-1 font-medium'}>{rows.reduce((sum, r) => sum + r.exceedances, 0)} 条超审批上限</span>
             {!!rows.some(r => r.missingThreshold) && <span className="rounded-lg bg-slate-100 px-2 py-1">{rows.reduce((sum, r) => sum + r.missingThreshold, 0)} 条缺上限</span>}
           </div>
           {groups.map(unit => {
@@ -46,10 +46,10 @@ export function AnalysisEvidence({ evidence, admin }: { evidence?: unknown[]; ad
             const dates = [...new Set(visible.flatMap(row => row.daily.map(day => day.date)))].sort();
             if (!dates.length) return null;
             if (dates.length === 1) return <div key={unit} className="rounded-xl border border-slate-200 bg-white p-3 text-xs" aria-label="单日监测摘要">
-              <p className="font-semibold text-slate-700">{dates[0]} · {unit} 单日摘要</p>
+              <p className="text-[13px] font-bold text-slate-800">{dates[0]} · {unit} 单日摘要</p>
               <div className="mt-2 space-y-1.5">{visible.map((row, i) => <div key={`${row.company}-${row.outlet}-${row.pollutant}-${i}`} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-t border-slate-100 pt-1.5 text-slate-600">
                 <span className="font-medium text-slate-800">{row.outlet ?? row.company} · {row.approvedName ?? row.pollutant}</span>
-                <span>当日均值 {Number(row.daily[0].mean.toFixed(3))} {unit === '未标单位' ? '' : unit} · <strong className={row.exceedances ? 'text-amber-800' : 'font-normal'}>{row.exceedances} 条超审批上限</strong></span>
+                <span>当日均值 <strong className="font-semibold text-slate-800">{Number(row.daily[0].mean.toFixed(3))} {unit === '未标单位' ? '' : unit}</strong> · <strong className={row.exceedances ? 'font-bold text-amber-800' : 'font-normal'}>{row.exceedances} 条超审批上限</strong></span>
               </div>)}</div>
               {selected.length > visible.length && <p className="mt-2 text-slate-500">这里只显示前 {visible.length} 项，其他结果见下方证据。</p>}
             </div>;
