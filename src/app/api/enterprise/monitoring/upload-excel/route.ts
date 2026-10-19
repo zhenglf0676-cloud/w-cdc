@@ -249,14 +249,23 @@ export async function POST(request: NextRequest) {
     if (records.length === 0) return NextResponse.json({ error: '文件没有可录入的监测数值，请检查已审批指标列' }, { status: 400 });
 
     // 9. 批量插入数据
+    let warningRecords: { id: string; at: string }[] = [];
     if (records.length > 0) {
-      const { error: insertError } = await supabase
+      const insertion = supabase
         .from('monitoring_data')
         .insert(records);
+      const { data: inserted, error: insertError } = strict
+        ? await insertion.select('id, status, monitored_at')
+        : await insertion;
 
       if (insertError) {
         console.error('数据插入失败:', insertError);
         return NextResponse.json({ error: '数据插入失败', details: insertError.message }, { status: 500 });
+      }
+      if (strict) {
+        warningRecords = (inserted ?? [])
+          .filter(row => row.status === 'warning')
+          .map(row => ({ id: row.id, at: row.monitored_at }));
       }
     }
 
@@ -266,6 +275,7 @@ export async function POST(request: NextRequest) {
       count: records.length,
       errors: errors.length > 0 ? ['部分数据未上传，请检查 Excel 格式和污染物申请状态', ...errors.slice(0, 20)] : [],
       warnings: [...new Set(warnings)],
+      warningRecords,
     };
     
     

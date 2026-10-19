@@ -104,6 +104,27 @@ export function WaterAssistant() {
     void poll();
     return () => { controller.abort(); clearTimeout(timer); };
   }, [active, session, play, animate]);
+  useEffect(() => {
+    if (!active || !session) return;
+    const announceImport = (event: Event) => {
+      if (!(event instanceof CustomEvent) || event.detail?.userId !== session.user.id) return;
+      const detail = event.detail as { warnings?: string[]; warningRecords?: { id: string; at: string }[] };
+      const unannounced = (detail.warningRecords ?? []).some(record => !seen.current.has(record.id));
+      const today = day(Date.now());
+      const key = `water-alerts:${session.user.id}:${today}`;
+      for (const record of detail.warningRecords ?? []) {
+        if (day(new Date(record.at).getTime()) === today) seen.current.add(record.id);
+      }
+      try { sessionStorage.setItem(key, JSON.stringify([...seen.current])); } catch { /* storage is optional */ }
+      if (detail.warnings?.length && unannounced) {
+        setMessage(`刚录入的数据中发现${detail.warnings.length}类超阈值指标，请查看监测页面。`);
+        animate('warning');
+        play('warning');
+      }
+    };
+    window.addEventListener('water-monitoring-imported', announceImport);
+    return () => window.removeEventListener('water-monitoring-imported', announceImport);
+  }, [active, session, play, animate]);
   const move = (p: Point) => { const next = keepInside(p); setPosition(next); try { localStorage.setItem('water-assistant-position', JSON.stringify(next)); } catch { /* optional browser storage */ } };
   async function generate() {
     if (!session || busy) return;

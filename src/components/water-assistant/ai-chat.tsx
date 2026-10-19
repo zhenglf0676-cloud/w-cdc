@@ -49,13 +49,13 @@ export function AiChat({ token, userId, scope, canImport }: { token: string; use
     if (!file || !importPreview?.success || importBusy || busy) return;
     const controller = new AbortController(); importRequest.current = controller; setImportBusy(true); setImportError('');
     try {
-      const data: { count: number; warnings: string[] } = await uploadExcel(file, false, controller.signal);
+      const data: { count: number; warnings: string[]; warningRecords: { id: string; at: string }[] } = await uploadExcel(file, false, controller.signal);
       if (controller.signal.aborted) return;
       setMessages(previous => [...previous,
         { role: 'user', content: `上传 Excel：${file.name}` },
         { role: 'assistant', content: `已按现有 Excel 规则录入 ${data.count} 条监测记录${data.warnings.length ? `，其中 ${data.warnings.length} 类指标出现超阈值记录` : ''}。你可以接着问我：“分析刚录入的这段时间的数据”。` },
       ]);
-      window.dispatchEvent(new CustomEvent('water-monitoring-imported', { detail: { userId } }));
+      window.dispatchEvent(new CustomEvent('water-monitoring-imported', { detail: { userId, warnings: data.warnings, warningRecords: data.warningRecords } }));
       setFile(null); setImportPreview(null);
     } catch (e) { if (!controller.signal.aborted) setImportError(e instanceof Error ? e.message : '录入失败，请重试'); }
     finally { if (importRequest.current === controller) { setImportBusy(false); importRequest.current = null; } }
