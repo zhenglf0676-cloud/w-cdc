@@ -149,7 +149,7 @@ export function WaterAssistant() {
         <Button size="icon" variant="ghost" className="shrink-0 text-white hover:bg-white/20 hover:text-white" aria-label="收起小水滴工作台" onClick={() => { setOpen(false); pet.current?.focus(); }}><X className="size-4" /></Button>
       </header>
       <div className={styles['workspace-body']}>
-        <div className={styles['conversation-pane']}><AiChat key={`${session.user.id}:${role}`} token={session.access_token} userId={session.user.id} scope={role === 'admin' ? '所属园区' : '本企业'} /></div>
+        <div className={styles['conversation-pane']}><AiChat key={`${session.user.id}:${role}`} token={session.access_token} userId={session.user.id} scope={role === 'admin' ? '所属园区' : '本企业'} canImport={role === 'enterprise'} /></div>
         <aside className={styles['tools-pane']} aria-label="快捷操作">
           <div className={styles['tools-title']}><span className="font-semibold text-teal-950">快捷操作</span><span className="text-xs text-slate-500">监测与演示</span></div>
           <div className={styles['quick-grid']}>

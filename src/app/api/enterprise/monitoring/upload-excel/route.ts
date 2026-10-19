@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
-import { getSupabaseCredentials, getSupabaseServiceRoleKey, getSupabaseClient } from '@/storage/database/supabase-client';
+import { getSupabaseCredentials, getSupabaseServiceRoleKey } from '@/storage/database/supabase-client';
+import { parseExcelChinaTime } from '@/lib/water-assistant/excel-time';
 
 // 使用 service role key 绕过 RLS
 function getSupabaseAdmin() {
@@ -23,12 +24,12 @@ const POLLUTANT_COLUMNS = [
 ];
 
 export async function POST(request: NextRequest) {
-  console.log('=== Excel 上传开始 ===');
+  const preview = request.nextUrl.searchParams.get('preview') === '1';
+  const strict = request.nextUrl.searchParams.get('strict') === '1';
   
   try {
     // 1. 身份验证
     const authHeader = request.headers.get('x-session');
-    console.log('authHeader:', authHeader ? '存在' : '不存在');
     
     if (!authHeader) {
       return NextResponse.json({ error: '未授权' }, { status: 401 });
@@ -56,12 +57,11 @@ export async function POST(request: NextRequest) {
       console.error('获取用户信息失败:', userError);
       return NextResponse.json({ error: '未授权' }, { status: 401 });
     }
-    console.log('用户 ID:', user.id);
 
     // 3. 获取企业信息
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('id, full_name')
+      .select('id, role')
       .eq('user_id', user.id)
       .single();
 
@@ -69,31 +69,37 @@ export async function POST(request: NextRequest) {
       console.error('获取企业信息失败:', profileError);
       return NextResponse.json({ error: '企业不存在' }, { status: 404 });
     }
-    console.log('企业名称:', profile.full_name, '企业 ID:', profile.id);
+    if (profile.role !== 'enterprise') {
+      return NextResponse.json({ error: '只有企业账号可以录入本企业监测数据' }, { status: 403 });
+    }
 
     // 4. 解析 Excel 文件
     const formData = await request.formData();
-    const file = formData.get('file') as File;
+    const file = formData.get('file');
     
-    if (!file) {
+    if (!(file instanceof File)) {
       return NextResponse.json({ error: '请上传文件' }, { status: 400 });
     }
-    console.log('文件名:', file.name, '文件大小:', file.size);
+    if (!/\.xlsx?$/i.test(file.name) || file.size === 0 || file.size > 2 * 1024 * 1024) {
+      return NextResponse.json({ error: '仅支持不超过2MB的 .xlsx 或 .xls 文件' }, { status: 400 });
+    }
 
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: 'array' });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const jsonData: any[] = XLSX.utils.sheet_to_json(sheet);
+    if (!sheet) return NextResponse.json({ error: '文件没有可读取的工作表' }, { status: 400 });
+    const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
 
-    console.log('Excel 行数:', jsonData.length);
 
     if (jsonData.length === 0) {
       return NextResponse.json({ error: '文件为空' }, { status: 400 });
     }
+    if (jsonData.length > 500) {
+      return NextResponse.json({ error: '一次最多导入500行，请拆分文件' }, { status: 400 });
+    }
 
     // 5. 验证必需字段
     const firstRow = jsonData[0];
-    console.log('第一行数据:', firstRow);
     
     if (!('排污口' in firstRow)) {
       return NextResponse.json({ error: '缺少必需字段：排污口' }, { status: 400 });
@@ -114,14 +120,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '获取排污口列表失败' }, { status: 500 });
     }
 
-    console.log('排污口数量:', outlets?.length || 0);
 
     if (!outlets || outlets.length === 0) {
       return NextResponse.json({ error: '企业没有已审批通过的排污口' }, { status: 400 });
     }
 
     const outletMap = new Map(outlets.map(o => [o.name, o.id]));
-    console.log('排污口映射:', Object.fromEntries(outletMap));
 
     // 7. 获取企业已审批通过的污染物列表
     const { data: applications, error: appError } = await supabase
@@ -139,7 +143,7 @@ export async function POST(request: NextRequest) {
     const pollutantThresholds = new Map<string, number>(); // 污染物 ID -> 阈值
     if (applications && applications.length > 0) {
       for (const app of applications) {
-        const pollutants = app.pollutants as any[];
+        const pollutants = app.pollutants as { id: string; threshold?: number | null }[];
         if (Array.isArray(pollutants)) {
           for (const p of pollutants) {
             approvedPollutantIds.add(p.id);
@@ -151,11 +155,9 @@ export async function POST(request: NextRequest) {
         }
       }
     }
-    console.log('已审批污染物:', Array.from(approvedPollutantIds));
-    console.log('污染物阈值:', Object.fromEntries(pollutantThresholds));
 
     // 8. 解析数据
-    const records: any[] = [];
+    const records: { outlet_id: string; pollutant_type: string; value: number; unit: string; standard_limit: number; status: string; monitored_at: string }[] = [];
     const errors: string[] = [];
 
     for (let i = 0; i < jsonData.length; i++) {
@@ -176,31 +178,11 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      let monitoredAt: Date;
-      if (typeof timeStr === 'number') {
-        // Excel 日期格式
-        monitoredAt = new Date((timeStr - 25569) * 86400 * 1000);
-      } else {
-        // 字符串格式：确保作为中国本地时间（CST，UTC+8）解析
-        const str = String(timeStr);
-        if (str.match(/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}$/)) {
-          // 格式：YYYY-MM-DD HH:mm，作为中国本地时间处理
-          // 手动添加 8 小时偏移，转换为 UTC 时间存储
-          const [datePart, timePart] = str.split(' ');
-          const [year, month, day] = datePart.split('-').map(Number);
-          const [hour, minute] = timePart.split(':').map(Number);
-          monitoredAt = new Date(Date.UTC(year, month - 1, day, hour - 8, minute));
-        } else {
-          monitoredAt = new Date(str);
-        }
-      }
-      
-      if (isNaN(monitoredAt.getTime())) {
+      const monitoredAt = parseExcelChinaTime(timeStr);
+      if (!monitoredAt) {
         errors.push(`第${rowNum}行：时间格式错误`);
         continue;
       }
-
-      console.log(`第${rowNum}行时间：原始="${timeStr}", 解析后="${monitoredAt.toISOString()}"`);
 
       // 解析污染物数据
       for (const col of POLLUTANT_COLUMNS) {
@@ -218,7 +200,7 @@ export async function POST(request: NextRequest) {
         }
 
         const numValue = Number(value);
-        if (isNaN(numValue)) {
+        if (!Number.isFinite(numValue) || numValue < 0) {
           errors.push(`第${rowNum}行：${col.excelName}数值格式错误`);
           continue;
         }
@@ -227,6 +209,10 @@ export async function POST(request: NextRequest) {
         const threshold = pollutantThresholds.has(col.dbId) 
           ? pollutantThresholds.get(col.dbId)! 
           : col.threshold;
+        if (!Number.isFinite(threshold)) {
+          errors.push(`第${rowNum}行：${col.excelName}审批阈值无效`);
+          continue;
+        }
 
         records.push({
           outlet_id: outletMap.get(outletName),
@@ -240,11 +226,27 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log('解析结果：成功', records.length, '条，错误', errors.length, '条');
 
-    if (errors.length > 0 && records.length === 0) {
-      return NextResponse.json({ error: '数据解析失败，请检查 Excel 格式和污染物申请状态' }, { status: 400 });
+    const seenRecords = new Set<string>();
+    for (const record of records) {
+      const key = `${record.outlet_id}:${record.pollutant_type}:${record.monitored_at}`;
+      if (seenRecords.has(key)) errors.push(`文件内存在重复的排污口、指标和监测时间：${record.pollutant_type} ${record.monitored_at}`);
+      seenRecords.add(key);
     }
+    const warnings = records.filter(r => r.status === 'warning').map(r => r.pollutant_type);
+    if (preview) return NextResponse.json({
+      success: records.length > 0 && errors.length === 0,
+      preview: true,
+      count: records.length,
+      errors: errors.slice(0, 20),
+      errorCount: errors.length,
+      warnings: [...new Set(warnings)],
+      approvedOutlets: outlets.map(o => o.name),
+      approvedPollutants: POLLUTANT_COLUMNS.filter(c => approvedPollutantIds.has(c.dbId)).map(c => c.excelName),
+      sample: records.slice(0, 5).map(r => ({ outlet: outlets.find(o => o.id === r.outlet_id)?.name, time: r.monitored_at, pollutant: r.pollutant_type, value: r.value, unit: r.unit, threshold: r.standard_limit })),
+    });
+    if (strict && errors.length > 0) return NextResponse.json({ error: `文件有${errors.length}处问题，请修改后重新预检`, errors: errors.slice(0, 20) }, { status: 400 });
+    if (records.length === 0) return NextResponse.json({ error: '文件没有可录入的监测数值，请检查已审批指标列' }, { status: 400 });
 
     // 9. 批量插入数据
     if (records.length > 0) {
@@ -256,25 +258,21 @@ export async function POST(request: NextRequest) {
         console.error('数据插入失败:', insertError);
         return NextResponse.json({ error: '数据插入失败', details: insertError.message }, { status: 500 });
       }
-      console.log('数据插入成功');
     }
 
     // 10. 返回结果
-    const warnings = records.filter(r => r.status === 'warning').map(r => r.pollutant_type);
     const result = {
       success: true,
       count: records.length,
-      errors: errors.length > 0 ? ['部分数据未上传，请检查 Excel 格式和污染物申请状态'] : [],
-      warnings: warnings,
+      errors: errors.length > 0 ? ['部分数据未上传，请检查 Excel 格式和污染物申请状态', ...errors.slice(0, 20)] : [],
+      warnings: [...new Set(warnings)],
     };
     
-    console.log('返回结果:', result);
-    console.log('=== Excel 上传完成 ===');
     
     return NextResponse.json(result);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Excel 上传异常:', error);
-    console.error('错误堆栈:', error.stack);
-    return NextResponse.json({ error: '服务器错误', details: error.message }, { status: 500 });
+    console.error('错误堆栈:', error instanceof Error ? error.stack : undefined);
+    return NextResponse.json({ error: '服务器错误' }, { status: 500 });
   }
 }
