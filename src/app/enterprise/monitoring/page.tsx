@@ -329,7 +329,7 @@ export default function MonitoringPage() {
 
       console.log('发送请求...');
       
-      const res = await fetch('/api/enterprise/monitoring/upload-excel', {
+      const res = await fetch('/api/enterprise/monitoring/upload-excel?notify=1', {
         method: 'POST',
         headers: {
           'x-session': session.access_token,
@@ -361,14 +361,12 @@ export default function MonitoringPage() {
 
       setExcelResult(data);
       setExcelFile(null);
-
-      // 刷新数据
-      if (selectedOutlet) {
-        fetchRealtimeData(selectedOutlet.id);
-        fetchChartData(selectedOutlet.id, timeRange);
-        fetchHistoryData(selectedOutlet.id);
+      if (data.success) {
+        window.dispatchEvent(new CustomEvent('water-monitoring-imported', {
+          detail: { userId: session.user.id, warnings: data.warnings, warningRecords: data.warningRecords },
+        }));
       }
-      fetchOutlets();
+
     } catch (error: any) {
       console.error('上传错误:', error);
       setExcelResult({
@@ -421,10 +419,11 @@ export default function MonitoringPage() {
       const data = await res.json();
       if (data.success) {
         setUploadSuccess(true);
+        window.dispatchEvent(new CustomEvent('water-monitoring-imported', {
+          detail: { userId: session!.user.id, warnings: data.warnings, warningRecords: data.warningRecords },
+        }));
         setTimeout(() => {
           setShowUploadDialog(false);
-          // 刷新数据
-          window.location.reload();
         }, 1500);
       } else {
         setUploadError(data.error || '上传失败');

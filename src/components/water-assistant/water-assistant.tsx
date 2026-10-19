@@ -90,11 +90,11 @@ export function WaterAssistant() {
         if (res.ok) {
           const data: { warnings: { id: string; at: string }[] } = await res.json();
           const key = `water-alerts:${session.user.id}:${day(Date.now())}`;
-          try { for (const id of JSON.parse(sessionStorage.getItem(key) ?? '[]')) seen.current.add(id); } catch { /* storage is optional */ }
+          try { for (const id of JSON.parse(localStorage.getItem(key) ?? '[]')) seen.current.add(id); } catch { /* storage is optional */ }
           const fresh = data.warnings.filter(w => !seen.current.has(w.id));
           if (fresh.length) {
             fresh.forEach(w => seen.current.add(w.id));
-            try { sessionStorage.setItem(key, JSON.stringify([...seen.current])); } catch { /* storage is optional */ }
+            try { localStorage.setItem(key, JSON.stringify([...seen.current])); } catch { /* storage is optional */ }
             setMessage(`发现${fresh.length}条新的超阈值记录，请查看监测页面。`); animate('warning'); play('warning');
           }
         }
@@ -109,13 +109,14 @@ export function WaterAssistant() {
     const announceImport = (event: Event) => {
       if (!(event instanceof CustomEvent) || event.detail?.userId !== session.user.id) return;
       const detail = event.detail as { warnings?: string[]; warningRecords?: { id: string; at: string }[] };
-      const unannounced = (detail.warningRecords ?? []).some(record => !seen.current.has(record.id));
       const today = day(Date.now());
       const key = `water-alerts:${session.user.id}:${today}`;
+      try { for (const id of JSON.parse(localStorage.getItem(key) ?? '[]')) seen.current.add(id); } catch { /* storage is optional */ }
+      const unannounced = (detail.warningRecords ?? []).some(record => !seen.current.has(record.id));
       for (const record of detail.warningRecords ?? []) {
         if (day(new Date(record.at).getTime()) === today) seen.current.add(record.id);
       }
-      try { sessionStorage.setItem(key, JSON.stringify([...seen.current])); } catch { /* storage is optional */ }
+      try { localStorage.setItem(key, JSON.stringify([...seen.current])); } catch { /* storage is optional */ }
       if (detail.warnings?.length && unannounced) {
         setMessage(`刚录入的数据中发现${detail.warnings.length}类超阈值指标，请查看监测页面。`);
         animate('warning');

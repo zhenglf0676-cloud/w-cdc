@@ -26,6 +26,7 @@ const POLLUTANT_COLUMNS = [
 export async function POST(request: NextRequest) {
   const preview = request.nextUrl.searchParams.get('preview') === '1';
   const strict = request.nextUrl.searchParams.get('strict') === '1';
+  const notify = request.nextUrl.searchParams.get('notify') === '1';
   
   try {
     // 1. 身份验证
@@ -254,7 +255,7 @@ export async function POST(request: NextRequest) {
       const insertion = supabase
         .from('monitoring_data')
         .insert(records);
-      const { data: inserted, error: insertError } = strict
+      const { data: inserted, error: insertError } = strict || notify
         ? await insertion.select('id, status, monitored_at')
         : await insertion;
 
@@ -262,7 +263,7 @@ export async function POST(request: NextRequest) {
         console.error('数据插入失败:', insertError);
         return NextResponse.json({ error: '数据插入失败', details: insertError.message }, { status: 500 });
       }
-      if (strict) {
+      if (strict || notify) {
         warningRecords = (inserted ?? [])
           .filter(row => row.status === 'warning')
           .map(row => ({ id: row.id, at: row.monitored_at }));

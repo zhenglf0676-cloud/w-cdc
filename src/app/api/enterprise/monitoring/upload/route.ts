@@ -94,9 +94,10 @@ export async function POST(request: NextRequest) {
     // 合并所有已审批的污染物
     const approvedPollutants: Record<string, { label: string; unit: string; threshold: number }> = {};
     if (applications && Array.isArray(applications)) {
-      applications.forEach((app: any) => {
-        if (app.pollutants && Array.isArray(app.pollutants)) {
-          app.pollutants.forEach((p: any) => {
+      applications.forEach(app => {
+        const pollutants = app.pollutants as { id: string; label: string; unit: string; threshold: number }[] | null;
+        if (Array.isArray(pollutants)) {
+          pollutants.forEach(p => {
             if (!approvedPollutants[p.id]) {
               approvedPollutants[p.id] = {
                 label: p.label,
@@ -148,9 +149,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { error: insertError } = await supabase
+    const { data: inserted, error: insertError } = await supabase
       .from('monitoring_data')
-      .insert(recordsToInsert);
+      .insert(recordsToInsert)
+      .select('id, status, monitored_at');
 
     if (insertError) {
       console.error('插入监测数据失败:', insertError);
@@ -164,6 +166,9 @@ export async function POST(request: NextRequest) {
       success: true,
       count: recordsToInsert.length,
       warnings,
+      warningRecords: (inserted ?? [])
+        .filter(record => record.status === 'warning')
+        .map(record => ({ id: record.id, at: record.monitored_at })),
     });
   } catch (error) {
     console.error('上传监测数据异常:', error);
