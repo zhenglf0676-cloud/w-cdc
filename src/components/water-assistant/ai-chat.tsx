@@ -7,14 +7,16 @@ import { AnalysisEvidence } from './analysis-evidence';
 import { HistoryEvidence } from './history-evidence';
 import { AnswerContent } from './answer-content';
 import type { KnowledgeSource } from '@/lib/water-assistant/knowledge';
+import { assistantFetch, AssistantSessionError } from '@/lib/water-assistant/request';
 
 type Message = { role: 'user' | 'assistant'; content: string; evidence?: unknown[]; sources?: KnowledgeSource[] };
 type ImportPreview = { success: boolean; count: number; errorCount: number; errors: string[]; warnings: string[]; approvedOutlets: string[]; approvedPollutants: string[]; sample: { outlet: string; time: string; pollutant: string; value: number; unit: string; threshold: number }[] };
-export function AiChat({ token, userId, scope, canImport }: { token: string; userId: string; scope: string; canImport: boolean }) {
+export function AiChat({ userId, scope, canImport }: { userId: string; scope: string; canImport: boolean }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [loginRequired, setLoginRequired] = useState(false);
   const pending = useRef<AbortController | null>(null);
   const importRequest = useRef<AbortController | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -27,13 +29,13 @@ export function AiChat({ token, userId, scope, canImport }: { token: string; use
   const [importError, setImportError] = useState('');
   const [dragging, setDragging] = useState(false);
   useEffect(() => {
-    setMessages([]); setError(''); setBusy(false); setQuestion(''); setFile(null); setImportPreview(null); setImportError(''); setImportBusy(false);
+    setMessages([]); setError(''); setLoginRequired(false); setBusy(false); setQuestion(''); setFile(null); setImportPreview(null); setImportError(''); setImportBusy(false);
     return () => { pending.current?.abort(); importRequest.current?.abort(); };
   }, [userId]);
   useEffect(() => { conversation.current?.scrollTo({ top: conversation.current.scrollHeight, behavior: 'smooth' }); }, [messages, busy, error, importPreview, importError]);
   async function uploadExcel(selected: File, preview: boolean, signal: AbortSignal) {
     const form = new FormData(); form.append('file', selected);
-    const response = await fetch(`/api/enterprise/monitoring/upload-excel?${preview ? 'preview=1' : 'strict=1'}`, { method: 'POST', headers: { 'x-session': token }, body: form, signal });
+    const response = await assistantFetch(token => fetch(`/api/enterprise/monitoring/upload-excel?${preview ? 'preview=1' : 'strict=1'}`, { method: 'POST', headers: { 'x-session': token }, body: form, signal }), signal);
     const data = await response.json();
     if (!response.ok) throw new Error([data.error, ...(data.errors ?? []).slice(0, 3)].filter(Boolean).join('；') || 'Excel 处理失败');
     return data;
@@ -68,14 +70,15 @@ export function AiChat({ token, userId, scope, canImport }: { token: string; use
     if (busy || importBusy || !question.trim()) return;
     const controller = new AbortController(); pending.current = controller;
     const next: Message[] = [...messages, { role: 'user', content: question.trim() }];
-    setBusy(true); setError('');
+    setBusy(true); setError(''); setLoginRequired(false);
     try {
-      const response = await fetch('/api/assistant/chat', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-auth-token': token }, body: JSON.stringify({ messages: next.slice(-11).map(({ role, content }) => ({ role, content })) }), signal: controller.signal });
+      const payload = JSON.stringify({ messages: next.slice(-11).map(({ role, content }) => ({ role, content })) });
+      const response = await assistantFetch(token => fetch('/api/assistant/chat', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-auth-token': token }, body: payload, signal: controller.signal }), controller.signal);
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || '分析失败');
       if (controller.signal.aborted) return;
       setMessages([...next, { role: 'assistant', content: data.answer, evidence: data.evidence, sources: data.sources }]); setQuestion('');
-    } catch (e) { if (!controller.signal.aborted) setError(e instanceof Error ? e.message : '网络异常，请重试'); }
+    } catch (e) { if (!controller.signal.aborted) { setLoginRequired(e instanceof AssistantSessionError); setError(e instanceof Error ? e.message : '网络异常，请重试'); } }
     finally { if (pending.current === controller) { setBusy(false); pending.current = null; } }
   }
   return <div className="relative flex h-full min-h-0 flex-col bg-white"
@@ -104,7 +107,7 @@ export function AiChat({ token, userId, scope, canImport }: { token: string; use
         </div>
       </div>)}
       {busy && <div role="status" className="flex items-center gap-2 text-sm text-teal-700"><Loader2 className="size-4 animate-spin" />正在查询并分析数据… <Button size="sm" variant="ghost" onClick={() => { pending.current?.abort(); setBusy(false); }}>取消</Button></div>}
-      {error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{error} 可再次点击发送重试。</p>}
+      {error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{error} {loginRequired && <a href="/login" className="font-semibold underline">前往登录</a>}</p>}
       {file && <div className="rounded-2xl border border-teal-200 bg-teal-50/70 p-4 text-sm text-slate-700">
         <div className="flex items-center gap-2 font-medium text-teal-900"><FileSpreadsheet className="size-5 shrink-0" /><span className="min-w-0 flex-1 truncate" title={file.name}>{file.name}</span><Button size="icon" variant="ghost" aria-label="取消上传文件" disabled={importBusy} onClick={() => { setFile(null); setImportPreview(null); setImportError(''); }}><X className="size-4" /></Button></div>
         {importBusy && <p className="mt-2 flex items-center gap-2 text-xs text-teal-700" role="status"><Loader2 className="size-3 animate-spin" />正在{importPreview ? '录入' : '预检'}…</p>}

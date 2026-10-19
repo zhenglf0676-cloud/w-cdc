@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogClose } fr
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/lib/auth-context';
+import { assistantFetch } from '@/lib/water-assistant/request';
 import styles from './water-assistant.module.css';
 import { AiChat } from './ai-chat';
 
@@ -86,7 +87,7 @@ export function WaterAssistant() {
     const controller = new AbortController(); let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
       if (document.visibilityState === 'visible') try {
-        const res = await fetch('/api/assistant/alerts', { headers: { 'x-auth-token': session.access_token }, cache: 'no-store', signal: controller.signal });
+        const res = await assistantFetch(token => fetch('/api/assistant/alerts', { headers: { 'x-auth-token': token }, cache: 'no-store', signal: controller.signal }), controller.signal);
         if (res.ok) {
           const data: { warnings: { id: string; at: string }[] } = await res.json();
           const key = `water-alerts:${session.user.id}:${day(Date.now())}`;
@@ -133,7 +134,8 @@ export function WaterAssistant() {
     setBusy(true); setMessage('稍等一下，我来整理监测数据！'); setDownload(null);
     if (downloadRef.current) { URL.revokeObjectURL(downloadRef.current); downloadRef.current = null; }
     try {
-      const res = await fetch(`/api/${role}/reports/word`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-auth-token': session.access_token }, body: JSON.stringify({ startDate, endDate }), signal: controller.signal });
+      const payload = JSON.stringify({ startDate, endDate });
+      const res = await assistantFetch(token => fetch(`/api/${role}/reports/word`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-auth-token': token }, body: payload, signal: controller.signal }), controller.signal);
       if (!res.ok) { const error = await res.json(); throw new Error(error.error ?? '报告生成失败'); }
       const blob = await res.blob(); if (controller.signal.aborted) return;
       const url = URL.createObjectURL(blob), name = `${role === 'admin' ? '园区' : '企业'}水质监测报告_${startDate}_${endDate}.docx`;
@@ -171,7 +173,7 @@ export function WaterAssistant() {
         <Button size="icon" variant="ghost" className="shrink-0 text-white hover:bg-white/20 hover:text-white" aria-label="收起小水滴工作台" onClick={() => { setOpen(false); pet.current?.focus(); }}><X className="size-4" /></Button>
       </header>
       <div className={styles['workspace-body']}>
-        <div className={styles['conversation-pane']}><AiChat key={`${session.user.id}:${role}`} token={session.access_token} userId={session.user.id} scope={role === 'admin' ? '所属园区' : '本企业'} canImport={role === 'enterprise'} /></div>
+        <div className={styles['conversation-pane']}><AiChat key={`${session.user.id}:${role}`} userId={session.user.id} scope={role === 'admin' ? '所属园区' : '本企业'} canImport={role === 'enterprise'} /></div>
         <aside className={styles['tools-pane']} aria-label="快捷操作">
           <div className={styles['tools-title']}><span className="font-semibold text-teal-950">快捷操作</span><span className="text-xs text-slate-500">监测与演示</span></div>
           <div className={styles['quick-grid']}>
