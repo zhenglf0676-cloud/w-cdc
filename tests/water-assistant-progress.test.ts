@@ -12,11 +12,16 @@ test('progress and result arrive in order when events and Chinese UTF-8 split ac
     { id: 'analyze_water', label: '统计监测记录', tool: 'analyze_water' },
     { id: 'answer', label: '核对结果并组织回答', tool: null },
   ] };
+  const revised: AgentPlan = { ...plan, revision: 1, steps: [plan.steps[0],
+    { id: 'compare_history', label: '比较当前与历史', tool: 'compare_history', required: false, reason: '发现超阈值记录，补查历史参照' },
+    plan.steps[1],
+  ] };
   const bytes = new TextEncoder().encode([
     event({ type: 'progress', step: { id: 'scope', label: '核对可访问企业', state: 'running' } }),
     event({ type: 'plan', plan }),
+    event({ type: 'plan', plan: revised }),
     event({ type: 'progress', step: { id: 'scope', label: '核对可访问企业', state: 'done' } }),
-    event({ type: 'result', data: { answer: '【结论】有记录', evidence: [], sources: [], toolTrace: [], scope: '本企业', plan } }),
+    event({ type: 'result', data: { answer: '【结论】有记录', evidence: [], sources: [], toolTrace: [], scope: '本企业', plan: revised } }),
   ].join(''));
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -26,7 +31,8 @@ test('progress and result arrive in order when events and Chinese UTF-8 split ac
   });
   const result = await readAssistantStream(new Response(stream), step => steps.push(step), undefined, value => plans.push(value));
   assert.equal(result.answer, '【结论】有记录');
-  assert.deepEqual(plans, [plan]);
+  assert.deepEqual(plans, [plan, revised]);
+  assert.deepEqual(result.plan, revised);
   assert.deepEqual(steps.map(step => step.state), ['running', 'done']);
 });
 

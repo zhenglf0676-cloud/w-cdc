@@ -12,7 +12,7 @@ import { assistantFetch, AssistantSessionError } from '@/lib/water-assistant/req
 import { readAssistantStream, type AssistantResult, type ProgressStep } from '@/lib/water-assistant/progress';
 import type { AgentPlan } from '@/lib/water-assistant/workflow';
 
-type Message = { role: 'user' | 'assistant'; content: string; evidence?: unknown[]; sources?: KnowledgeSource[]; toolTrace?: unknown; progress?: ProgressStep[]; plan?: AgentPlan };
+type Message = { role: 'user' | 'assistant'; content: string; evidence?: unknown[]; sources?: KnowledgeSource[]; toolTrace?: unknown; progress?: ProgressStep[]; plan?: AgentPlan; outcome?: AssistantResult['outcome'] };
 type ImportPreview = { success: boolean; count: number; errorCount: number; errors: string[]; warnings: string[]; approvedOutlets: string[]; approvedPollutants: string[]; sample: { outlet: string; time: string; pollutant: string; value: number; unit: string; threshold: number }[] };
 
 function ProgressList({ steps }: { steps: ProgressStep[] }) {
@@ -26,19 +26,19 @@ function ProgressList({ steps }: { steps: ProgressStep[] }) {
   </ol>;
 }
 
-function PlanList({ plan, progress, finished = false }: { plan: AgentPlan; progress: ProgressStep[]; finished?: boolean }) {
+function PlanList({ plan, progress, finished = false, outcome }: { plan: AgentPlan; progress: ProgressStep[]; finished?: boolean; outcome?: AssistantResult['outcome'] }) {
   return <div className="mt-3 rounded-xl border border-teal-100 bg-white/80 p-3 text-xs">
-    <p className="font-semibold text-teal-900">本轮任务计划{plan.source === 'fallback' ? ' · 基础方案' : ''}</p>
+    <p className="font-semibold text-teal-900">本轮任务计划{plan.revision ? ` · 根据结果补充 ${plan.revision} 步` : plan.source === 'fallback' ? ' · 基础方案' : ''}</p>
     <ol className="mt-2 space-y-1.5">
       {plan.steps.map((step, index) => {
         const executions = step.tool ? progress.filter(item => item.tool === step.tool) : [];
-        const state = step.tool ? executions.some(item => item.state === 'done') ? 'done' : executions.at(-1)?.state : finished ? 'done' : undefined;
+        const state = step.tool ? executions.some(item => item.state === 'done') ? 'done' : executions.at(-1)?.state : finished ? outcome === 'needs_input' ? 'waiting' : 'done' : undefined;
         return <li key={step.id} className="flex items-center gap-2 text-slate-600">
           <span className={`flex size-4 shrink-0 items-center justify-center rounded-full text-[10px] ${state === 'done' ? 'bg-emerald-100 text-emerald-700' : state === 'failed' || (finished && !state) ? 'bg-amber-100 text-amber-700' : 'bg-teal-50 text-teal-600'}`}>
             {state === 'done' ? <Check className="size-3" /> : state === 'failed' || (finished && !state) ? '!' : index + 1}
           </span>
-          <span className={state === 'running' ? 'font-semibold text-teal-800' : ''}>{step.label}</span>
-          {finished && step.tool && !state && <span className="text-amber-700">未完成</span>}
+          <span className={state === 'running' ? 'font-semibold text-teal-800' : ''}>{step.label}{step.reason && <span className="ml-1 text-teal-600">· {step.reason}</span>}</span>
+          {finished && step.tool && !state && <span className="shrink-0 text-amber-700">{outcome === 'needs_input' ? '待补充' : '未完成'}</span>}
         </li>;
       })}
     </ol>
@@ -125,7 +125,7 @@ export function AiChat({ userId, scope, canImport }: { userId: string; scope: st
       const data: AssistantResult = streamed
         ? await readAssistantStream(response, onProgress, controller.signal, onPlan) : await response.json();
       if (controller.signal.aborted) return;
-      setMessages([...next, { role: 'assistant', content: data.answer, evidence: data.evidence, sources: data.sources, toolTrace: data.toolTrace, progress: streamed ? progressRef.current : [], plan: data.plan ?? planRef.current ?? undefined }]); setQuestion('');
+      setMessages([...next, { role: 'assistant', content: data.answer, evidence: data.evidence, sources: data.sources, toolTrace: data.toolTrace, progress: streamed ? progressRef.current : [], plan: data.plan ?? planRef.current ?? undefined, outcome: data.outcome }]); setQuestion('');
     } catch (e) { if (!controller.signal.aborted) { setLoginRequired(e instanceof AssistantSessionError); setError(e instanceof Error ? e.message : '网络异常，请重试'); } }
     finally { if (pending.current === controller) { setBusy(false); setProgress([]); progressRef.current = []; setPlan(null); planRef.current = null; pending.current = null; } }
   }
@@ -149,7 +149,7 @@ export function AiChat({ userId, scope, canImport }: { userId: string; scope: st
         {m.role === 'assistant' && <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-teal-100 text-teal-700"><Droplets className="size-4" /></span>}
         <div className={`min-w-0 rounded-2xl px-3.5 py-3 text-sm leading-relaxed shadow-sm ${m.role === 'user' ? 'max-w-[88%] rounded-tr-sm bg-teal-700 text-white' : 'w-full max-w-[calc(100%-2.25rem)] rounded-tl-sm border border-slate-100 bg-slate-50 text-slate-800'}`}>
           {m.role === 'assistant' ? <AnswerContent content={m.content} /> : <p className="whitespace-pre-wrap break-words">{m.content}</p>}
-          {m.role === 'assistant' && (!!m.progress?.length || !!m.plan) && <details className="mt-3 rounded-xl border border-teal-100 bg-white px-3 py-2 text-xs"><summary className="cursor-pointer font-medium text-teal-800">查看本次任务计划与分析过程</summary>{m.plan && <PlanList plan={m.plan} progress={m.progress ?? []} finished />}{!!m.progress?.length && <ProgressList steps={m.progress} />}</details>}
+          {m.role === 'assistant' && (!!m.progress?.length || !!m.plan) && <details className="mt-3 rounded-xl border border-teal-100 bg-white px-3 py-2 text-xs"><summary className="cursor-pointer font-medium text-teal-800">查看本次任务计划与分析过程</summary>{m.plan && <PlanList plan={m.plan} progress={m.progress ?? []} finished outcome={m.outcome} />}{!!m.progress?.length && <ProgressList steps={m.progress} />}</details>}
           <AnalysisEvidence evidence={m.evidence} admin={scope === '所属园区'} />
           <HistoryEvidence evidence={m.evidence} />
           <ToolEvidence evidence={m.evidence} trace={m.toolTrace} />

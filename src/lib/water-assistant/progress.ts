@@ -15,6 +15,7 @@ export type AssistantResult = {
   toolTrace: unknown;
   scope: string;
   plan?: AgentPlan;
+  outcome?: 'complete' | 'partial' | 'needs_input';
 };
 
 export type AssistantStreamEvent =

@@ -8,7 +8,7 @@ export function requiredEvidenceTools(question: string): EvidenceTool[] {
   const required: EvidenceTool[] = [];
   const history = !isDefinition && /(以前|过去|历史|对比|变化|波动|稳定|升高|下降|趋势|cdc|skew|\bav\b|\bad\b|\bcv\b)/i.test(q);
   if (history) required.push('compare_history');
-  if (/(原始记录|记录(?:编号|id)|这条记录|核对记录)/i.test(q)) required.push('inspect_record_evidence');
+  if (/(原始记录|记录(?:编号|id)|这条记录|核对记录)/i.test(q) || /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(q)) required.push('inspect_record_evidence');
   const entity = /(我(?:的|们)|本企业|所属园区|园区|[\u3400-\u9fff]{2,}企业)/.test(q);
   const period = /(今天|昨日|昨天|本周|上周|本月|最近|近[0-9一二三四五六七八九十]+天|20\d\d-\d\d-\d\d)/.test(q);
   const context = entity && /(审批|许可|排污口|阈值)/.test(q) &&
