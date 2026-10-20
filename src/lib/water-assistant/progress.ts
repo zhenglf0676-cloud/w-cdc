@@ -1,9 +1,11 @@
 import type { KnowledgeSource } from './knowledge';
+import type { AgentPlan, AgentTool } from './workflow';
 
 export type ProgressStep = {
   id: string;
   label: string;
   state: 'running' | 'done' | 'failed';
+  tool?: AgentTool;
 };
 
 export type AssistantResult = {
@@ -12,10 +14,12 @@ export type AssistantResult = {
   sources: KnowledgeSource[];
   toolTrace: unknown;
   scope: string;
+  plan?: AgentPlan;
 };
 
 export type AssistantStreamEvent =
   | { type: 'progress'; step: ProgressStep }
+  | { type: 'plan'; plan: AgentPlan }
   | { type: 'result'; data: AssistantResult }
   | { type: 'error'; error: string };
 
@@ -24,6 +28,7 @@ export async function readAssistantStream(
   response: Response,
   onProgress: (step: ProgressStep) => void,
   signal?: AbortSignal,
+  onPlan?: (plan: AgentPlan) => void,
 ): Promise<AssistantResult> {
   if (!response.body) throw new Error('服务器没有返回分析结果，请重试');
   const reader = response.body.getReader();
@@ -45,6 +50,7 @@ export async function readAssistantStream(
           if (!line.startsWith('data: ')) continue;
           const event = JSON.parse(line.slice(6)) as AssistantStreamEvent;
           if (event.type === 'progress') onProgress(event.step);
+          else if (event.type === 'plan') onPlan?.(event.plan);
           else if (event.type === 'result') result = event.data;
           else if (event.type === 'error') throw new Error(event.error);
         }

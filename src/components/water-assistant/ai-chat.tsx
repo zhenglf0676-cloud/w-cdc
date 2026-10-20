@@ -10,8 +10,9 @@ import { AnswerContent } from './answer-content';
 import type { KnowledgeSource } from '@/lib/water-assistant/knowledge';
 import { assistantFetch, AssistantSessionError } from '@/lib/water-assistant/request';
 import { readAssistantStream, type AssistantResult, type ProgressStep } from '@/lib/water-assistant/progress';
+import type { AgentPlan } from '@/lib/water-assistant/workflow';
 
-type Message = { role: 'user' | 'assistant'; content: string; evidence?: unknown[]; sources?: KnowledgeSource[]; toolTrace?: unknown; progress?: ProgressStep[] };
+type Message = { role: 'user' | 'assistant'; content: string; evidence?: unknown[]; sources?: KnowledgeSource[]; toolTrace?: unknown; progress?: ProgressStep[]; plan?: AgentPlan };
 type ImportPreview = { success: boolean; count: number; errorCount: number; errors: string[]; warnings: string[]; approvedOutlets: string[]; approvedPollutants: string[]; sample: { outlet: string; time: string; pollutant: string; value: number; unit: string; threshold: number }[] };
 
 function ProgressList({ steps }: { steps: ProgressStep[] }) {
@@ -25,6 +26,25 @@ function ProgressList({ steps }: { steps: ProgressStep[] }) {
   </ol>;
 }
 
+function PlanList({ plan, progress, finished = false }: { plan: AgentPlan; progress: ProgressStep[]; finished?: boolean }) {
+  return <div className="mt-3 rounded-xl border border-teal-100 bg-white/80 p-3 text-xs">
+    <p className="font-semibold text-teal-900">本轮任务计划{plan.source === 'fallback' ? ' · 基础方案' : ''}</p>
+    <ol className="mt-2 space-y-1.5">
+      {plan.steps.map((step, index) => {
+        const executions = step.tool ? progress.filter(item => item.tool === step.tool) : [];
+        const state = step.tool ? executions.some(item => item.state === 'done') ? 'done' : executions.at(-1)?.state : finished ? 'done' : undefined;
+        return <li key={step.id} className="flex items-center gap-2 text-slate-600">
+          <span className={`flex size-4 shrink-0 items-center justify-center rounded-full text-[10px] ${state === 'done' ? 'bg-emerald-100 text-emerald-700' : state === 'failed' || (finished && !state) ? 'bg-amber-100 text-amber-700' : 'bg-teal-50 text-teal-600'}`}>
+            {state === 'done' ? <Check className="size-3" /> : state === 'failed' || (finished && !state) ? '!' : index + 1}
+          </span>
+          <span className={state === 'running' ? 'font-semibold text-teal-800' : ''}>{step.label}</span>
+          {finished && step.tool && !state && <span className="text-amber-700">未完成</span>}
+        </li>;
+      })}
+    </ol>
+  </div>;
+}
+
 export function AiChat({ userId, scope, canImport }: { userId: string; scope: string; canImport: boolean }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [question, setQuestion] = useState('');
@@ -33,6 +53,8 @@ export function AiChat({ userId, scope, canImport }: { userId: string; scope: st
   const [loginRequired, setLoginRequired] = useState(false);
   const [progress, setProgress] = useState<ProgressStep[]>([]);
   const progressRef = useRef<ProgressStep[]>([]);
+  const [plan, setPlan] = useState<AgentPlan | null>(null);
+  const planRef = useRef<AgentPlan | null>(null);
   const pending = useRef<AbortController | null>(null);
   const importRequest = useRef<AbortController | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -45,10 +67,10 @@ export function AiChat({ userId, scope, canImport }: { userId: string; scope: st
   const [importError, setImportError] = useState('');
   const [dragging, setDragging] = useState(false);
   useEffect(() => {
-    setMessages([]); setError(''); setLoginRequired(false); setBusy(false); setQuestion(''); setFile(null); setImportPreview(null); setImportError(''); setImportBusy(false); setProgress([]); progressRef.current = [];
+    setMessages([]); setError(''); setLoginRequired(false); setBusy(false); setQuestion(''); setFile(null); setImportPreview(null); setImportError(''); setImportBusy(false); setProgress([]); progressRef.current = []; setPlan(null); planRef.current = null;
     return () => { pending.current?.abort(); importRequest.current?.abort(); };
   }, [userId]);
-  useEffect(() => { conversation.current?.scrollTo({ top: conversation.current.scrollHeight, behavior: 'smooth' }); }, [messages, busy, progress, error, importPreview, importError]);
+  useEffect(() => { conversation.current?.scrollTo({ top: conversation.current.scrollHeight, behavior: 'smooth' }); }, [messages, busy, progress, plan, error, importPreview, importError]);
   async function uploadExcel(selected: File, preview: boolean, signal: AbortSignal) {
     const form = new FormData(); form.append('file', selected);
     const response = await assistantFetch(token => fetch(`/api/enterprise/monitoring/upload-excel?${preview ? 'preview=1' : 'strict=1'}`, { method: 'POST', headers: { 'x-session': token }, body: form, signal }), signal);
@@ -87,7 +109,7 @@ export function AiChat({ userId, scope, canImport }: { userId: string; scope: st
     const controller = new AbortController(); pending.current = controller;
     const next: Message[] = [...messages, { role: 'user', content: question.trim() }];
     progressRef.current = [{ id: 'auth', label: '验证登录与访问权限', state: 'running' }];
-    setProgress(progressRef.current); setBusy(true); setError(''); setLoginRequired(false);
+    planRef.current = null; setPlan(null); setProgress(progressRef.current); setBusy(true); setError(''); setLoginRequired(false);
     try {
       const payload = JSON.stringify({ messages: next.slice(-11).map(({ role, content }) => ({ role, content })) });
       const response = await assistantFetch(token => fetch('/api/assistant/chat', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', 'x-auth-token': token }, body: payload, signal: controller.signal }), controller.signal);
@@ -98,13 +120,14 @@ export function AiChat({ userId, scope, canImport }: { userId: string; scope: st
         progressRef.current = index === -1 ? [...progressRef.current, step] : progressRef.current.map(item => item.id === step.id ? step : item);
         setProgress(progressRef.current);
       };
+      const onPlan = (nextPlan: AgentPlan) => { if (!controller.signal.aborted) { planRef.current = nextPlan; setPlan(nextPlan); } };
       const streamed = response.headers.get('content-type')?.includes('text/event-stream');
       const data: AssistantResult = streamed
-        ? await readAssistantStream(response, onProgress, controller.signal) : await response.json();
+        ? await readAssistantStream(response, onProgress, controller.signal, onPlan) : await response.json();
       if (controller.signal.aborted) return;
-      setMessages([...next, { role: 'assistant', content: data.answer, evidence: data.evidence, sources: data.sources, toolTrace: data.toolTrace, progress: streamed ? progressRef.current : [] }]); setQuestion('');
+      setMessages([...next, { role: 'assistant', content: data.answer, evidence: data.evidence, sources: data.sources, toolTrace: data.toolTrace, progress: streamed ? progressRef.current : [], plan: data.plan ?? planRef.current ?? undefined }]); setQuestion('');
     } catch (e) { if (!controller.signal.aborted) { setLoginRequired(e instanceof AssistantSessionError); setError(e instanceof Error ? e.message : '网络异常，请重试'); } }
-    finally { if (pending.current === controller) { setBusy(false); setProgress([]); progressRef.current = []; pending.current = null; } }
+    finally { if (pending.current === controller) { setBusy(false); setProgress([]); progressRef.current = []; setPlan(null); planRef.current = null; pending.current = null; } }
   }
   return <div className="relative flex h-full min-h-0 flex-col bg-white"
     onDragEnter={e => { if (!e.dataTransfer.types.includes('Files')) return; e.preventDefault(); dragDepth.current++; setDragging(true); }}
@@ -126,7 +149,7 @@ export function AiChat({ userId, scope, canImport }: { userId: string; scope: st
         {m.role === 'assistant' && <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-teal-100 text-teal-700"><Droplets className="size-4" /></span>}
         <div className={`min-w-0 rounded-2xl px-3.5 py-3 text-sm leading-relaxed shadow-sm ${m.role === 'user' ? 'max-w-[88%] rounded-tr-sm bg-teal-700 text-white' : 'w-full max-w-[calc(100%-2.25rem)] rounded-tl-sm border border-slate-100 bg-slate-50 text-slate-800'}`}>
           {m.role === 'assistant' ? <AnswerContent content={m.content} /> : <p className="whitespace-pre-wrap break-words">{m.content}</p>}
-          {m.role === 'assistant' && !!m.progress?.length && <details className="mt-3 rounded-xl border border-teal-100 bg-white px-3 py-2 text-xs"><summary className="cursor-pointer font-medium text-teal-800">查看本次分析过程</summary><ProgressList steps={m.progress} /></details>}
+          {m.role === 'assistant' && (!!m.progress?.length || !!m.plan) && <details className="mt-3 rounded-xl border border-teal-100 bg-white px-3 py-2 text-xs"><summary className="cursor-pointer font-medium text-teal-800">查看本次任务计划与分析过程</summary>{m.plan && <PlanList plan={m.plan} progress={m.progress ?? []} finished />}{!!m.progress?.length && <ProgressList steps={m.progress} />}</details>}
           <AnalysisEvidence evidence={m.evidence} admin={scope === '所属园区'} />
           <HistoryEvidence evidence={m.evidence} />
           <ToolEvidence evidence={m.evidence} trace={m.toolTrace} />
@@ -136,8 +159,9 @@ export function AiChat({ userId, scope, canImport }: { userId: string; scope: st
       {busy && <div className="flex gap-2" aria-label="小水滴分析过程">
         <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-teal-100 text-teal-700"><Droplets className="size-4" /></span>
         <div className="min-w-0 w-full max-w-[calc(100%-2.25rem)] rounded-2xl rounded-tl-sm border border-teal-100 bg-gradient-to-br from-teal-50 to-white px-4 py-3 shadow-sm">
-          <div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold text-teal-900">小水滴正在分析</p><Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { pending.current?.abort(); setBusy(false); setProgress([]); progressRef.current = []; }}>取消</Button></div>
+          <div className="flex items-center justify-between gap-3"><p className="text-sm font-semibold text-teal-900">小水滴正在分析</p><Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { pending.current?.abort(); setBusy(false); setProgress([]); progressRef.current = []; setPlan(null); planRef.current = null; }}>取消</Button></div>
           <p role="status" className="mt-1 text-xs text-teal-700">{progress.find(step => step.state === 'running')?.label ?? '正在整理结果'}…</p>
+          {plan && <PlanList plan={plan} progress={progress} />}
           <ProgressList steps={progress} />
         </div>
       </div>}

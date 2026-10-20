@@ -1,15 +1,22 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readAssistantStream, type AssistantStreamEvent, type ProgressStep } from '../src/lib/water-assistant/progress';
+import type { AgentPlan } from '../src/lib/water-assistant/workflow';
 
 function event(value: AssistantStreamEvent) { return `data: ${JSON.stringify(value)}\n\n`; }
 
 test('progress and result arrive in order when events and Chinese UTF-8 split across chunks', async () => {
   const steps: ProgressStep[] = [];
+  const plans: AgentPlan[] = [];
+  const plan: AgentPlan = { source: 'model', steps: [
+    { id: 'analyze_water', label: '统计监测记录', tool: 'analyze_water' },
+    { id: 'answer', label: '核对结果并组织回答', tool: null },
+  ] };
   const bytes = new TextEncoder().encode([
     event({ type: 'progress', step: { id: 'scope', label: '核对可访问企业', state: 'running' } }),
+    event({ type: 'plan', plan }),
     event({ type: 'progress', step: { id: 'scope', label: '核对可访问企业', state: 'done' } }),
-    event({ type: 'result', data: { answer: '【结论】有记录', evidence: [], sources: [], toolTrace: [], scope: '本企业' } }),
+    event({ type: 'result', data: { answer: '【结论】有记录', evidence: [], sources: [], toolTrace: [], scope: '本企业', plan } }),
   ].join(''));
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -17,8 +24,9 @@ test('progress and result arrive in order when events and Chinese UTF-8 split ac
       controller.close();
     },
   });
-  const result = await readAssistantStream(new Response(stream), step => steps.push(step));
+  const result = await readAssistantStream(new Response(stream), step => steps.push(step), undefined, value => plans.push(value));
   assert.equal(result.answer, '【结论】有记录');
+  assert.deepEqual(plans, [plan]);
   assert.deepEqual(steps.map(step => step.state), ['running', 'done']);
 });
 
