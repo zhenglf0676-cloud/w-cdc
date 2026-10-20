@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { chinaDay, chinaPeriod, recentChinaDays, shiftChinaDay } from '../china-time';
-import { dailyLatest, exceeded, statistics, type Analysis, type Reading, type Stats } from '../water-reports/model';
+import { dailyLatest, statistics, type Analysis, type Reading, type Stats } from '../water-reports/model';
+import { confirmedExceedance, comparableUpperLimit } from './analysis';
 
 export const comparisonArgs = z.object({
   currentStartDate: z.string().optional(), currentEndDate: z.string().optional(),
@@ -23,8 +24,7 @@ export function comparisonRanges(args: Args, now = new Date()) {
   return { current, baseline };
 }
 
-const isUpperLimitComparable = (record: Reading, unit: string) =>
-  record.unit === unit && record.standard_limit !== null && Number.isFinite(Number(record.standard_limit));
+const isUpperLimitComparable = (record: Reading, unit: string) => record.unit === unit && comparableUpperLimit(record);
 
 /** A normal-reference day needs every recorded sample for that pollutant to have a valid upper limit and stay within it. */
 export function normalReference(records: Reading[], pollutant: string, unit: string): { days: number; excludedDays: number; stats: Stats | null; daily: { date: string; value: number }[] } {
@@ -34,7 +34,7 @@ export function normalReference(records: Reading[], pollutant: string, unit: str
     const date = chinaDay(record.monitored_at);
     days.set(date, [...(days.get(date) ?? []), record]);
   }
-  const good = [...days.entries()].filter(([, rows]) => rows.every(r => isUpperLimitComparable(r, unit) && !exceeded(r)));
+  const good = [...days.entries()].filter(([, rows]) => rows.every(r => isUpperLimitComparable(r, unit) && !confirmedExceedance(r)));
   const daily = Object.entries(dailyLatest(good.flatMap(([, rows]) => rows))[pollutant] ?? {})
     .filter(([, value]) => value > 0).sort(([a], [b]) => a.localeCompare(b))
     .map(([date, value]) => ({ date, value }));
@@ -54,7 +54,7 @@ export function compareCompanyPeriods(company: string, current: Analysis[number]
     const currentDays = Object.values(current?.daily[metric.id] ?? {}).filter(value => value > 0).length;
     const currentDaily = Object.entries(current?.daily[metric.id] ?? {}).filter(([, value]) => value > 0).sort(([a], [b]) => a.localeCompare(b)).map(([date, value]) => ({ date, value }));
     const comparable = unitsMatch && currentDays >= 4 && reference.days >= 4;
-    const warnings = nowRecords.filter(exceeded);
+    const warnings = nowRecords.filter(confirmedExceedance);
     const outletWarnings = [...new Map(warnings.map(record => [record.outlet_id, { name: outlets.get(record.outlet_id) ?? record.outlet_id, count: warnings.filter(w => w.outlet_id === record.outlet_id).length }])).values()]
       .sort((a, b) => b.count - a.count).slice(0, 5);
     return {
@@ -70,14 +70,14 @@ export function compareCompanyPeriods(company: string, current: Analysis[number]
         avPercent: reference.stats.av > 0 ? (metric.stats.av / reference.stats.av - 1) * 100 : null,
       } : null,
       outletWarnings,
-      note: !unitsMatch ? '两期单位不一致，不能对比。' : reference.days < 4 || currentDays < 4 ? '有效日样本不足4天，仅展示已有统计，不判断波动方向。' : null,
+      note: /^ph$/i.test(metric.id) ? 'pH 缺少双侧阈值，暂不能构建历史正常参考。' : !unitsMatch ? '两期单位不一致，不能对比。' : reference.days < 4 || currentDays < 4 ? '有效日样本不足4天，仅展示已有统计，不判断波动方向。' : null,
     };
   });
   return {
     company, currentCDC: current?.cdc ?? null, previousCDC: baseline?.cdc ?? null,
     currentRecords: current?.records.length ?? 0, previousRecords: baseline?.records.length ?? 0,
-    currentExceedances: current?.records.filter(exceeded).length ?? 0,
-    previousExceedances: baseline?.records.filter(exceeded).length ?? 0,
+    currentExceedances: current?.records.filter(confirmedExceedance).length ?? 0,
+    previousExceedances: baseline?.records.filter(confirmedExceedance).length ?? 0,
     pollutants: results,
   };
 }

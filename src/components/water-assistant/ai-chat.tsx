@@ -5,11 +5,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AnalysisEvidence } from './analysis-evidence';
 import { HistoryEvidence } from './history-evidence';
+import { ToolEvidence } from './tool-evidence';
 import { AnswerContent } from './answer-content';
 import type { KnowledgeSource } from '@/lib/water-assistant/knowledge';
 import { assistantFetch, AssistantSessionError } from '@/lib/water-assistant/request';
 
-type Message = { role: 'user' | 'assistant'; content: string; evidence?: unknown[]; sources?: KnowledgeSource[] };
+type Message = { role: 'user' | 'assistant'; content: string; evidence?: unknown[]; sources?: KnowledgeSource[]; toolTrace?: unknown };
 type ImportPreview = { success: boolean; count: number; errorCount: number; errors: string[]; warnings: string[]; approvedOutlets: string[]; approvedPollutants: string[]; sample: { outlet: string; time: string; pollutant: string; value: number; unit: string; threshold: number }[] };
 export function AiChat({ userId, scope, canImport }: { userId: string; scope: string; canImport: boolean }) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -77,7 +78,7 @@ export function AiChat({ userId, scope, canImport }: { userId: string; scope: st
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || '分析失败');
       if (controller.signal.aborted) return;
-      setMessages([...next, { role: 'assistant', content: data.answer, evidence: data.evidence, sources: data.sources }]); setQuestion('');
+      setMessages([...next, { role: 'assistant', content: data.answer, evidence: data.evidence, sources: data.sources, toolTrace: data.toolTrace }]); setQuestion('');
     } catch (e) { if (!controller.signal.aborted) { setLoginRequired(e instanceof AssistantSessionError); setError(e instanceof Error ? e.message : '网络异常，请重试'); } }
     finally { if (pending.current === controller) { setBusy(false); pending.current = null; } }
   }
@@ -103,6 +104,7 @@ export function AiChat({ userId, scope, canImport }: { userId: string; scope: st
           {m.role === 'assistant' ? <AnswerContent content={m.content} /> : <p className="whitespace-pre-wrap break-words">{m.content}</p>}
           <AnalysisEvidence evidence={m.evidence} admin={scope === '所属园区'} />
           <HistoryEvidence evidence={m.evidence} />
+          <ToolEvidence evidence={m.evidence} trace={m.toolTrace} />
           {!!m.sources?.length && <div className="mt-3 space-y-2 border-t border-teal-100 pt-3" aria-label="参考资料"><p className="text-xs font-medium text-teal-800">资料依据</p>{m.sources.map(source => <details key={source.id} className="rounded-lg border border-slate-200 bg-white p-2 text-xs"><summary className="cursor-pointer text-slate-700">{source.title} · {source.section}</summary><p className="mt-2 text-slate-600">{source.excerpt}</p><p className="mt-1 text-slate-500">{source.version}</p>{source.url && <a href={source.url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-teal-700 underline">查看官方来源</a>}</details>)}</div>}
         </div>
       </div>)}

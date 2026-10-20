@@ -7,7 +7,7 @@ const ReactECharts = dynamic(() => import('echarts-for-react'), { ssr: false });
 const palette = ['#0ea5e9', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#6366f1'];
 const summary = z.object({
   outlet: z.string().optional(), pollutant: z.string(), unit: z.string().nullable(),
-  count: z.number(), exceedances: z.number(), missingThreshold: z.number(),
+  count: z.number(), exceedances: z.number(), missingThreshold: z.number(), unassessable: z.number().optional(),
   approvedName: z.string().nullable().optional(), currentThreshold: z.number().nullable().optional(),
   recordThresholds: z.array(z.number().nullable()).optional(), thresholdChanged: z.boolean().optional(),
   approvalStatus: z.string().optional(),
@@ -39,6 +39,7 @@ export function AnalysisEvidence({ evidence, admin }: { evidence?: unknown[]; ad
             <span className="rounded-lg bg-white px-2 py-1 font-medium">{rows.reduce((sum, r) => sum + r.count, 0)} 条记录</span>
             <span className={rows.some(r => r.exceedances) ? 'rounded-lg bg-amber-50 px-2 py-1 font-bold text-amber-800' : 'rounded-lg bg-white px-2 py-1 font-medium'}>{rows.reduce((sum, r) => sum + r.exceedances, 0)} 条超审批上限</span>
             {!!rows.some(r => r.missingThreshold) && <span className="rounded-lg bg-slate-100 px-2 py-1">{rows.reduce((sum, r) => sum + r.missingThreshold, 0)} 条缺上限</span>}
+          {!!rows.some(r => r.unassessable) && <span className="rounded-lg bg-slate-100 px-2 py-1">{rows.reduce((sum, r) => sum + (r.unassessable ?? 0), 0)} 条无法自动判定（含缺上限或 pH）</span>}
           </div>
           {groups.map(unit => {
             const selected = rows.filter(row => (row.unit ?? '未标单位') === unit);
@@ -73,7 +74,7 @@ export function AnalysisEvidence({ evidence, admin }: { evidence?: unknown[]; ad
               {selected.length > visible.length && <p className="px-1 text-xs text-slate-500">图中显示前 {visible.length} 条序列，其余记录见下方证据。</p>}
             </div>;
           })}
-          {rows.some(row => row.daily.length) && <p className="text-xs text-slate-500">北京时间逐日平均值；超阈值次数按单条记录与审批上限比较。图中日均值不用于法定达标判定。</p>}
+          {rows.some(row => row.daily.length) && <p className="text-xs text-slate-500">北京时间逐日平均值；已判定的超上限次数按单条记录保存的审批上限比较。pH 缺双侧阈值不自动判定；日均值不用于法定达标判定。</p>}
           <details className="rounded-xl border border-slate-200 bg-white p-2 text-xs"><summary className="cursor-pointer font-medium text-teal-800">按企业 / 排污口 / 污染物查看阈值与记录</summary>
             <div className="mt-2 space-y-1">{rows.slice(0, 30).map((row, i) => <p key={`${row.company}-${row.outlet}-${row.pollutant}-${i}`} className="border-t border-slate-100 py-1 text-slate-600"><span className="font-medium text-slate-800">{row.company} · {row.outlet ?? '排污口'} · {row.approvedName ?? row.pollutant}</span>：{row.count} 条，{row.exceedances} 条超记录上限；当前审批上限 {row.currentThreshold === null || row.currentThreshold === undefined ? '未匹配' : `${row.currentThreshold} ${row.unit ?? ''}`}；记录保存上限 {row.recordThresholds?.map(value => value ?? '缺失').join('、') || '未提供'} {row.unit ?? ''}{row.thresholdChanged ? '（与当前审批不同，请复核）' : ''}{row.approvalStatus !== '已匹配当前审批配置' && row.approvalStatus ? `；${row.approvalStatus}` : ''}</p>)}{rows.length > 30 && <p className="text-slate-500">仅列前 30 项，完整结果见下方证据。</p>}</div>
           </details>

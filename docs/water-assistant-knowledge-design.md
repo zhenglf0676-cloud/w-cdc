@@ -2,7 +2,7 @@
 
 ## 已接入的内容
 
-小水滴现有三个服务端工具：`analyze_water` 查询登录账号授权范围内的企业、已审批排污口、已审批污染物和监测记录；`search_knowledge` 从经过核对的公共资料中取最多四段内容；`compare_history` 对比两个时段的监测波动和 CDC。资料依据在回答下方展开，国家标准条目附官方链接。资料库数据位于 `src/lib/water-assistant/knowledge.ts`，便于下一轮直接调整条目。
+小水滴现有五个服务端工具：`analyze_water` 查询授权范围内监测记录；`inspect_monitoring_context` 查询当前企业层级审批配置；`inspect_record_evidence` 按记录 ID 核对授权排口原始数据；`search_knowledge` 查询已核对的公共资料；`compare_history` 对比两期监测波动和 CDC。资料依据在回答下方展开，国家标准条目附官方链接。资料库数据位于 `src/lib/water-assistant/knowledge.ts`。工具权限和判定边界见 `docs/assistant-safety-tools.md`。
 
 第一版只摘录用户 2026 年 8 月操作说明书中与当前实现一致的操作和 CDC 概念，并加入以下官方来源的适用范围摘要：
 
