@@ -7,6 +7,12 @@ export async function GET(request: NextRequest) {
     // 使用服务角色密钥查询数据，绕过RLS策略
     const client = getSupabaseClient();
     
+    const token = request.headers.get('x-auth-token');
+    if (!token) return NextResponse.json({ error: '未登录' }, { status: 401 });
+    const { data: { user }, error: authError } = await client.auth.getUser(token);
+    if (authError || !user) return NextResponse.json({ error: '登录已失效' }, { status: 401 });
+    const { data: admin, error: adminError } = await client.from('profiles').select('park_name').eq('user_id', user.id).eq('role', 'admin').single();
+    if (adminError || !admin?.park_name) return NextResponse.json({ error: '无管理员权限或未配置园区' }, { status: 403 });
     // 获取企业 ID 参数
     const { searchParams } = new URL(request.url);
     const enterpriseId = searchParams.get('enterpriseId');
@@ -20,6 +26,7 @@ export async function GET(request: NextRequest) {
       .from('profiles')
       .select('id, company_name, user_id')
       .eq('id', enterpriseId)
+      .eq('park_name', admin.park_name)
       .eq('role', 'enterprise')
       .single();
 

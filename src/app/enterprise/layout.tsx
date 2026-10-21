@@ -12,6 +12,8 @@ export default function EnterpriseLayout({ children }: { children: React.ReactNo
     activeItem = 'monitor';
   } else if (pathname === '/enterprise/cdc') {
     activeItem = 'cdc';
+  } else if (pathname === '/enterprise/knowledge') {
+    activeItem = 'knowledge';
   } else if (pathname === '/enterprise/profile') {
     activeItem = 'profile';
   }
