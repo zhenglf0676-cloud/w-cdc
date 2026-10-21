@@ -6,6 +6,10 @@ export type KnowledgeSource = {
   version: string;
   excerpt: string;
   url?: string;
+  documentId?: string;
+  citation?: string;
+  hasFile?: boolean;
+  fileName?: string;
 };
 
 type Entry = KnowledgeSource & { keywords: string[] };
@@ -65,4 +69,9 @@ export function searchKnowledge(query: string, limit = 4): KnowledgeSource[] {
     void _keywords;
     return source;
   });
+}
+
+export function keepVerifiedCitations(answer: string, sources: readonly KnowledgeSource[]): string {
+  const allowed = new Set(sources.map(source => source.citation).filter(Boolean));
+  return answer.replace(/\[资料\d+\]/g, citation => allowed.has(citation.slice(1, -1)) ? citation : '');
 }

@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Building2,
   Activity,
+  BookOpen,
   Settings,
   LogOut,
   ChevronLeft,
@@ -24,6 +25,7 @@ const navItems: NavItem[] = [
   { title: '首页（园区地图）', href: '/admin', icon: LayoutDashboard },
   { title: '企业管理', href: '/admin/management', icon: Building2 },
   { title: '实时监测（预警中心）', href: '/admin/monitoring', icon: Activity },
+  { title: '小水滴资料库', href: '/admin/knowledge', icon: BookOpen },
   { title: '系统管理', href: '/admin/settings', icon: Settings },
 ];
 

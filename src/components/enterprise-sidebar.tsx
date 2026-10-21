@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Home,
@@ -11,6 +11,7 @@ import {
   ChevronRight,
   LogOut,
   Building2,
+  BookOpen,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useSupabaseConfig } from '@/lib/supabase-config-inject';
@@ -24,6 +25,7 @@ const menuItems = [
   { id: 'home', label: '首页（污染物管理）', icon: Home, href: '/enterprise' },
   { id: 'monitor', label: '排污点监测', icon: Radio, href: '/enterprise/monitoring' },
   { id: 'cdc', label: 'CDC 分析', icon: BarChart3, href: '/enterprise/cdc' },
+  { id: 'knowledge', label: '小水滴资料库', icon: BookOpen, href: '/enterprise/knowledge' },
   { id: 'profile', label: '个人中心', icon: User, href: '/enterprise/profile' },
 ];
 
@@ -35,7 +37,7 @@ export function EnterpriseSidebar({ activeItem = 'home' }: EnterpriseSidebarProp
   const [collapsed, setCollapsed] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  const fetchUnreadCount = async () => {
+  const fetchUnreadCount = useCallback(async () => {
     if (!isReady) return;
     
     try {
@@ -58,7 +60,7 @@ export function EnterpriseSidebar({ activeItem = 'home' }: EnterpriseSidebarProp
     } catch (error) {
       console.error('获取未读消息数量失败:', error);
     }
-  };
+  }, [isReady]);
 
   // 获取未读消息数量
   useEffect(() => {
@@ -67,7 +69,7 @@ export function EnterpriseSidebar({ activeItem = 'home' }: EnterpriseSidebarProp
     // 每 30 秒刷新一次
     const interval = setInterval(fetchUnreadCount, 30000);
     return () => clearInterval(interval);
-  }, [isReady]);
+  }, [isReady, fetchUnreadCount]);
 
   const handleLogout = async () => {
     await signOut();

@@ -104,6 +104,17 @@ export function AiChat({ userId, scope, canImport }: { userId: string; scope: st
     } catch (e) { if (!controller.signal.aborted) setImportError(e instanceof Error ? e.message : '录入失败，请重试'); }
     finally { if (importRequest.current === controller) { setImportBusy(false); importRequest.current = null; } }
   }
+  async function downloadKnowledge(source: KnowledgeSource) {
+    if (!source.documentId) return;
+    try {
+      const res = await assistantFetch(token => fetch(`/api/assistant/knowledge/${source.documentId}/file`, { headers: { 'x-auth-token': token } }));
+      if (!res.ok) { const data = await res.json(); throw new Error(data.error || '资料下载失败'); }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a'); anchor.href = url; anchor.download = source.fileName ?? source.title;
+      anchor.click(); setTimeout(() => URL.revokeObjectURL(url), 30000);
+    } catch (e) { setError(e instanceof Error ? e.message : '资料下载失败'); }
+  }
   async function send() {
     if (busy || importBusy || !question.trim()) return;
     const controller = new AbortController(); pending.current = controller;
@@ -153,7 +164,7 @@ export function AiChat({ userId, scope, canImport }: { userId: string; scope: st
           <AnalysisEvidence evidence={m.evidence} admin={scope === '所属园区'} />
           <HistoryEvidence evidence={m.evidence} />
           <ToolEvidence evidence={m.evidence} trace={m.toolTrace} />
-          {!!m.sources?.length && <div className="mt-3 space-y-2 border-t border-teal-100 pt-3" aria-label="参考资料"><p className="text-xs font-medium text-teal-800">资料依据</p>{m.sources.map(source => <details key={source.id} className="rounded-lg border border-slate-200 bg-white p-2 text-xs"><summary className="cursor-pointer text-slate-700">{source.title} · {source.section}</summary><p className="mt-2 text-slate-600">{source.excerpt}</p><p className="mt-1 text-slate-500">{source.version}</p>{source.url && <a href={source.url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-teal-700 underline">查看官方来源</a>}</details>)}</div>}
+          {!!m.sources?.length && <div className="mt-3 space-y-2 border-t border-teal-100 pt-3" aria-label="参考资料"><p className="text-xs font-medium text-teal-800">资料依据</p>{m.sources.map((source, sourceIndex) => <details key={source.id} className="rounded-lg border border-slate-200 bg-white p-2 text-xs"><summary className="cursor-pointer text-slate-700"><span className="font-semibold text-teal-800">[{source.citation ?? `资料${sourceIndex + 1}`}]</span> {source.title} · {source.section}</summary><p className="mt-2 whitespace-pre-wrap text-slate-600">{source.excerpt}</p><p className="mt-1 text-slate-500">{source.version}</p>{source.url && <a href={source.url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-teal-700 underline">查看来源</a>}{source.hasFile && <button type="button" onClick={() => void downloadKnowledge(source)} className="ml-3 mt-1 text-teal-700 underline">下载资料原件</button>}</details>)}</div>}
         </div>
       </div>)}
       {busy && <div className="flex gap-2" aria-label="小水滴分析过程">
