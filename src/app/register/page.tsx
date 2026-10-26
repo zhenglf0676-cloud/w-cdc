@@ -218,7 +218,7 @@ export default function RegisterPage() {
               </div>
 
               {/* Enterprise Fields */}
-              <>
+              <div className="space-y-4">
                   {/* Company Name */}
                   <div className="space-y-2">
                     <Label htmlFor="companyName" className="text-sm font-medium text-[#0F172A]">
@@ -252,18 +252,19 @@ export default function RegisterPage() {
                       className="h-10 border-[#E2E8F0] bg-white text-[#0F172A] placeholder:text-[#94A3B8]"
                       disabled={isLoading}
                     />
-                    <p className="text-xs text-[#94A3B8]">填写园区管理者注册的园区名称，用于关联管理</p>
+                    <p className="text-xs text-[#94A3B8]">填写所属园区名称，用于关联管理</p>
                   </div>
 
                   {/* Location Picker */}
                   <LocationPicker
                     value={location ?? undefined}
-                    onChange={(loc) => setLocation({ lat: loc.lat, lng: loc.lng })}
-                    onConfirm={(loc: { lat: number; lng: number; address: string }) => {
-                      setLocationConfirmed(true);
+                    onChange={(loc) => {
+                      setLocation({ lat: loc.lat, lng: loc.lng });
+                      setLocationConfirmed(false);
                     }}
+                    onConfirm={() => setLocationConfirmed(true)}
                   />
-              </>
+              </div>
 
               {/* Password */}
               <div className="space-y-2">
