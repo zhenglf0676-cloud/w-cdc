@@ -4,14 +4,13 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Eye, EyeOff, Droplets, Loader2, Shield, Factory, MapPin, Building2 } from 'lucide-react';
+import { Eye, EyeOff, Droplets, Loader2, Building2 } from 'lucide-react';
 import { getSupabaseBrowserClientWithRetry } from '@/lib/supabase-browser';
 import { useSupabaseConfig } from '@/lib/supabase-config-inject';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { cn } from '@/lib/utils';
 import { LocationPicker } from '@/components/location-picker';
 
 const APP_ICON_URL = 'https://coze-coding-project.tos.coze.site/gen_project_icon/2026-07-19/7664132817533763599_1784448963.png?sign=4906513018-895757e6df-0-736898d83ce3829565980b6ed3d392d92eb800346f56fde50229a2899b5a2cc6';
@@ -24,8 +23,6 @@ const highlights = [
   { label: '地图可视化', desc: '园区排污口分布一目了然' },
 ];
 
-type UserRole = 'admin' | 'enterprise' | '';
-
 export default function RegisterPage() {
   const router = useRouter();
   const { isLoading: isConfigLoading } = useSupabaseConfig();
@@ -36,12 +33,10 @@ export default function RegisterPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [role, setRole] = useState<UserRole>('');
   const [companyName, setCompanyName] = useState('');
   const [parkName, setParkName] = useState('');
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [locationConfirmed, setLocationConfirmed] = useState(false);
-  const [locationAddress, setLocationAddress] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -57,23 +52,17 @@ export default function RegisterPage() {
       setError('请填写所有字段');
       return;
     }
-    if (!role) {
-      setError('请选择账户角色');
+    if (!companyName.trim()) {
+      setError('使用者需要填写企业名称');
       return;
     }
-    if (role === 'enterprise') {
-      if (!companyName.trim()) {
-        setError('使用者需要填写企业名称');
-        return;
-      }
-      if (!parkName.trim()) {
-        setError('请选择所属园区');
-        return;
-      }
-      if (!locationConfirmed) {
-        setError('请在地图上选择并确认企业位置');
-        return;
-      }
+    if (!parkName.trim()) {
+      setError('请选择所属园区');
+      return;
+    }
+    if (!locationConfirmed || !location) {
+      setError('请在地图上选择并确认企业位置');
+      return;
     }
     if (password.length < 6) {
       setError('密码长度至少为6位');
@@ -93,11 +82,11 @@ export default function RegisterPage() {
         options: {
           data: {
             full_name: fullName.trim(),
-            role: role,
-            company_name: role === 'enterprise' ? companyName.trim() : null,
-            park_name: role === 'enterprise' ? parkName.trim() : null,
-            latitude: role === 'enterprise' && location ? location.lat : null,
-            longitude: role === 'enterprise' && location ? location.lng : null,
+            role: 'enterprise',
+            company_name: companyName.trim(),
+            park_name: parkName.trim(),
+            latitude: location.lat,
+            longitude: location.lng,
           },
         },
       });
@@ -112,41 +101,33 @@ export default function RegisterPage() {
       }
 
       if (data.user) {
-        // Write profile to database via API route
-        try {
-          await fetch('/api/profiles', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              userId: data.user.id,
-              role: role,
-              fullName: fullName.trim(),
-              companyName: role === 'enterprise' ? companyName.trim() : null,
-              parkName: role === 'enterprise' ? parkName.trim() : null,
-              latitude: role === 'enterprise' && location ? location.lat : null,
-              longitude: role === 'enterprise' && location ? location.lng : null,
-            }),
+        let session = data.session;
+        if (!session) {
+          const { data: loginData, error: signInError } = await supabase.auth.signInWithPassword({
+            email: email.trim(), password,
           });
-        } catch (profileError) {
-          console.error('Failed to create profile:', profileError);
+          if (signInError || !loginData.session) {
+            setError('账号已创建，请验证邮箱并登录后联系管理员补全企业资料');
+            return;
+          }
+          session = loginData.session;
         }
 
-        if (data.session) {
-          router.push('/');
-          router.refresh();
-        } else {
-          // Auto-confirm is on, try signing in directly
-          const { error: signInError } = await supabase.auth.signInWithPassword({
-            email: email.trim(),
-            password,
-          });
-          if (!signInError) {
-            router.push('/');
-            router.refresh();
-          } else {
-            router.push('/login');
-          }
+        const profileRes = await fetch('/api/profiles', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({
+            role: 'enterprise', fullName: fullName.trim(),
+            companyName: companyName.trim(), parkName: parkName.trim(),
+            latitude: location.lat, longitude: location.lng,
+          }),
+        });
+        if (!profileRes.ok) {
+          setError('账号已创建，但企业资料保存失败，请联系管理员处理');
+          return;
         }
+        router.push('/');
+        router.refresh();
       }
     } catch {
       setError('注册失败，请稍后重试');
@@ -200,58 +181,7 @@ export default function RegisterPage() {
                 </div>
               )}
 
-              {/* Role Selection */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-[#0F172A]">账户角色</Label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setRole('admin')}
-                    disabled={isLoading}
-                    className={cn(
-                      'flex flex-col items-center gap-1.5 rounded-lg border-2 p-3 transition-all',
-                      role === 'admin'
-                        ? 'border-[#0EA5E9] bg-[#0EA5E9]/5'
-                        : 'border-[#E2E8F0] bg-white hover:border-[#CBD5E1]'
-                    )}
-                  >
-                    <Shield className={cn(
-                      'h-5 w-5',
-                      role === 'admin' ? 'text-[#0EA5E9]' : 'text-[#94A3B8]'
-                    )} />
-                    <span className={cn(
-                      'text-sm font-medium',
-                      role === 'admin' ? 'text-[#0EA5E9]' : 'text-[#64748B]'
-                    )}>
-                      管理者
-                    </span>
-                    <span className="text-xs text-[#94A3B8]">园区管理</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRole('enterprise')}
-                    disabled={isLoading}
-                    className={cn(
-                      'flex flex-col items-center gap-1.5 rounded-lg border-2 p-3 transition-all',
-                      role === 'enterprise'
-                        ? 'border-[#0EA5E9] bg-[#0EA5E9]/5'
-                        : 'border-[#E2E8F0] bg-white hover:border-[#CBD5E1]'
-                    )}
-                  >
-                    <Factory className={cn(
-                      'h-5 w-5',
-                      role === 'enterprise' ? 'text-[#0EA5E9]' : 'text-[#94A3B8]'
-                    )} />
-                    <span className={cn(
-                      'text-sm font-medium',
-                      role === 'enterprise' ? 'text-[#0EA5E9]' : 'text-[#64748B]'
-                    )}>
-                      使用者
-                    </span>
-                    <span className="text-xs text-[#94A3B8]">企业用户</span>
-                  </button>
-                </div>
-              </div>
+              <p className="rounded-lg bg-[#EFF6FF] px-3 py-2 text-sm text-[#1D4ED8]">这里注册企业账号。管理员账号请联系系统负责人配置。</p>
 
               {/* Account Name */}
               <div className="space-y-2">
@@ -261,16 +191,13 @@ export default function RegisterPage() {
                 <Input
                   id="fullName"
                   type="text"
-                  placeholder={role === 'admin' ? '请输入园区名称（如：XX产业园区）' : '请输入您的姓名'}
+                  placeholder="请输入您的姓名"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   className="h-10 border-[#E2E8F0] bg-white text-[#0F172A] placeholder:text-[#94A3B8]"
                   autoComplete="name"
                   disabled={isLoading}
                 />
-                {role === 'admin' && (
-                  <p className="text-xs text-[#94A3B8]">管理者账号名即为园区名称，企业注册时可选择所属园区</p>
-                )}
               </div>
 
               {/* Email */}
@@ -291,8 +218,7 @@ export default function RegisterPage() {
               </div>
 
               {/* Enterprise Fields */}
-              {role === 'enterprise' && (
-                <>
+              <>
                   {/* Company Name */}
                   <div className="space-y-2">
                     <Label htmlFor="companyName" className="text-sm font-medium text-[#0F172A]">
@@ -335,11 +261,9 @@ export default function RegisterPage() {
                     onChange={(loc) => setLocation({ lat: loc.lat, lng: loc.lng })}
                     onConfirm={(loc: { lat: number; lng: number; address: string }) => {
                       setLocationConfirmed(true);
-                      setLocationAddress(loc.address);
                     }}
                   />
-                </>
-              )}
+              </>
 
               {/* Password */}
               <div className="space-y-2">
