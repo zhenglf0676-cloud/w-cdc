@@ -46,16 +46,9 @@ select bucket_id, count(*) as objects from storage.objects group by bucket_id or
 
 ## 复制到独立项目
 
-1. 在用户指定的 Supabase 组织中建立独立项目，选择数据存放地区并确认容量及费用。先将它连到单独的测试环境，**不要覆盖生产变量**。保留 Coze 两个原库及其备份。
+1. 在用户指定的 Supabase 组织建立独立项目，选择数据存放地区并确认容量及费用。先将它连到单独的测试环境，**不要覆盖生产变量**。保留 Coze 两个原库及其备份。
 2. 从网站实际连接的源库取得完整结构和数据，另一套扣子库也单独备份。优先使用有相应权限的 Supabase CLI 备份/受控 `pg_dump`，并按官方迁移指引恢复；不能把整个源 `auth`/`storage` schema 盲目覆盖目标托管 schema。`auth.users`、`auth.identities`、密码哈希与用户 UUID 必须一起处理，使 `profiles.user_id`、排口、审批、监测关联继续有效。若扣子只允许导出 `public` 表而不允许导出 Auth 数据，先停在这里：可保留监测历史，但旧密码无法直接保证延续，届时须另行设计账号重置和 ID 映射方案。
 3. 迁移所有相关 schema、函数、索引、约束和 RLS，确认目标 Supabase 默认 `auth`/`storage` schema 不被盲目覆盖。Storage 文件需要单独复制；仅迁移 `storage.objects` 元数据不会复制文件内容。
 4. 在目标库执行资料库 SQL 迁移，验证 `vector` 扩展、私有文件桶及检索 RPC 可以使用。新库的 URL、anon key、service role key 分别配置到**预览环境**，不要把 service role 公开给客户端。
-5. 用 `scripts/verify-supabase-copy.mjs` 对比源库和目标库已知业务表的行数及内容摘要、账号 ID 集合。另通过受控 SQL 核对 `auth.users`、`auth.identities` 与密码哈希迁移情况。盘点如发现其他业务表，用 `MIGRATION_TABLES`（逗号分隔表名）加入对账；再用真实企业和管理员账号测试登录、审批排口、Excel 上传、监测查询、小水滴问答和资料检索。需特别测匿名用户不能读取 `profiles`、企业 A 不能读取企业 B 数据、企业用户不能自设管理员。新旧项目 JWT 不同，切换后用户一般需重新登录。
+5. 用 `scripts/verify-supabase-copy.mjs` 对比源库和目标库已知业务表的行数及内容摘要、账号 ID 集合。另通过受控 SQL 核对 `auth.users`、`auth.identities` 与非空密码哈希的数量，不输出哈希值。盘点如发现其他业务表，用 `MIGRATION_TABLES`（逗号分隔表名）加入对账；再用真实企业和管理员账号测试登录、审批排口、Excel 上传、监测查询、小水滴问答和资料检索。需特别测匿名用户不能读取 `profiles`、企业 A 不能读取企业 B 数据、企业用户不能自设管理员。自助注册仅为企业创建档案；管理员角色由系统负责人在受控后台配置。新旧项目 JWT 不同，切换后用户一般需重新登录。
 6. 切换窗口暂停写入，做最后一次增量同步并重新对账，然后才更新生产环境的 Supabase URL、anon key、service role key、重新部署。保留原库和回退变量，持续监测一段时间；任何计数、内容、账号或权限不一致都回退连接。
-
-## 当前状态
-
-- Vercel `w-cdc` 已有当前源库的 URL、anon key、service role key，生产网站可正常运行；独立 Supabase 项目尚未建立。未修改任何生产数据库变量。
-- 已完成源库的只读盘点；尚未完成受控数据库导出、独立项目创建、数据复制、权限测试与生产切换，因此不能称为“已迁移”。
-- 独立 Supabase 所在组织、数据地区与费用需由所有者确认。
-- 资料库代码仍位于预览分支，生产站目前继续使用经过验证的 Agent 版本。
