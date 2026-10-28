@@ -1,20 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { getSupabaseCredentials, getSupabaseServiceRoleKey } from '@/storage/database/supabase-client';
-
-// 使用 service role key 绕过 RLS
-function getSupabaseAdmin() {
-  const { url, anonKey } = getSupabaseCredentials();
-  const serviceRoleKey = getSupabaseServiceRoleKey();
-  return createClient(url, serviceRoleKey || anonKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
+import { requireParkAdmin } from '@/lib/admin-authorization';
 
 // POST /api/admin/discharge-outlets/approve - 管理员审批通过排污口
 export async function POST(request: NextRequest) {
   try {
-    const supabase = getSupabaseAdmin();
+    const access = await requireParkAdmin(request);
+    if (!access.ok) return access.response;
+    const { db: supabase, parkName } = access.context;
     const body = await request.json();
     const { outletId } = body;
 
@@ -30,6 +22,7 @@ export async function POST(request: NextRequest) {
       .from('discharge_outlets')
       .select('*')
       .eq('id', outletId)
+      .eq('park_name', parkName)
       .single();
 
     if (outletError || !outlet) {
@@ -42,7 +35,7 @@ export async function POST(request: NextRequest) {
     // 获取企业信息
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id, full_name')
+      .select('id')
       .eq('user_id', outlet.user_id)
       .single();
 
@@ -62,9 +55,6 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
-
-    // 获取企业名称
-    const enterpriseName = profile?.full_name || '未知企业';
 
     // 创建通知（使用 profile.id 而不是 outlet.user_id）
     if (profile?.id) {

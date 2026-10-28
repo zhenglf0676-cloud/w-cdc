@@ -44,12 +44,15 @@ export async function POST(request: Request) {
     // 获取申请信息
     const { data: application } = await db
       .from('pollutant_applications')
-      .select('*, profiles(company_name)')
+      .select('*, profiles(company_name, park_name)')
       .eq('id', applicationId)
       .single();
 
     if (!application) {
       return NextResponse.json({ error: '申请不存在' }, { status: 404 });
+    }
+    if (!adminProfile.park_name || application.profiles?.park_name !== adminProfile.park_name) {
+      return NextResponse.json({ error: '无权审批其他园区的申请' }, { status: 403 });
     }
 
     const companyName = application.profiles?.company_name || '未知企业';

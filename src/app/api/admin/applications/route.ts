@@ -1,38 +1,16 @@
 import { NextResponse } from 'next/server';
-import { getSupabaseCredentials, getSupabaseServiceRoleKey } from '@/storage/database/supabase-client';
-import { createClient } from '@supabase/supabase-js';
+import { requireParkAdmin } from '@/lib/admin-authorization';
 
 export async function GET(request: Request) {
   try {
-    const token = request.headers.get('x-session');
-    if (!token) {
-      return NextResponse.json({ error: '未登录' }, { status: 401 });
-    }
-
-    const { url } = getSupabaseCredentials();
-    const serviceRoleKey = getSupabaseServiceRoleKey();
-    const db = createClient(url, serviceRoleKey!, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
-
-    // 验证管理员身份
-    const {
-      data: { user },
-    } = await db.auth.getUser(token);
-
-    if (!user) {
-      return NextResponse.json({ error: '认证失败' }, { status: 401 });
-    }
-
-    const { data: adminProfile } = await db
-      .from('profiles')
-      .select('*')
-      .eq('user_id', user.id)
-      .single();
-
-    if (!adminProfile || adminProfile.role !== 'admin') {
-      return NextResponse.json({ error: '无权限' }, { status: 403 });
-    }
+    const access = await requireParkAdmin(request);
+    if (!access.ok) return access.response;
+    const { db, parkName } = access.context;
+    const { data: companies, error: companyError } = await db.from('profiles')
+      .select('id').eq('role', 'enterprise').eq('park_name', parkName);
+    if (companyError) throw companyError;
+    const companyIds = (companies ?? []).map(company => company.id);
+    if (!companyIds.length) return NextResponse.json({ pending: [], approved: [] });
 
     // 获取所有待审批的申请
     const { data: pendingApplications, error } = await db
@@ -42,6 +20,7 @@ export async function GET(request: Request) {
         profiles!company_id(full_name, company_name, park_name)
       `)
       .eq('status', 'pending')
+      .in('company_id', companyIds)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -57,10 +36,15 @@ export async function GET(request: Request) {
         profiles!company_id(full_name, company_name, park_name)
       `)
       .in('status', ['approved', 'rejected'])
+      .in('company_id', companyIds)
       .order('approved_at', { ascending: false });
 
     // 处理数据，将 profiles 展平到顶层
-    const processApplications = (apps: any[]) => {
+    type ApplicationRow = {
+      profiles?: { company_name?: string | null; full_name?: string | null; park_name?: string | null } | null;
+      [key: string]: unknown;
+    };
+    const processApplications = (apps: ApplicationRow[]) => {
       return apps.map(app => ({
         ...app,
         company_name: app.profiles?.company_name || app.profiles?.full_name || '未知企业',

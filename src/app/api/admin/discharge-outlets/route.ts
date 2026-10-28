@@ -1,25 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { getSupabaseCredentials, getSupabaseServiceRoleKey } from '@/storage/database/supabase-client';
-
-// 使用 service role key 绕过 RLS
-function getSupabaseAdmin() {
-  const { url, anonKey } = getSupabaseCredentials();
-  const serviceRoleKey = getSupabaseServiceRoleKey();
-  return createClient(url, serviceRoleKey || anonKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
+import { requireParkAdmin } from '@/lib/admin-authorization';
 
 // GET /api/admin/discharge-outlets - 管理员获取所有排污口申请
 export async function GET(request: NextRequest) {
   try {
-    const supabase = getSupabaseAdmin();
+    const access = await requireParkAdmin(request);
+    if (!access.ok) return access.response;
+    const { db: supabase, parkName } = access.context;
 
     // 获取所有排污口申请
     const { data: outlets, error } = await supabase
       .from('discharge_outlets')
       .select('*')
+      .eq('park_name', parkName)
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -33,7 +26,9 @@ export async function GET(request: NextRequest) {
     // 获取所有用户信息
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('user_id, full_name, company_name');
+      .select('user_id, full_name, company_name')
+      .eq('park_name', parkName)
+      .eq('role', 'enterprise');
 
     // 关联用户信息
     const profileMap = new Map(profiles?.map(p => [p.user_id, p]) || []);

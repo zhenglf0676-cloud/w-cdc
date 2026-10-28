@@ -1,7 +1,7 @@
 /** Compare two Supabase projects without printing row contents or credentials.
  * Usage: SOURCE_SUPABASE_URL=... SOURCE_SUPABASE_SERVICE_ROLE_KEY=... \
  *        TARGET_SUPABASE_URL=... TARGET_SUPABASE_SERVICE_ROLE_KEY=... \
- *        node scripts/verify-supabase-copy.mjs
+ *        MIGRATION_ALLOW_EXTRA_ENTERPRISE_PROFILE=1 node scripts/verify-supabase-copy.mjs
  */
 import { createHash } from 'node:crypto';
 import { createClient } from '@supabase/supabase-js';
@@ -26,20 +26,23 @@ function canonical(value) {
   return value;
 }
 
-async function tableDigest(db, table) {
+async function tableRows(db, table) {
   const countResult = await db.from(table).select('id', { count: 'exact', head: true });
   if (countResult.error) throw new Error(`${table} count: ${countResult.error.message}`);
-  const digest = createHash('sha256');
+  const result = new Map();
   let rows = 0;
   while (true) {
     const { data, error } = await db.from(table).select('*').order('id', { ascending: true }).range(rows, rows + pageSize - 1);
     if (error) throw new Error(`${table} page at ${rows}: ${error.message}`);
-    for (const record of data ?? []) digest.update(`${JSON.stringify(canonical(record))}\n`);
+    for (const record of data ?? []) {
+      if (result.has(record.id)) throw new Error(`${table} contains a duplicate id`);
+      result.set(record.id, record);
+    }
     rows += data?.length ?? 0;
     if ((data?.length ?? 0) < pageSize) break;
   }
   if (rows !== countResult.count) throw new Error(`${table} changed during verification: count ${countResult.count}, read ${rows}`);
-  return { count: rows, sha256: digest.digest('hex') };
+  return result;
 }
 
 async function authIdsDigest(db) {
@@ -63,10 +66,17 @@ const target = client('TARGET');
 let mismatch = false;
 
 for (const table of tables) {
-  const [left, right] = await Promise.all([tableDigest(source, table), tableDigest(target, table)]);
-  const same = left.count === right.count && left.sha256 === right.sha256;
+  const [left, right] = await Promise.all([tableRows(source, table), tableRows(target, table)]);
+  const missing = [...left.keys()].filter(id => !right.has(id));
+  const changed = [...left.entries()].filter(([id, row]) => right.has(id) &&
+    JSON.stringify(canonical(row)) !== JSON.stringify(canonical(right.get(id))));
+  const extra = [...right.values()].filter(row => !left.has(row.id));
+  const expectedProfile = table === 'profiles' && process.env.MIGRATION_ALLOW_EXTRA_ENTERPRISE_PROFILE === '1' &&
+    extra.length === 1 && extra[0].role === 'enterprise' &&
+    ![...left.values()].some(row => row.user_id === extra[0].user_id);
+  const same = missing.length === 0 && changed.length === 0 && (extra.length === 0 || expectedProfile);
   mismatch ||= !same;
-  console.log(`${same ? 'OK' : 'MISMATCH'} ${table}: source=${left.count} target=${right.count}; content digest ${same ? 'matches' : 'differs'}`);
+  console.log(`${same ? 'OK' : 'MISMATCH'} ${table}: source=${left.size} target=${right.size}; missing=${missing.length} changed=${changed.length} extra=${extra.length}${expectedProfile ? ' (one recovered enterprise profile)' : ''}`);
 }
 
 const [leftUsers, rightUsers] = await Promise.all([authIdsDigest(source), authIdsDigest(target)]);

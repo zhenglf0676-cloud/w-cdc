@@ -56,10 +56,10 @@ create policy assistant_knowledge_published_read on public.assistant_knowledge_d
     (valid_from is null or valid_from <= (now() at time zone 'Asia/Shanghai')::date) and
     (valid_until is null or valid_until >= (now() at time zone 'Asia/Shanghai')::date) and
     (visibility = 'public' or exists (
-      select 1 from public.profiles p where p.user_id = auth.uid()::text and
+      select 1 from public.profiles p where p.user_id = auth.uid() and
       p.park_name = assistant_knowledge_documents.park_name and
       ((visibility = 'park' and p.role in ('admin', 'enterprise')) or
-       (visibility = 'enterprise' and (p.user_id = company_user_id or p.role = 'admin')))
+       (visibility = 'enterprise' and (p.user_id::text = company_user_id or p.role = 'admin')))
     ))
   );
 
@@ -69,6 +69,7 @@ create policy assistant_knowledge_chunks_read on public.assistant_knowledge_chun
     exists (select 1 from public.assistant_knowledge_documents d where d.id = document_id)
   );
 
+revoke all on public.assistant_knowledge_documents, public.assistant_knowledge_chunks from anon, authenticated;
 grant select on public.assistant_knowledge_documents, public.assistant_knowledge_chunks to authenticated;
 -- Uploads and reviews use the server service role after verifying the logged-in user's profile.
 
