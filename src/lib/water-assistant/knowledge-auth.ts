@@ -24,18 +24,18 @@ export function knowledgeAdminClient() {
   return getSupabaseClient();
 }
 
-export function canReviewKnowledge(actor: KnowledgeActor, doc: KnowledgeDocumentAccess) {
-  return actor.role === 'admin' && (doc.visibility === 'public' ? doc.uploaded_by === actor.userId : doc.park_name === actor.park);
+export function canReviewKnowledge(actor: KnowledgeActor) {
+  return actor.role === 'admin';
 }
 
 export function canViewKnowledge(actor: KnowledgeActor, doc: KnowledgeDocumentAccess) {
   if (doc.status !== 'published') return false;
   const today = chinaDay(new Date());
   if (doc.valid_from && doc.valid_from > today || doc.valid_until && doc.valid_until < today) return false;
-  return doc.visibility === 'public' || doc.park_name === actor.park &&
-    (doc.visibility === 'park' || doc.company_user_id === actor.userId || actor.role === 'admin');
+  return doc.visibility === 'public' || actor.role === 'admin' ||
+    doc.visibility === 'enterprise' && doc.company_user_id === actor.userId;
 }
 
 export function canOpenKnowledge(actor: KnowledgeActor, doc: KnowledgeDocumentAccess) {
-  return doc.uploaded_by === actor.userId || canReviewKnowledge(actor, doc) || canViewKnowledge(actor, doc);
+  return doc.uploaded_by === actor.userId || canReviewKnowledge(actor) || canViewKnowledge(actor, doc);
 }

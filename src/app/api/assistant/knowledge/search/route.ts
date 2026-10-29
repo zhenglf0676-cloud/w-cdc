@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     // The user token is essential: the RPC checks document and chunk RLS before ranking.
     const token = request.headers.get('x-auth-token')!;
     const sources = await searchScopedKnowledge(getSupabaseClient(token), parsed.data.query);
-    return NextResponse.json({ sources, scope: actor.role === 'admin' ? '所属园区' : '本企业' }, { headers });
+    return NextResponse.json({ sources, scope: actor.role === 'admin' ? '全部已发布资料' : '公共资料及本企业' }, { headers });
   } catch (error) {
     return NextResponse.json({ error: error instanceof KnowledgeError ? error.message : '资料检索暂不可用，请稍后再试' },
       { status: error instanceof KnowledgeError ? error.status : 503, headers });

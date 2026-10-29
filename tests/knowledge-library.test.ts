@@ -12,23 +12,28 @@ const adminA = { userId: 'admin-a', role: 'admin' as const, park: '园区一' };
 const adminOther = { userId: 'admin-b', role: 'admin' as const, park: '园区二' };
 const enterpriseDoc = { visibility: 'enterprise' as const, park_name: '园区一', company_user_id: 'a', uploaded_by: 'a', status: 'published', valid_from: null, valid_until: null };
 
-test('company documents are only readable by the company and its park admin', () => {
+test('company documents are readable by their company and every admin', () => {
   assert.equal(canViewKnowledge(enterpriseA, enterpriseDoc), true);
   assert.equal(canViewKnowledge(enterpriseB, enterpriseDoc), false);
   assert.equal(canViewKnowledge(adminA, enterpriseDoc), true);
-  assert.equal(canViewKnowledge(adminOther, enterpriseDoc), false);
-  assert.equal(canReviewKnowledge(adminA, enterpriseDoc), true);
-  assert.equal(canReviewKnowledge(adminOther, enterpriseDoc), false);
+  assert.equal(canViewKnowledge(adminOther, enterpriseDoc), true);
+  assert.equal(canReviewKnowledge(adminA), true);
+  assert.equal(canReviewKnowledge(adminOther), true);
+  assert.equal(canReviewKnowledge(enterpriseA), false);
 });
 
 test('pending and expired documents cannot be used as published evidence', () => {
   assert.equal(canViewKnowledge(enterpriseA, { ...enterpriseDoc, status: 'pending' }), false);
   assert.equal(canOpenKnowledge(enterpriseA, { ...enterpriseDoc, status: 'pending' }), true); // uploader preview
   assert.equal(canViewKnowledge(enterpriseB, { ...enterpriseDoc, status: 'pending' }), false);
+  assert.equal(canOpenKnowledge(enterpriseB, { ...enterpriseDoc, status: 'pending' }), false);
+  assert.equal(canOpenKnowledge(adminOther, { ...enterpriseDoc, status: 'pending' }), true); // admin review
   assert.equal(canViewKnowledge(enterpriseA, { ...enterpriseDoc, valid_until: '2020-01-01' }), false);
   assert.equal(canViewKnowledge(enterpriseA, { ...enterpriseDoc, valid_from: '2099-01-01' }), false);
-  assert.equal(canViewKnowledge(enterpriseB, { ...enterpriseDoc, visibility: 'park', company_user_id: null }), true);
+  assert.equal(canViewKnowledge(enterpriseB, { ...enterpriseDoc, visibility: 'park', company_user_id: null }), false);
+  assert.equal(canViewKnowledge(adminOther, { ...enterpriseDoc, visibility: 'park', company_user_id: null }), true);
   assert.equal(canViewKnowledge(adminOther, { ...enterpriseDoc, visibility: 'public', park_name: null, company_user_id: null }), true);
+  assert.equal(canViewKnowledge(enterpriseB, { ...enterpriseDoc, visibility: 'public', park_name: null, company_user_id: null }), true);
 });
 
 test('text upload preserves sections and does not silently accept empty scans', async () => {

@@ -33,19 +33,12 @@ export async function GET(request: Request) {
       return NextResponse.json({ document: doc, chunks }, { headers: noStore });
     }
     const fields = 'id,title,version,visibility,park_name,company_user_id,status,file_name,embedding_status,uploaded_by,review_note,created_at,reviewed_at,valid_from,valid_until';
-    const visibleQueries = [
-      actor.role === 'admin'
-        ? client.from('assistant_knowledge_documents').select(fields).eq('park_name', actor.park).order('created_at', { ascending: false }).limit(100)
-        : client.from('assistant_knowledge_documents').select(fields).eq('company_user_id', actor.userId).order('created_at', { ascending: false }).limit(100),
-      client.from('assistant_knowledge_documents').select(fields).eq('visibility', 'public').eq('status', 'published').order('created_at', { ascending: false }).limit(100),
-    ];
-    if (actor.role === 'enterprise') {
-      visibleQueries.push(client.from('assistant_knowledge_documents').select(fields)
-        .eq('visibility', 'park').eq('park_name', actor.park).eq('status', 'published').order('created_at', { ascending: false }).limit(100));
-    } else {
-      visibleQueries.push(client.from('assistant_knowledge_documents').select(fields)
-        .eq('visibility', 'public').eq('uploaded_by', actor.userId).order('created_at', { ascending: false }).limit(100));
-    }
+    const visibleQueries = actor.role === 'admin'
+      ? [client.from('assistant_knowledge_documents').select(fields).order('created_at', { ascending: false }).limit(1000)]
+      : [
+          client.from('assistant_knowledge_documents').select(fields).eq('company_user_id', actor.userId).order('created_at', { ascending: false }).limit(100),
+          client.from('assistant_knowledge_documents').select(fields).eq('visibility', 'public').eq('status', 'published').order('created_at', { ascending: false }).limit(100),
+        ];
     const results = await Promise.all(visibleQueries);
     const documents = [...new Map(results.flatMap(result => {
       if (result.error) throw result.error;
@@ -64,13 +57,12 @@ export async function POST(request: Request) {
     const form = await request.formData();
     const title = shortText(form, 'title');
     const version = shortText(form, 'version') || '1.0';
-    const visibility = actor.role === 'enterprise' ? 'enterprise' : shortText(form, 'visibility');
+    const visibility = actor.role === 'enterprise' ? 'enterprise' : 'public';
     const validFrom = shortText(form, 'validFrom');
     const validUntil = shortText(form, 'validUntil');
     const sourceUrl = shortText(form, 'sourceUrl');
     if (title.length < 2 || title.length > 180) throw new KnowledgeError('标题应为 2 至 180 字', 400);
     if (version.length > 60 || !version) throw new KnowledgeError('版本信息过长', 400);
-    if (!['public', 'park', 'enterprise'].includes(visibility) || actor.role === 'admin' && visibility === 'enterprise') throw new KnowledgeError('资料范围无效', 400);
     if (!date.safeParse(validFrom).success || !date.safeParse(validUntil).success || validFrom && validUntil && validFrom > validUntil) throw new KnowledgeError('有效日期无效', 400);
     if (sourceUrl && (!/^https:\/\//i.test(sourceUrl) || sourceUrl.length > 500)) throw new KnowledgeError('来源链接必须是 HTTPS 地址', 400);
     const candidate = form.get('file');
@@ -117,7 +109,7 @@ export async function PATCH(request: Request) {
     const { id, action, note } = parsed.data;
     if (action === 'reject' && !note?.trim()) throw new KnowledgeError('请填写退回原因', 400);
     const { data: doc, error } = await client.from('assistant_knowledge_documents').select('*').eq('id', id).single();
-    if (error || !doc || !canReviewKnowledge(actor, doc)) throw new KnowledgeError('资料不存在或不在所属园区', 404);
+    if (error || !doc || !canReviewKnowledge(actor)) throw new KnowledgeError('资料不存在或无权管理', 404);
     if ((action === 'archive' || action === 'reindex') && doc.status !== 'published' ||
       (action === 'approve' || action === 'reject') && doc.status !== 'pending') throw new KnowledgeError('当前资料状态无法执行此操作', 409);
     let embeddingStatus: 'hybrid' | 'keyword' = doc.embedding_status;
