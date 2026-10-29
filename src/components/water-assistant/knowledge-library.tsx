@@ -48,6 +48,7 @@ export function KnowledgeLibrary({ admin }: { admin: boolean }) {
   const input = useRef<HTMLInputElement>(null);
   const searchRequest = useRef(0);
   const canManagePreview = !!preview && admin;
+  const missingIndexes = admin ? documents.filter(doc => doc.status === 'published' && doc.embedding_status === 'keyword') : [];
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -135,6 +136,32 @@ export function KnowledgeLibrary({ admin }: { admin: boolean }) {
     finally { setBusy(false); }
   }
 
+  async function reindexMissing() {
+    if (!admin || busy || !missingIndexes.length) return;
+    setBusy(true); setError(''); setNotice('正在补齐语义索引…');
+    let completed = 0;
+    const failures: string[] = [];
+    for (const [index, doc] of missingIndexes.entries()) {
+      try {
+        const response = await assistantFetch(token => fetch('/api/assistant/knowledge', {
+          method: 'PATCH', headers: { 'x-auth-token': token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: doc.id, action: 'reindex' }),
+        }));
+        const data = await response.json();
+        if (!response.ok || data.embeddingStatus !== 'hybrid') throw new Error(data.error || data.note || '向量接口暂不可用');
+        completed++;
+      } catch (err) {
+        failures.push(`${doc.title}：${err instanceof Error ? err.message : '更新失败'}`);
+      }
+      setNotice(`正在补齐语义索引 ${index + 1}/${missingIndexes.length} · 已成功 ${completed}`);
+    }
+    clearSearch();
+    await load();
+    setNotice(`${completed}/${missingIndexes.length} 份资料已支持混合检索`);
+    if (failures.length) setError(`未完成：${failures.slice(0, 3).join('；')}${failures.length > 3 ? `；另有 ${failures.length - 3} 份` : ''}`);
+    setBusy(false);
+  }
+
   if (!session) return <main className="mx-auto max-w-5xl space-y-4 px-5 py-8 sm:px-8">
     <h1 className="text-2xl font-bold text-slate-900">小水滴资料库</h1>
     <p className="text-sm text-slate-600">{authLoading ? '正在验证登录状态…' : '请先登录，再查看和提交资料。'}</p>
@@ -176,7 +203,7 @@ export function KnowledgeLibrary({ admin }: { admin: boolean }) {
         {source.url && <a href={source.url} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block text-xs text-teal-700 underline underline-offset-2">查看来源</a>}
       </article>)}
     </section> : <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" aria-label="资料清单">
-      <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-5"><h2 className="font-semibold text-slate-900">资料清单 <span className="ml-1 text-sm font-normal text-slate-500">{loading ? '…' : documents.length}</span></h2><Button variant="ghost" size="sm" onClick={() => void load()} disabled={loading} className="text-slate-600"><RefreshCw className="size-4" />刷新</Button></div>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-5"><h2 className="font-semibold text-slate-900">资料清单 <span className="ml-1 text-sm font-normal text-slate-500">{loading ? '…' : documents.length}</span></h2><div className="flex flex-wrap items-center gap-2">{admin && missingIndexes.length > 0 && <Button variant="outline" size="sm" onClick={() => void reindexMissing()} disabled={busy || loading} className="text-teal-700">{busy ? <Loader2 className="size-4 animate-spin" /> : <RefreshCw className="size-4" />}补齐语义索引（{missingIndexes.length}）</Button>}<Button variant="ghost" size="sm" onClick={() => void load()} disabled={busy || loading} className="text-slate-600"><RefreshCw className="size-4" />刷新</Button></div></div>
       {loading && <p className="px-5 py-8 text-sm text-slate-500">正在读取资料…</p>}
       {!loading && !documents.length && <p className="px-5 py-10 text-center text-sm text-slate-500">暂无可查看的资料，点击“上传资料”添加第一份。</p>}
       {!loading && documents.map(doc => <div key={doc.id} className="flex flex-col gap-3 border-b border-slate-100 px-4 py-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:px-5">
