@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { BookOpen, Check, CircleAlert, FileText, Loader2, Upload, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,7 +21,7 @@ const statuses: Record<DocumentRow['status'], string> = { pending: '待审核', 
 const scopeLabels = { public: '公共资料', park: '所属园区', enterprise: '本企业' };
 
 export function KnowledgeLibrary({ admin }: { admin: boolean }) {
-  const { session } = useAuth();
+  const { session, isLoading: authLoading } = useAuth();
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -49,7 +50,11 @@ export function KnowledgeLibrary({ admin }: { admin: boolean }) {
     } catch (err) { setError(err instanceof Error ? err.message : '资料列表读取失败'); }
     finally { setLoading(false); }
   }, []);
-  useEffect(() => { if (session) void load(); }, [session, load]);
+  useEffect(() => {
+    if (authLoading) return;
+    if (session) void load();
+    else { setDocuments([]); setPreview(null); setLoading(false); }
+  }, [authLoading, session, load]);
 
   async function upload(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -96,6 +101,12 @@ export function KnowledgeLibrary({ admin }: { admin: boolean }) {
     } catch (err) { setError(err instanceof Error ? err.message : '审核失败'); }
     finally { setBusy(false); }
   }
+
+  if (!session) return <main className="mx-auto max-w-6xl space-y-4 px-5 py-8 sm:px-8">
+    <h1 className="text-2xl font-bold text-slate-900">小水滴资料库</h1>
+    <p className="text-sm text-slate-600">{authLoading ? '正在验证登录状态…' : '请先登录，再查看和提交资料。'}</p>
+    {!authLoading && <Button asChild><Link href="/login">去登录</Link></Button>}
+  </main>;
 
   return <main className="mx-auto max-w-6xl space-y-7 px-5 py-8 sm:px-8">
     <div className="flex items-start gap-3"><span className="rounded-xl bg-teal-100 p-3 text-teal-700"><BookOpen className="size-6" /></span><div>
