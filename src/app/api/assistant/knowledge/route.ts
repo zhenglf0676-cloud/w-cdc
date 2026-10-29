@@ -30,7 +30,10 @@ export async function GET(request: Request) {
       if (error || !doc || !canOpenKnowledge(actor, doc)) throw new KnowledgeError('资料不存在或不在权限范围内', 404);
       const { data: chunks, error: chunkError } = await client.from('assistant_knowledge_chunks').select('ordinal,section,content').eq('document_id', id).order('ordinal').limit(65);
       if (chunkError) throw chunkError;
-      return NextResponse.json({ document: doc, chunks }, { headers: noStore });
+      const owner = actor.role === 'admin' && doc.visibility === 'enterprise' && doc.company_user_id
+        ? await client.from('profiles').select('company_name').eq('user_id', doc.company_user_id).maybeSingle()
+        : null;
+      return NextResponse.json({ document: { ...doc, company_name: owner?.data?.company_name ?? null }, chunks }, { headers: noStore });
     }
     const fields = 'id,title,version,visibility,park_name,company_user_id,status,file_name,embedding_status,uploaded_by,review_note,created_at,reviewed_at,valid_from,valid_until';
     const visibleQueries = actor.role === 'admin'
@@ -45,7 +48,13 @@ export async function GET(request: Request) {
       return result.data ?? [];
     }).filter(doc => canOpenKnowledge(actor, doc)).map(doc => [doc.id, doc])).values()]
       .sort((a, b) => b.created_at.localeCompare(a.created_at));
-    return NextResponse.json({ documents }, { headers: noStore });
+    if (actor.role !== 'admin') return NextResponse.json({ documents }, { headers: noStore });
+    const owners = [...new Set(documents.filter(doc => doc.visibility === 'enterprise' && doc.company_user_id)
+      .map(doc => doc.company_user_id!))];
+    const profiles = owners.length ? await client.from('profiles').select('user_id,company_name').in('user_id', owners) : null;
+    const names = new Map((profiles?.data ?? []).map(profile => [profile.user_id, profile.company_name]));
+    return NextResponse.json({ documents: documents.map(doc => ({ ...doc,
+      company_name: doc.company_user_id ? names.get(doc.company_user_id) ?? null : null })) }, { headers: noStore });
   } catch (error) { return failure(error); }
 }
 

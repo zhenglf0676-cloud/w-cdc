@@ -14,7 +14,7 @@ import { useAuth } from '@/lib/auth-context';
 
 type DocumentRow = {
   id: string; title: string; version: string; visibility: 'public' | 'park' | 'enterprise';
-  status: 'pending' | 'published' | 'rejected' | 'archived'; file_name: string;
+  status: 'pending' | 'published' | 'rejected' | 'archived'; file_name: string; company_name?: string | null;
   embedding_status: 'keyword' | 'hybrid'; review_note: string | null; created_at: string; uploaded_by: string;
 };
 type Preview = { document: DocumentRow & { content: string; source_url: string | null }; chunks: { ordinal: number; section: string; content: string }[] };
@@ -180,7 +180,7 @@ export function KnowledgeLibrary({ admin }: { admin: boolean }) {
       {loading && <p className="px-5 py-8 text-sm text-slate-500">正在读取资料…</p>}
       {!loading && !documents.length && <p className="px-5 py-10 text-center text-sm text-slate-500">暂无可查看的资料，点击“上传资料”添加第一份。</p>}
       {!loading && documents.map(doc => <div key={doc.id} className="flex flex-col gap-3 border-b border-slate-100 px-4 py-4 last:border-b-0 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-        <div className="flex min-w-0 items-start gap-3"><FileText className="mt-0.5 size-5 shrink-0 text-teal-700" aria-hidden="true" /><div className="min-w-0"><p className="break-words text-sm font-semibold text-slate-900">{doc.title}</p><p className="mt-1 text-xs text-slate-500">{scopeLabels[doc.visibility]} · {doc.version} · {statuses[doc.status]}{doc.status === 'published' && ` · ${doc.embedding_status === 'hybrid' ? '混合检索' : '关键词检索'}`}</p>{doc.review_note && <p className="mt-1 text-xs text-amber-700">审核意见：{doc.review_note}</p>}</div></div>
+        <div className="flex min-w-0 items-start gap-3"><FileText className="mt-0.5 size-5 shrink-0 text-teal-700" aria-hidden="true" /><div className="min-w-0"><p className="break-words text-sm font-semibold text-slate-900">{doc.title}</p><p className="mt-1 text-xs text-slate-500">{admin && doc.visibility === 'enterprise' ? `${doc.company_name || '未知企业'} · 企业资料` : scopeLabels[doc.visibility]} · {doc.version} · {statuses[doc.status]}{doc.status === 'published' && ` · ${doc.embedding_status === 'hybrid' ? '混合检索' : '关键词检索'}`}</p>{doc.review_note && <p className="mt-1 text-xs text-amber-700">审核意见：{doc.review_note}</p>}</div></div>
         <div className="flex shrink-0 gap-1 pl-8 sm:pl-0"><Button variant="ghost" size="sm" onClick={() => void inspect(doc.id)}>{admin && doc.status === 'pending' ? '审核' : '查看'}</Button>
           {admin && doc.status === 'published' && doc.embedding_status === 'keyword' && <Button variant="ghost" size="sm" disabled={busy} onClick={() => void review(doc.id, 'reindex')} className="text-teal-700 hover:text-teal-800">更新索引</Button>}
         </div>
@@ -207,7 +207,7 @@ export function KnowledgeLibrary({ admin }: { admin: boolean }) {
 
     <Dialog open={!!preview} onOpenChange={open => { if (!open && !busy) setPreview(null); }}>
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl">
-        <DialogHeader><DialogTitle className="pr-5 leading-snug">{preview?.document.title ?? '资料详情'}</DialogTitle><DialogDescription>已提取 {preview?.chunks.length ?? 0} 个片段。发布前请核对原文；问答引用将指向对应章节或页码。</DialogDescription></DialogHeader>
+        <DialogHeader><DialogTitle className="pr-5 leading-snug">{preview?.document.title ?? '资料详情'}</DialogTitle><DialogDescription>{admin && preview?.document.visibility === 'enterprise' && `${preview.document.company_name || '未知企业'} · 企业资料。`}已提取 {preview?.chunks.length ?? 0} 个片段。发布前请核对原文；问答引用将指向对应章节或页码。</DialogDescription></DialogHeader>
         {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
         {preview && <><div className="max-h-[42dvh] space-y-2 overflow-y-auto rounded-xl bg-slate-50 p-3">{preview.chunks.map(chunk => <div key={chunk.ordinal} className="rounded-lg bg-white p-3 text-xs leading-6 text-slate-700"><p className="mb-1 font-bold text-teal-800">{chunk.section} · 片段 {chunk.ordinal + 1}</p>{chunk.content}</div>)}</div>
           {canManagePreview && preview.document.status === 'pending' && <div className="space-y-2"><Label htmlFor="knowledge-review-note">退回原因（退回时填写）</Label><Textarea id="knowledge-review-note" maxLength={500} rows={2} value={reviewNote} onChange={e => setReviewNote(e.target.value)} placeholder="请说明需要修改的内容" /><div className="flex flex-wrap gap-2"><Button disabled={busy} onClick={() => void review(preview.document.id, 'approve')} className="bg-teal-700 hover:bg-teal-800">审核并发布</Button><Button disabled={busy || !reviewNote.trim()} variant="outline" onClick={() => void review(preview.document.id, 'reject')}>退回资料</Button></div></div>}
