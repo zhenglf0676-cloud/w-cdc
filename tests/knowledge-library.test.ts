@@ -2,9 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { canOpenKnowledge, canReviewKnowledge, canViewKnowledge } from '../src/lib/water-assistant/knowledge-auth';
 import { chunkKnowledge, extractKnowledgeFile } from '../src/lib/water-assistant/knowledge-files';
-import { embedKnowledge, knowledgeTerms, searchScopedKnowledge } from '../src/lib/water-assistant/knowledge-retrieval';
+import { embedKnowledge, isEvidenceChunk, knowledgeTerms, searchScopedKnowledge } from '../src/lib/water-assistant/knowledge-retrieval';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { keepVerifiedCitations } from '../src/lib/water-assistant/knowledge';
+import { citedKnowledge, keepVerifiedCitations } from '../src/lib/water-assistant/knowledge';
 
 const enterpriseA = { userId: 'a', role: 'enterprise' as const, park: '园区一' };
 const enterpriseB = { userId: 'b', role: 'enterprise' as const, park: '园区一' };
@@ -50,6 +50,9 @@ test('document section boundaries survive chunking and exact standard identifier
   assert.equal(chunks[0].section, '第 2 页');
   assert.equal(chunks.at(-1)?.section, '第 3 页');
   assert.ok(knowledgeTerms('GB/T 14848 对总磷和排污口适用吗？').some(term => /14848/.test(term)));
+  const terms = knowledgeTerms('井水读数升高，从现场取样到实验室怎么核查？');
+  assert.ok(terms.includes('地下水'));
+  assert.ok(terms.includes('采样'));
 });
 
 test('neighboring chunks overlap so a fact at a boundary remains searchable', () => {
@@ -114,4 +117,28 @@ test('a knowledge database failure does not revive static excerpts', async () =>
 
 test('a fabricated citation label is removed from the displayed answer', () => {
   assert.equal(keepVerifiedCitations('见[资料1]，另见[资料9]。', [{ id: '1', title: 'a', section: 'b', version: 'c', excerpt: 'd', citation: '资料1' }]), '见[资料1]，另见。');
+});
+
+test('retrieval excludes upload test instructions and title-only headings without hiding short factual notes', async () => {
+  assert.equal(isEvidenceChunk('检索验收：上传后可以提问什么？'), false);
+  assert.equal(isEvidenceChunk('HJ 212—2025《污染物自动监测监控系统数据传输技术要求》上传测试摘要'), false);
+  assert.equal(isEvidenceChunk('没有记录不能说明水质正常。'), true);
+  const rows = [
+    { id: 'meta', excerpt: '检索验收：问这个问题看能否找到本段。', score: 3 },
+    { id: 'heading', excerpt: 'HJ 212—2025 上传测试摘要', score: 2 },
+    { id: 'evidence', excerpt: '缺记录时应核对设备、数据采集与传输链路。', score: 1 },
+  ];
+  const client = { rpc: async (_name: string, args: { p_limit: number }) => {
+    assert.equal(args.p_limit, 6);
+    return { data: rows.map(row => ({ ...row, document_id: row.id, title: '测试资料', section: '正文', version: '1', source_url: null, file_name: '测试.txt', has_file: true })), error: null };
+  } } as unknown as SupabaseClient;
+  assert.deepEqual((await searchScopedKnowledge(client, '数据传输中断')).map(source => source.id), ['evidence']);
+});
+
+test('answer cites only used documents and renumbers sources without gaps', () => {
+  const sources = [1, 2, 3, 4].map(index => ({ id: String(index), title: String(index), section: '正文', version: '1', excerpt: '说明。', citation: `资料${index}` }));
+  const result = citedKnowledge('依据[资料1]和[资料4]，没有[资料9]。', sources);
+  assert.equal(result.answer, '依据[资料1]和[资料2]，没有。');
+  assert.deepEqual(result.sources.map(source => source.id), ['1', '4']);
+  assert.deepEqual(result.sources.map(source => source.citation), ['资料1', '资料2']);
 });

@@ -53,21 +53,33 @@ export async function indexKnowledgeDocument(client: SupabaseClient, documentId:
 
 export function knowledgeTerms(question: string): string[] {
   const exact = question.match(/(?:GB\/?T|GB|HJ)\s*\d{2,6}(?:-\d{4})?|COD|NH3-N|SKEW|CDC|总磷|总氮|氨氮|重金属|排污口|排口|采样|质控|排放|阈值|监测|许可证|地下水|污水|异常|波动|偏度|变异系数|报告|上传|录入/gi) ?? [];
+  const synonyms = [
+    ...(/取样/u.test(question) ? ['采样'] : []),
+    ...(/井水|监测井/u.test(question) ? ['地下水'] : []),
+    ...(/断流|断数|传输中断/u.test(question) ? ['数据传输'] : []),
+  ];
   const generic = new Set(['请问', '什么', '我们', '怎么', '如何', '是否', '可以', '一下', '企业', '现在', '过去', '这个', '数据']);
   const phrases = (question.match(/[\u3400-\u9fff]{2,}/g) ?? []).flatMap(part => part.length <= 4 ? [part] : Array.from({ length: part.length - 2 }, (_, i) => part.slice(i, i + 3)));
-  return [...new Set([...exact.map(term => term.trim()), ...phrases.filter(term => !generic.has(term))])].slice(0, 16);
+  return [...new Set([...exact.map(term => term.trim()), ...synonyms, ...phrases.filter(term => !generic.has(term))])].slice(0, 16);
 }
 
 type SearchRow = { id: string; document_id: string; title: string; section: string; version: string; excerpt: string; source_url: string | null; file_name: string; has_file: boolean; score: number };
+
+/** Headings and instructions about testing the library are not evidence for a water-quality answer. */
+export function isEvidenceChunk(excerpt: string): boolean {
+  const content = excerpt.trim();
+  if (/^(?:检索验收|测试提问|验收提问|检索测试)\s*[：:]/u.test(content)) return false;
+  return content.length >= 80 || /[。！？.!?；;]/u.test(content);
+}
 
 /** The caller uses a user-scoped Supabase client: the SQL function applies RLS before ranking. */
 export async function searchScopedKnowledge(client: SupabaseClient, query: string): Promise<KnowledgeSource[]> {
   const vector = (await embedKnowledge([query]))?.[0];
   const { data, error } = await client.rpc('assistant_search_knowledge', {
-    p_query: query.slice(0, 120), p_terms: knowledgeTerms(query), p_embedding: vector ? JSON.stringify(vector) : null, p_limit: 5,
+    p_query: query.slice(0, 120), p_terms: knowledgeTerms(query), p_embedding: vector ? JSON.stringify(vector) : null, p_limit: 6,
   });
   if (error) throw new Error('资料库检索失败');
-  const databaseSources = ((data ?? []) as SearchRow[]).filter(row => row.score > 0).map(row => ({
+  const databaseSources = ((data ?? []) as SearchRow[]).filter(row => row.score > 0 && isEvidenceChunk(row.excerpt)).slice(0, 5).map(row => ({
     id: row.id, documentId: row.document_id, title: row.title, section: row.section,
     version: row.version, excerpt: row.excerpt, url: row.source_url ?? undefined, hasFile: row.has_file, fileName: row.file_name,
   }));

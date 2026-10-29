@@ -5,7 +5,7 @@ import { chinaDay, chinaDateTime, chinaPeriod } from '@/lib/china-time';
 import { analysisArgs, allowedCompany, authorizedReadings, confirmedExceedance, selectAuthorizedCompanies, summarize, type AuthorizedCompany, type Scope } from '@/lib/water-assistant/analysis';
 import { contextArgs, loadMonitoringContext, recordArgs } from '@/lib/water-assistant/context';
 import { requiredEvidenceTools, type EvidenceTool } from '@/lib/water-assistant/policy';
-import { keepVerifiedCitations, knowledgeArgs, type KnowledgeSource } from '@/lib/water-assistant/knowledge';
+import { citedKnowledge, knowledgeArgs, type KnowledgeSource } from '@/lib/water-assistant/knowledge';
 import { searchScopedKnowledge } from '@/lib/water-assistant/knowledge-retrieval';
 import { comparisonArgs, comparisonRanges, compareCompanyPeriods } from '@/lib/water-assistant/history';
 import { reportData, ReportError } from '@/lib/water-reports/data';
@@ -172,18 +172,18 @@ async function runAnalysis(
           const requiredMissing = missing.filter(tool => plan.steps.find(step => step.tool === tool)?.required !== false);
           return NextResponse.json({ answer: (requiredMissing.length
             ? `【结论】本次未能完成全部必要核查，暂时无法给出完整结论。\n【提醒】尚未完成：${requiredMissing.map(tool => toolLabels[tool]).join('、')}。请缩小范围或补充日期、记录编号后重试。`
-            : `【结论】已完成原问题的核查，但本轮未能补查${missing.map(tool => toolLabels[tool]).join('、')}，暂不作历史比较。\n【提醒】现有监测证据可在下方查看；缺少历史参照不能证明异常的长期趋势。`) + (missingRecordId ? '\n请提供记录 ID 以核对单条记录。' : ''), evidence, toolTrace, plan, sources: [...sourceMap.values()], scope: scope.role === 'admin' ? '所属园区' : '本企业', outcome: missingRecordId ? 'needs_input' : 'partial' }, { headers });
+            : `【结论】已完成原问题的核查，但本轮未能补查${missing.map(tool => toolLabels[tool]).join('、')}，暂不作历史比较。\n【提醒】现有监测证据可在下方查看；缺少历史参照不能证明异常的长期趋势。`) + (missingRecordId ? '\n请提供记录 ID 以核对单条记录。' : ''), evidence, toolTrace, plan, sources: [], scope: scope.role === 'admin' ? '所属园区' : '本企业', outcome: missingRecordId ? 'needs_input' : 'partial' }, { headers });
         }
         const missingData = missingPlanData(plan, availableData).filter(tool => !(missingRecordId && tool === 'inspect_record_evidence'));
         if (missingData.length) {
           finish('failed');
-          return NextResponse.json({ answer: `【结论】已完成查询，但${missingData.map(tool => toolLabels[tool]).join('、')}未返回可用于本次判断的授权数据，无法作完整结论。\n【提醒】无记录不代表水质正常；请核查日期、企业名称及数据上报情况。当前审批配置不能替代历史监测记录。${missingRecordId ? '另请提供记录 ID，以核对单条记录。' : ''}`, evidence, toolTrace, plan, sources: [...sourceMap.values()], scope: scope.role === 'admin' ? '所属园区' : '本企业', outcome: missingRecordId ? 'needs_input' : 'partial' }, { headers });
+          return NextResponse.json({ answer: `【结论】已完成查询，但${missingData.map(tool => toolLabels[tool]).join('、')}未返回可用于本次判断的授权数据，无法作完整结论。\n【提醒】无记录不代表水质正常；请核查日期、企业名称及数据上报情况。当前审批配置不能替代历史监测记录。${missingRecordId ? '另请提供记录 ID，以核对单条记录。' : ''}`, evidence, toolTrace, plan, sources: [], scope: scope.role === 'admin' ? '所属园区' : '本企业', outcome: missingRecordId ? 'needs_input' : 'partial' }, { headers });
         }
         finish('done');
         const answer = missingRecordId && !/记录(?:编号|\s*ID)/i.test(message.content)
           ? `${message.content}\n【提醒】单条记录核查还需你提供记录 ID；目前的结论只涉及已完成的其他查询。` : message.content;
-        const sources = [...sourceMap.values()];
-        return NextResponse.json({ answer: keepVerifiedCitations(answer, sources), evidence, toolTrace, plan, sources, scope: scope.role === 'admin' ? '所属园区' : '本企业', outcome: missingRecordId ? 'needs_input' : 'complete' }, { headers });
+        const cited = citedKnowledge(answer, [...sourceMap.values()]);
+        return NextResponse.json({ answer: cited.answer, evidence, toolTrace, plan, sources: cited.sources, scope: scope.role === 'admin' ? '所属园区' : '本企业', outcome: missingRecordId ? 'needs_input' : 'complete' }, { headers });
       }
       messages.push({ role: 'assistant', ...message });
       for (const [callIndex, call] of message.tool_calls.entries()) {
