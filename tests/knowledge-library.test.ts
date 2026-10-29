@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { canOpenKnowledge, canReviewKnowledge, canViewKnowledge } from '../src/lib/water-assistant/knowledge-auth';
 import { chunkKnowledge, extractKnowledgeFile } from '../src/lib/water-assistant/knowledge-files';
-import { knowledgeTerms } from '../src/lib/water-assistant/knowledge-retrieval';
+import { embedKnowledge, knowledgeTerms, searchScopedKnowledge } from '../src/lib/water-assistant/knowledge-retrieval';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { keepVerifiedCitations } from '../src/lib/water-assistant/knowledge';
 
 const enterpriseA = { userId: 'a', role: 'enterprise' as const, park: '园区一' };
@@ -44,6 +45,66 @@ test('document section boundaries survive chunking and exact standard identifier
   assert.equal(chunks[0].section, '第 2 页');
   assert.equal(chunks.at(-1)?.section, '第 3 页');
   assert.ok(knowledgeTerms('GB/T 14848 对总磷和排污口适用吗？').some(term => /14848/.test(term)));
+});
+
+test('neighboring chunks overlap so a fact at a boundary remains searchable', () => {
+  const content = 'A'.repeat(870) + '跨段阈值依据' + 'B'.repeat(180);
+  const chunks = chunkKnowledge([{ section: '第 2 页', text: content }]);
+  assert.equal(chunks.length, 2);
+  assert.ok(chunks[0].content.includes('跨段阈值依据'));
+  assert.ok(chunks[1].content.includes('跨段阈值依据'));
+  assert.equal(chunks[1].section, '第 2 页');
+});
+
+test('embedding response index determines chunk alignment even if provider returns rows out of order', async () => {
+  const previousKey = process.env.WATER_AI_EMBEDDING_API_KEY;
+  const previousModel = process.env.WATER_AI_EMBEDDING_MODEL;
+  const previousFetch = globalThis.fetch;
+  process.env.WATER_AI_EMBEDDING_API_KEY = 'test-only';
+  process.env.WATER_AI_EMBEDDING_MODEL = 'text-embedding-v4';
+  globalThis.fetch = async () => new Response(JSON.stringify({ data: [
+    { index: 1, embedding: Array(1024).fill(0.2) },
+    { index: 0, embedding: Array(1024).fill(0.1) },
+  ] }), { status: 200 });
+  try {
+    const vectors = await embedKnowledge(['first', 'second']);
+    assert.equal(vectors?.[0][0], 0.1);
+    assert.equal(vectors?.[1][0], 0.2);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousKey === undefined) delete process.env.WATER_AI_EMBEDDING_API_KEY;
+    else process.env.WATER_AI_EMBEDDING_API_KEY = previousKey;
+    if (previousModel === undefined) delete process.env.WATER_AI_EMBEDDING_MODEL;
+    else process.env.WATER_AI_EMBEDDING_MODEL = previousModel;
+  }
+});
+
+test('an archived built-in document cannot reappear from the static fallback', async () => {
+  const previousKey = process.env.WATER_AI_EMBEDDING_API_KEY;
+  const previousModel = process.env.WATER_AI_EMBEDDING_MODEL;
+  delete process.env.WATER_AI_EMBEDDING_API_KEY;
+  delete process.env.WATER_AI_EMBEDDING_MODEL;
+  const client = { rpc: async () => ({ data: [], error: null }) } as unknown as SupabaseClient;
+  try {
+    assert.deepEqual(await searchScopedKnowledge(client, 'GB/T 14848 地下水质量标准'), []);
+  } finally {
+    if (previousKey !== undefined) process.env.WATER_AI_EMBEDDING_API_KEY = previousKey;
+    if (previousModel !== undefined) process.env.WATER_AI_EMBEDDING_MODEL = previousModel;
+  }
+});
+
+test('a knowledge database failure does not revive static excerpts', async () => {
+  const previousKey = process.env.WATER_AI_EMBEDDING_API_KEY;
+  const previousModel = process.env.WATER_AI_EMBEDDING_MODEL;
+  delete process.env.WATER_AI_EMBEDDING_API_KEY;
+  delete process.env.WATER_AI_EMBEDDING_MODEL;
+  const client = { rpc: async () => ({ data: null, error: { message: 'unavailable' } }) } as unknown as SupabaseClient;
+  try {
+    await assert.rejects(searchScopedKnowledge(client, 'GB/T 14848 地下水质量标准'), /资料库检索失败/);
+  } finally {
+    if (previousKey !== undefined) process.env.WATER_AI_EMBEDDING_API_KEY = previousKey;
+    if (previousModel !== undefined) process.env.WATER_AI_EMBEDDING_MODEL = previousModel;
+  }
 });
 
 test('a fabricated citation label is removed from the displayed answer', () => {

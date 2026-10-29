@@ -12,7 +12,7 @@ import { useAuth } from '@/lib/auth-context';
 type DocumentRow = {
   id: string; title: string; version: string; visibility: 'public' | 'park' | 'enterprise';
   status: 'pending' | 'published' | 'rejected' | 'archived'; file_name: string;
-  embedding_status: 'keyword' | 'hybrid'; review_note: string | null; created_at: string;
+  embedding_status: 'keyword' | 'hybrid'; review_note: string | null; created_at: string; uploaded_by: string;
 };
 type Preview = { document: DocumentRow & { content: string; source_url: string | null }; chunks: { ordinal: number; section: string; content: string }[] };
 
@@ -37,6 +37,7 @@ export function KnowledgeLibrary({ admin }: { admin: boolean }) {
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const input = useRef<HTMLInputElement>(null);
+  const canManagePreview = !!preview && admin && (preview.document.visibility !== 'public' || preview.document.uploaded_by === session?.user.id);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -99,7 +100,7 @@ export function KnowledgeLibrary({ admin }: { admin: boolean }) {
   return <main className="mx-auto max-w-6xl space-y-7 px-5 py-8 sm:px-8">
     <div className="flex items-start gap-3"><span className="rounded-xl bg-teal-100 p-3 text-teal-700"><BookOpen className="size-6" /></span><div>
       <h1 className="text-2xl font-bold text-slate-900">小水滴资料库</h1>
-      <p className="mt-1 text-sm text-slate-600">{admin ? '审核企业资料，维护园区和公共知识；发布后小水滴才可引用。' : '提交本企业资料供管理员核对；审核发布后可用于本企业的智能分析。'}</p>
+      <p className="mt-1 text-sm text-slate-600">{admin ? '审核企业资料，维护园区和公共知识；发布后小水滴才可引用。' : '查看已发布的公共及园区资料，提交本企业资料供管理员审核。'}</p>
     </div></div>
     {error && <p role="alert" className="flex items-center gap-2 rounded-xl bg-red-50 p-3 text-sm text-red-700"><CircleAlert className="size-4" />{error}</p>}
     {notice && <p role="status" className="flex items-center gap-2 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800"><Check className="size-4" />{notice}</p>}
@@ -118,7 +119,7 @@ export function KnowledgeLibrary({ admin }: { admin: boolean }) {
       <section className="min-w-0 space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm" aria-label="已提交资料">
         <div className="flex items-center justify-between gap-2"><h2 className="font-semibold text-slate-900">资料清单</h2><Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>刷新</Button></div>
         {loading && <p className="text-sm text-slate-500">正在读取资料…</p>}
-        {!loading && !documents.length && <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">暂无已提交资料。现有公共标准摘要仍可在小水滴对话中检索。</p>}
+        {!loading && !documents.length && <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">当前暂无可查看的资料。</p>}
         {documents.map(doc => <div key={doc.id} className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-slate-200 p-3">
           <div className="flex min-w-0 gap-2"><FileText className="mt-0.5 size-4 shrink-0 text-teal-700" /><div className="min-w-0"><p className="break-words text-sm font-semibold text-slate-900">{doc.title}</p><p className="mt-1 text-xs text-slate-600">{scopeLabels[doc.visibility]} · {doc.version} · {statuses[doc.status]}{doc.status === 'published' && ` · ${doc.embedding_status === 'hybrid' ? '混合检索' : '关键词检索'}`}</p>{doc.review_note && <p className="mt-1 text-xs text-amber-700">审核意见：{doc.review_note}</p>}</div></div>
           <Button variant="outline" size="sm" onClick={() => void inspect(doc.id)}>预览</Button>
@@ -126,10 +127,10 @@ export function KnowledgeLibrary({ admin }: { admin: boolean }) {
       </section>
     </div>
     {preview && <section className="space-y-3 rounded-2xl border border-teal-200 bg-teal-50/50 p-5" aria-label="资料提取预览">
-      <div className="flex items-start justify-between gap-2"><div><h2 className="font-semibold text-teal-950">提取预览 · {preview.document.title}</h2><p className="mt-1 text-xs text-slate-600">{preview.chunks.length} 个片段；请确认文字与页码、段落对应，再发布给小水滴。</p></div><Button variant="ghost" size="icon" onClick={() => setPreview(null)} aria-label="关闭预览"><X className="size-4" /></Button></div>
+      <div className="flex items-start justify-between gap-2"><div><h2 className="font-semibold text-teal-950">资料片段 · {preview.document.title}</h2><p className="mt-1 text-xs text-slate-600">{preview.chunks.length} 个片段；问答引用将指向对应章节或页码。待审核资料需核对原文后才能发布。</p></div><Button variant="ghost" size="icon" onClick={() => setPreview(null)} aria-label="关闭预览"><X className="size-4" /></Button></div>
       <div className="max-h-80 space-y-2 overflow-y-auto">{preview.chunks.map(chunk => <div key={chunk.ordinal} className="rounded-lg bg-white p-3 text-xs leading-6 text-slate-700"><p className="mb-1 font-bold text-teal-800">{chunk.section} · 片段 {chunk.ordinal + 1}</p>{chunk.content}</div>)}</div>
-      {admin && preview.document.status === 'pending' && <div className="space-y-2"><Label htmlFor="knowledge-review-note">退回原因（退回时填写）</Label><Textarea id="knowledge-review-note" maxLength={500} rows={2} value={reviewNote} onChange={e => setReviewNote(e.target.value)} placeholder="请说明需要修改的内容" /><div className="flex gap-2"><Button disabled={busy} onClick={() => void review(preview.document.id, 'approve')} className="bg-teal-700 hover:bg-teal-800">审核并发布</Button><Button disabled={busy || !reviewNote.trim()} variant="outline" onClick={() => void review(preview.document.id, 'reject')}>退回资料</Button></div></div>}
-      {admin && preview.document.status === 'published' && <div className="flex gap-2"><Button disabled={busy} variant="outline" onClick={() => void review(preview.document.id, 'reindex')}>更新语义索引</Button><Button disabled={busy} variant="outline" onClick={() => void review(preview.document.id, 'archive')}>归档旧版本</Button></div>}
+      {canManagePreview && preview.document.status === 'pending' && <div className="space-y-2"><Label htmlFor="knowledge-review-note">退回原因（退回时填写）</Label><Textarea id="knowledge-review-note" maxLength={500} rows={2} value={reviewNote} onChange={e => setReviewNote(e.target.value)} placeholder="请说明需要修改的内容" /><div className="flex gap-2"><Button disabled={busy} onClick={() => void review(preview.document.id, 'approve')} className="bg-teal-700 hover:bg-teal-800">审核并发布</Button><Button disabled={busy || !reviewNote.trim()} variant="outline" onClick={() => void review(preview.document.id, 'reject')}>退回资料</Button></div></div>}
+      {canManagePreview && preview.document.status === 'published' && <div className="flex gap-2"><Button disabled={busy} variant="outline" onClick={() => void review(preview.document.id, 'reindex')}>更新语义索引</Button><Button disabled={busy} variant="outline" onClick={() => void review(preview.document.id, 'archive')}>归档旧版本</Button></div>}
     </section>}
   </main>;
 }

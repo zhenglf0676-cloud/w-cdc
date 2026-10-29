@@ -35,21 +35,15 @@ export async function extractKnowledgeFile(file: File): Promise<DocumentSection[
 
 export function chunkKnowledge(sections: DocumentSection[]): KnowledgeChunk[] {
   const chunks: KnowledgeChunk[] = [];
-  let content = '';
-  let section = '';
-  const flush = () => {
-    if (content.trim()) chunks.push({ ordinal: chunks.length, section, content: content.trim() });
-    content = '';
-  };
   for (const part of sections) {
-    for (let i = 0; i < part.text.length; i += 850) {
-      const segment = part.text.slice(i, i + 850);
-      if (section !== part.section || content.length + segment.length > 1000) flush();
-      section = part.section;
-      content += `${content ? ' ' : ''}${segment}`;
+    const text = part.text.replace(/\s+/g, ' ').trim();
+    for (let start = 0; start < text.length;) {
+      const end = Math.min(start + 900, text.length);
+      chunks.push({ ordinal: chunks.length, section: part.section, content: text.slice(start, end) });
+      if (end === text.length) break;
+      start = end - 80; // Keep facts spanning a boundary available to either search hit.
     }
   }
-  flush();
   if (!chunks.length || chunks.length > 65) throw new Error('资料片段过多，请拆分文件后上传');
   return chunks;
 }

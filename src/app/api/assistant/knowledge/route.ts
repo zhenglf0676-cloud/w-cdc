@@ -30,15 +30,25 @@ export async function GET(request: Request) {
       return NextResponse.json({ document: doc, chunks }, { headers: noStore });
     }
     const fields = 'id,title,version,visibility,park_name,company_user_id,status,file_name,embedding_status,uploaded_by,review_note,created_at,reviewed_at,valid_from,valid_until';
-    const query = client.from('assistant_knowledge_documents').select(fields).order('created_at', { ascending: false }).limit(100);
-    const own = await (actor.role === 'admin' ? query.eq('park_name', actor.park) : query.eq('company_user_id', actor.userId));
-    if (own.error) throw own.error;
-    let documents = own.data ?? [];
-    if (actor.role === 'admin') {
-      const publicDocs = await client.from('assistant_knowledge_documents').select(fields).eq('visibility', 'public').eq('uploaded_by', actor.userId).order('created_at', { ascending: false }).limit(100);
-      if (publicDocs.error) throw publicDocs.error;
-      documents = [...documents, ...(publicDocs.data ?? [])];
+    const visibleQueries = [
+      actor.role === 'admin'
+        ? client.from('assistant_knowledge_documents').select(fields).eq('park_name', actor.park).order('created_at', { ascending: false }).limit(100)
+        : client.from('assistant_knowledge_documents').select(fields).eq('company_user_id', actor.userId).order('created_at', { ascending: false }).limit(100),
+      client.from('assistant_knowledge_documents').select(fields).eq('visibility', 'public').eq('status', 'published').order('created_at', { ascending: false }).limit(100),
+    ];
+    if (actor.role === 'enterprise') {
+      visibleQueries.push(client.from('assistant_knowledge_documents').select(fields)
+        .eq('visibility', 'park').eq('park_name', actor.park).eq('status', 'published').order('created_at', { ascending: false }).limit(100));
+    } else {
+      visibleQueries.push(client.from('assistant_knowledge_documents').select(fields)
+        .eq('visibility', 'public').eq('uploaded_by', actor.userId).order('created_at', { ascending: false }).limit(100));
     }
+    const results = await Promise.all(visibleQueries);
+    const documents = [...new Map(results.flatMap(result => {
+      if (result.error) throw result.error;
+      return result.data ?? [];
+    }).filter(doc => canOpenKnowledge(actor, doc)).map(doc => [doc.id, doc])).values()]
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
     return NextResponse.json({ documents }, { headers: noStore });
   } catch (error) { return failure(error); }
 }
