@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { applicationId, thresholds } = body;
 
-    if (!applicationId || !thresholds) {
+    if (!applicationId || !Array.isArray(thresholds)) {
       return NextResponse.json({ error: '参数不完整' }, { status: 400 });
     }
 
@@ -44,12 +44,15 @@ export async function POST(request: Request) {
     // 获取申请信息
     const { data: application } = await db
       .from('pollutant_applications')
-      .select('*, profiles(company_name)')
+      .select('*, profiles(company_name, park_name)')
       .eq('id', applicationId)
       .single();
 
     if (!application) {
       return NextResponse.json({ error: '申请不存在' }, { status: 404 });
+    }
+    if (!adminProfile.park_name || application.profiles?.park_name !== adminProfile.park_name) {
+      return NextResponse.json({ error: '无权审批其他园区的申请' }, { status: 403 });
     }
 
     const companyName = application.profiles?.company_name || '未知企业';
@@ -70,8 +73,9 @@ export async function POST(request: Request) {
     }
 
     // 创建通知
-    const pollutantNames = thresholds.map((t: any) => t.label || t.name || t.id).join('、');
-    const pollutantDetails = thresholds.map((t: any) => {
+    type ApprovedPollutant = { label?: string; name?: string; id?: string; threshold?: number; unit?: string };
+    const pollutantNames = (thresholds as ApprovedPollutant[]).map(t => t.label || t.name || t.id).join('、');
+    const pollutantDetails = (thresholds as ApprovedPollutant[]).map(t => {
       const name = t.label || t.name || t.id;
       const threshold = t.threshold || 0;
       const unit = t.unit || 'mg/L';

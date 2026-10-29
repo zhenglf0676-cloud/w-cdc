@@ -2,6 +2,7 @@
 const DAY = 86400000;
 const OFFSET = 8 * 60 * 60 * 1000;
 export const chinaDay = (value: string | number | Date) => new Date(new Date(value).getTime() + OFFSET).toISOString().slice(0, 10);
+export const chinaDateTime = (value: string | number | Date) => new Date(new Date(value).getTime() + OFFSET).toISOString().slice(0, 16).replace('T', ' ');
 export function chinaPeriod(start: unknown, end: unknown) {
   const valid = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && Number.isFinite(Date.parse(v)) && new Date(v).toISOString().slice(0, 10) === v;
   if (!valid(start) || !valid(end) || start > end) throw new Error('请选择有效的起止日期');

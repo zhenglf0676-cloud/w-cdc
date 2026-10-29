@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useEffectEvent, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import ReactECharts from 'echarts-for-react';
@@ -255,6 +255,25 @@ export default function MonitoringPage() {
     }
   };
 
+  const refreshImportedData = useEffectEvent(() => {
+    void fetchOutlets();
+    if (selectedOutlet) {
+      void fetchRealtimeData(selectedOutlet.id);
+      void fetchChartData(selectedOutlet.id, timeRange);
+      void fetchHistoryData(selectedOutlet.id);
+    }
+  });
+
+  useEffect(() => {
+    if (!session) return;
+    const refreshAfterImport = (event: Event) => {
+      if (!(event instanceof CustomEvent) || event.detail?.userId !== session.user.id) return;
+      refreshImportedData();
+    };
+    window.addEventListener('water-monitoring-imported', refreshAfterImport);
+    return () => window.removeEventListener('water-monitoring-imported', refreshAfterImport);
+  }, [session]);
+
   // 过滤排污口列表
   const filteredOutlets = outlets.filter(outlet =>
     outlet.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -310,7 +329,7 @@ export default function MonitoringPage() {
 
       console.log('发送请求...');
       
-      const res = await fetch('/api/enterprise/monitoring/upload-excel', {
+      const res = await fetch('/api/enterprise/monitoring/upload-excel?notify=1', {
         method: 'POST',
         headers: {
           'x-session': session.access_token,
@@ -342,14 +361,12 @@ export default function MonitoringPage() {
 
       setExcelResult(data);
       setExcelFile(null);
-
-      // 刷新数据
-      if (selectedOutlet) {
-        fetchRealtimeData(selectedOutlet.id);
-        fetchChartData(selectedOutlet.id, timeRange);
-        fetchHistoryData(selectedOutlet.id);
+      if (data.success) {
+        window.dispatchEvent(new CustomEvent('water-monitoring-imported', {
+          detail: { userId: session.user.id, warnings: data.warnings, warningRecords: data.warningRecords },
+        }));
       }
-      fetchOutlets();
+
     } catch (error: any) {
       console.error('上传错误:', error);
       setExcelResult({
@@ -402,10 +419,11 @@ export default function MonitoringPage() {
       const data = await res.json();
       if (data.success) {
         setUploadSuccess(true);
+        window.dispatchEvent(new CustomEvent('water-monitoring-imported', {
+          detail: { userId: session!.user.id, warnings: data.warnings, warningRecords: data.warningRecords },
+        }));
         setTimeout(() => {
           setShowUploadDialog(false);
-          // 刷新数据
-          window.location.reload();
         }, 1500);
       } else {
         setUploadError(data.error || '上传失败');

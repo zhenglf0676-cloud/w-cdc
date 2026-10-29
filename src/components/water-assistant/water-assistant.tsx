@@ -2,13 +2,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import Image from 'next/image';
-import { X, Download, Volume2, VolumeX, Loader2, Waves } from 'lucide-react';
+import { X, Download, Volume2, VolumeX, Loader2, Waves, Sparkles, Droplets } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/lib/auth-context';
+import { assistantFetch } from '@/lib/water-assistant/request';
 import styles from './water-assistant.module.css';
+import { AiChat } from './ai-chat';
 
 type Point = { x: number; y: number };
 const day = (n: number) => new Date(n + 28800000).toISOString().slice(0, 10);
@@ -85,15 +87,15 @@ export function WaterAssistant() {
     const controller = new AbortController(); let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
       if (document.visibilityState === 'visible') try {
-        const res = await fetch('/api/assistant/alerts', { headers: { 'x-auth-token': session.access_token }, cache: 'no-store', signal: controller.signal });
+        const res = await assistantFetch(token => fetch('/api/assistant/alerts', { headers: { 'x-auth-token': token }, cache: 'no-store', signal: controller.signal }), controller.signal);
         if (res.ok) {
           const data: { warnings: { id: string; at: string }[] } = await res.json();
           const key = `water-alerts:${session.user.id}:${day(Date.now())}`;
-          try { for (const id of JSON.parse(sessionStorage.getItem(key) ?? '[]')) seen.current.add(id); } catch { /* storage is optional */ }
+          try { for (const id of JSON.parse(localStorage.getItem(key) ?? '[]')) seen.current.add(id); } catch { /* storage is optional */ }
           const fresh = data.warnings.filter(w => !seen.current.has(w.id));
           if (fresh.length) {
             fresh.forEach(w => seen.current.add(w.id));
-            try { sessionStorage.setItem(key, JSON.stringify([...seen.current])); } catch { /* storage is optional */ }
+            try { localStorage.setItem(key, JSON.stringify([...seen.current])); } catch { /* storage is optional */ }
             setMessage(`发现${fresh.length}条新的超阈值记录，请查看监测页面。`); animate('warning'); play('warning');
           }
         }
@@ -103,6 +105,28 @@ export function WaterAssistant() {
     void poll();
     return () => { controller.abort(); clearTimeout(timer); };
   }, [active, session, play, animate]);
+  useEffect(() => {
+    if (!active || !session) return;
+    const announceImport = (event: Event) => {
+      if (!(event instanceof CustomEvent) || event.detail?.userId !== session.user.id) return;
+      const detail = event.detail as { warnings?: string[]; warningRecords?: { id: string; at: string }[] };
+      const today = day(Date.now());
+      const key = `water-alerts:${session.user.id}:${today}`;
+      try { for (const id of JSON.parse(localStorage.getItem(key) ?? '[]')) seen.current.add(id); } catch { /* storage is optional */ }
+      const unannounced = (detail.warningRecords ?? []).some(record => !seen.current.has(record.id));
+      for (const record of detail.warningRecords ?? []) {
+        if (day(new Date(record.at).getTime()) === today) seen.current.add(record.id);
+      }
+      try { localStorage.setItem(key, JSON.stringify([...seen.current])); } catch { /* storage is optional */ }
+      if (detail.warnings?.length && unannounced) {
+        setMessage(`刚录入的数据中发现${detail.warnings.length}类超阈值指标，请查看监测页面。`);
+        animate('warning');
+        play('warning');
+      }
+    };
+    window.addEventListener('water-monitoring-imported', announceImport);
+    return () => window.removeEventListener('water-monitoring-imported', announceImport);
+  }, [active, session, play, animate]);
   const move = (p: Point) => { const next = keepInside(p); setPosition(next); try { localStorage.setItem('water-assistant-position', JSON.stringify(next)); } catch { /* optional browser storage */ } };
   async function generate() {
     if (!session || busy) return;
@@ -110,7 +134,8 @@ export function WaterAssistant() {
     setBusy(true); setMessage('稍等一下，我来整理监测数据！'); setDownload(null);
     if (downloadRef.current) { URL.revokeObjectURL(downloadRef.current); downloadRef.current = null; }
     try {
-      const res = await fetch(`/api/${role}/reports/word`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-auth-token': session.access_token }, body: JSON.stringify({ startDate, endDate }), signal: controller.signal });
+      const payload = JSON.stringify({ startDate, endDate });
+      const res = await assistantFetch(token => fetch(`/api/${role}/reports/word`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-auth-token': token }, body: payload, signal: controller.signal }), controller.signal);
       if (!res.ok) { const error = await res.json(); throw new Error(error.error ?? '报告生成失败'); }
       const blob = await res.blob(); if (controller.signal.aborted) return;
       const url = URL.createObjectURL(blob), name = `${role === 'admin' ? '园区' : '企业'}水质监测报告_${startDate}_${endDate}.docx`;
@@ -131,21 +156,39 @@ export function WaterAssistant() {
     ];
   }
   if (!active || !position) return null;
+  const viewportWidth = window.innerWidth;
+  const workspaceWidth = Math.min(980, viewportWidth - 24);
+  const petWidth = Math.min(230, viewportWidth * .42);
+  const workspaceLeft = position.x > workspaceWidth + 16
+    ? position.x - workspaceWidth - 12
+    : position.x + petWidth + workspaceWidth + 24 <= viewportWidth
+      ? position.x + petWidth + 12
+      : Math.max(12, Math.min(viewportWidth - workspaceWidth - 12, position.x - workspaceWidth / 2));
+  const workspaceTop = Math.max(12, Math.min(window.innerHeight - Math.min(720, window.innerHeight - 24) - 12, position.y - 200));
   return <div ref={root} className={styles.root} style={{ left: position.x, top: position.y }}>
-    {open && <section ref={panel} tabIndex={-1} className={styles.panel} style={{ left: Math.max(12, Math.min(window.innerWidth - 362, position.x > 360 ? position.x - 360 : position.x + 160)), top: Math.max(12, Math.min(window.innerHeight - 450, position.y - 100)) }} aria-label="小水滴操作面板">
-      <div className="flex items-center justify-between"><h2 className="font-semibold text-teal-900">小水滴 · {role === 'admin' ? '园区助手' : '企业助手'}</h2><Button size="icon" variant="ghost" aria-label="收起面板" onClick={() => { setOpen(false); pet.current?.focus(); }}><X className="size-4" /></Button></div>
-      <p className="text-sm text-slate-500">{role === 'admin' ? '生成所属园区的监测报告' : '生成本企业的监测报告'}</p>
-      <div className="mt-4 grid grid-cols-2 gap-3"><div><Label htmlFor="water-start">开始日期</Label><Input id="water-start" type="date" value={startDate} max={endDate || undefined} onChange={e => setStart(e.target.value)} disabled={busy} /></div><div><Label htmlFor="water-end">结束日期</Label><Input id="water-end" type="date" value={endDate} min={startDate || undefined} onChange={e => setEnd(e.target.value)} disabled={busy} /></div></div>
-      <Button className="mt-4 w-full bg-teal-700 hover:bg-teal-800" disabled={busy || demoStep !== null || !startDate || !endDate || startDate > endDate} onClick={generate}>{busy ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}{busy ? '正在生成报告…' : '生成Word报告'}</Button>
-      {download && <a className="mt-2 block text-center text-sm text-teal-700 underline" href={download} download={filename}>再次下载报告</a>}
-      <div className="mt-4 border-t border-teal-100 pt-4">
-        <Button className="w-full" variant="outline" disabled={demoStep !== null || busy} onClick={prepareDemo}>{demoStep !== null ? <Loader2 className="size-4 animate-spin" /> : <Waves className="size-4" />}{demoStep !== null ? '正在准备演示…' : '查看污染扩散演示'}</Button>
-        {demoStep !== null && <div className="mt-2 text-sm text-teal-700" role="status">{['正在加载三维网格…', '正在准备扩散动画…', '演示准备完成。'][demoStep]}<Button variant="ghost" size="sm" onClick={cancelDemo}>取消</Button></div>}
-        <p className="mt-2 text-xs text-slate-500">固定场景示意 · 非实时预测</p>
+    <section ref={panel} tabIndex={-1} className={styles.workspace} style={{ display: open ? undefined : 'none', left: workspaceLeft, top: workspaceTop }} aria-label="小水滴工作台">
+      <header className={styles['workspace-header']}>
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-white/20"><Droplets className="size-6" /></span>
+        <div className="min-w-0 flex-1"><h2 className="flex items-center gap-2 font-semibold">小水滴 · {role === 'admin' ? '园区智能助手' : '企业智能助手'} <Sparkles className="size-4 text-cyan-200" /></h2><p className="mt-0.5 text-xs text-teal-100">自然语言分析水质 · 常用功能一键直达</p></div>
+        <Button size="icon" variant="ghost" className="shrink-0 text-white hover:bg-white/20 hover:text-white" aria-label="收起小水滴工作台" onClick={() => { setOpen(false); pet.current?.focus(); }}><X className="size-4" /></Button>
+      </header>
+      <div className={styles['workspace-body']}>
+        <div className={styles['conversation-pane']}><AiChat key={`${session.user.id}:${role}`} userId={session.user.id} scope={role === 'admin' ? '所属园区' : '本企业'} canImport={role === 'enterprise'} /></div>
+        <aside className={styles['tools-pane']} aria-label="快捷操作">
+          <div className={styles['tools-title']}><span className="font-semibold text-teal-950">快捷操作</span><span className="text-xs text-slate-500">监测与演示</span></div>
+          <div className={styles['quick-grid']}>
+            <Button variant="outline" className={styles['quick-button']} disabled={busy || demoStep !== null || !startDate || !endDate || startDate > endDate} onClick={generate}>{busy ? <Loader2 className="size-5 animate-spin" /> : <Download className="size-5" />}<span>{busy ? '正在生成…' : '生成Word报告'}</span></Button>
+            <Button variant="outline" className={styles['quick-button']} aria-pressed={voice} onClick={() => { const enabled = !voice; setVoice(enabled); try { localStorage.setItem('water-assistant-voice', String(enabled)); } catch { /* optional */ } if (enabled) play('enabled', true); else sound.current?.pause(); }}>{voice ? <Volume2 className="size-5" /> : <VolumeX className="size-5" />}<span>{voice ? '语音已开启' : '开启语音提示'}</span></Button>
+            <Button variant="outline" className={styles['quick-button']} disabled={demoStep !== null || busy} onClick={prepareDemo}>{demoStep !== null ? <Loader2 className="size-5 animate-spin" /> : <Waves className="size-5" />}<span>{demoStep !== null ? '准备演示中…' : '污染扩散演示'}</span></Button>
+          </div>
+          <details className={styles['date-settings']}><summary className="cursor-pointer text-xs font-medium text-teal-800">调整报告时间 · 默认近7天</summary><div className="mt-3 grid grid-cols-2 gap-2"><div><Label htmlFor="water-start" className="text-xs">开始日期</Label><Input id="water-start" type="date" value={startDate} max={endDate || undefined} onChange={e => setStart(e.target.value)} disabled={busy} className="mt-1" /></div><div><Label htmlFor="water-end" className="text-xs">结束日期</Label><Input id="water-end" type="date" value={endDate} min={startDate || undefined} onChange={e => setEnd(e.target.value)} disabled={busy} className="mt-1" /></div></div></details>
+          {download && <a className="block text-xs font-medium text-teal-700 underline" href={download} download={filename}>再次下载报告</a>}
+          {demoStep !== null && <div className="text-xs text-teal-700" role="status">{['正在加载三维网格…', '正在准备扩散动画…', '演示准备完成。'][demoStep]}<Button variant="ghost" size="sm" onClick={cancelDemo}>取消</Button></div>}
+          <p className={styles['tool-status']} role="status">{message}</p>
+          <p className="text-xs text-slate-500">污染演示为固定场景示意，非实时预测。</p>
+        </aside>
       </div>
-      <p className="mt-3 text-sm text-slate-700" role="status">{message}</p>
-      <Button className="mt-2" variant="ghost" onClick={() => { const enabled = !voice; setVoice(enabled); try { localStorage.setItem('water-assistant-voice', String(enabled)); } catch { /* optional */ } if (enabled) play('enabled', true); else sound.current?.pause(); }}>{voice ? <Volume2 className="size-4" /> : <VolumeX className="size-4" />}{voice ? '语音已开启' : '开启语音提示'}</Button>
-    </section>}
+    </section>
     <Dialog open={demoOpen} onOpenChange={setDemoOpen}>
       <DialogContent className="flex h-[94dvh] w-[96vw] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-[1400px]" showCloseButton={false} onCloseAutoFocus={e => { e.preventDefault(); pet.current?.focus(); }}>
         <div className="flex shrink-0 items-center justify-between gap-3 border-b px-4 py-3">

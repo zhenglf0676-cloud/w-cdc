@@ -1,24 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { getSupabaseCredentials, getSupabaseServiceRoleKey } from '@/storage/database/supabase-client';
+import { requireParkAdmin } from '@/lib/admin-authorization';
 
 export async function GET(request: NextRequest) {
   try {
-    const token = request.headers.get('x-session');
-    if (!token) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
+    const access = await requireParkAdmin(request);
+    if (!access.ok) return access.response;
+    const { db, parkName } = access.context;
 
-    const { url } = getSupabaseCredentials();
-    const serviceRoleKey = getSupabaseServiceRoleKey();
-    const db = createClient(url, serviceRoleKey!, {
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
+    const { data: companies, error: companyError } = await db.from('profiles')
+      .select('id').eq('role', 'enterprise').eq('park_name', parkName);
+    if (companyError) throw companyError;
+    const companyIds = (companies ?? []).map(company => company.id);
+    if (!companyIds.length) return NextResponse.json({ count: 0 });
 
     const { count, error } = await db
       .from('pollutant_applications')
       .select('*', { count: 'exact', head: true })
-      .eq('status', 'pending');
+      .eq('status', 'pending')
+      .in('company_id', companyIds);
 
     if (error) {
       console.error('获取待审批数量失败:', error);
