@@ -9,7 +9,10 @@ export const maxDuration = 120;
 const noStore = { 'Cache-Control': 'private, no-store' };
 const shortText = (form: FormData, name: string) => String(form.get(name) ?? '').trim();
 const date = z.union([z.literal(''), z.iso.date()]);
-const actionSchema = z.object({ id: z.uuid(), action: z.enum(['approve', 'reject', 'archive', 'reindex']), note: z.string().max(500).optional() }).strict();
+// Built-in documents use deterministic Postgres UUIDs derived from their slug.
+// z.uuid() rejects some valid Postgres UUIDs because their version bits vary.
+const documentId = z.guid();
+const actionSchema = z.object({ id: documentId, action: z.enum(['approve', 'reject', 'archive', 'reindex']), note: z.string().max(500).optional() }).strict();
 
 function failure(error: unknown) {
   return NextResponse.json({ error: error instanceof KnowledgeError ? error.message : error instanceof Error && /^(资料|PDF|Word|没有提取|请选择|文件|文本|标题|版本)/.test(error.message) ? error.message : '资料库操作失败，请稍后重试' },
@@ -22,7 +25,7 @@ export async function GET(request: Request) {
     const client = knowledgeAdminClient();
     const id = new URL(request.url).searchParams.get('id');
     if (id) {
-      if (!z.uuid().safeParse(id).success) throw new KnowledgeError('资料编号无效', 400);
+      if (!documentId.safeParse(id).success) throw new KnowledgeError('资料编号无效', 400);
       const { data: doc, error } = await client.from('assistant_knowledge_documents').select('*').eq('id', id).single();
       if (error || !doc || !canOpenKnowledge(actor, doc)) throw new KnowledgeError('资料不存在或不在权限范围内', 404);
       const { data: chunks, error: chunkError } = await client.from('assistant_knowledge_chunks').select('ordinal,section,content').eq('document_id', id).order('ordinal').limit(65);

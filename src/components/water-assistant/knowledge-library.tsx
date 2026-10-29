@@ -111,7 +111,7 @@ export function KnowledgeLibrary({ admin }: { admin: boolean }) {
   return <main className="mx-auto max-w-6xl space-y-7 px-5 py-8 sm:px-8">
     <div className="flex items-start gap-3"><span className="rounded-xl bg-teal-100 p-3 text-teal-700"><BookOpen className="size-6" /></span><div>
       <h1 className="text-2xl font-bold text-slate-900">小水滴资料库</h1>
-      <p className="mt-1 text-sm text-slate-600">{admin ? '审核企业资料，维护园区和公共知识；发布后小水滴才可引用。' : '查看已发布的公共及园区资料，提交本企业资料供管理员审核。'}</p>
+      <p className="mt-1 text-sm text-slate-600">{admin ? '审核企业资料，维护园区和公共知识；已发布资料可在列表中更新语义索引。' : '查看已发布的公共及园区资料，提交本企业资料供管理员审核；索引由管理员维护。'}</p>
     </div></div>
     {error && <p role="alert" className="flex items-center gap-2 rounded-xl bg-red-50 p-3 text-sm text-red-700"><CircleAlert className="size-4" />{error}</p>}
     {notice && <p role="status" className="flex items-center gap-2 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800"><Check className="size-4" />{notice}</p>}
@@ -133,7 +133,11 @@ export function KnowledgeLibrary({ admin }: { admin: boolean }) {
         {!loading && !documents.length && <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">当前暂无可查看的资料。</p>}
         {documents.map(doc => <div key={doc.id} className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-slate-200 p-3">
           <div className="flex min-w-0 gap-2"><FileText className="mt-0.5 size-4 shrink-0 text-teal-700" /><div className="min-w-0"><p className="break-words text-sm font-semibold text-slate-900">{doc.title}</p><p className="mt-1 text-xs text-slate-600">{scopeLabels[doc.visibility]} · {doc.version} · {statuses[doc.status]}{doc.status === 'published' && ` · ${doc.embedding_status === 'hybrid' ? '混合检索' : '关键词检索'}`}</p>{doc.review_note && <p className="mt-1 text-xs text-amber-700">审核意见：{doc.review_note}</p>}</div></div>
-          <Button variant="outline" size="sm" onClick={() => void inspect(doc.id)}>预览</Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={() => void inspect(doc.id)}>预览</Button>
+            {admin && doc.status === 'published' && (doc.visibility !== 'public' || doc.uploaded_by === session.user.id) &&
+              <Button size="sm" disabled={busy} onClick={() => void review(doc.id, 'reindex')} className="bg-teal-700 hover:bg-teal-800">更新语义索引</Button>}
+          </div>
         </div>)}
       </section>
     </div>
