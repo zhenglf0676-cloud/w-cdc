@@ -9,7 +9,10 @@ export const maxDuration = 120;
 const noStore = { 'Cache-Control': 'private, no-store' };
 const shortText = (form: FormData, name: string) => String(form.get(name) ?? '').trim();
 const date = z.union([z.literal(''), z.iso.date()]);
-const actionSchema = z.object({ id: z.uuid(), action: z.enum(['approve', 'reject', 'archive', 'reindex']), note: z.string().max(500).optional() }).strict();
+// Built-in documents use deterministic Postgres UUIDs derived from their slug.
+// z.uuid() rejects some valid Postgres UUIDs because their version bits vary.
+const documentId = z.guid();
+const actionSchema = z.object({ id: documentId, action: z.enum(['approve', 'reject', 'archive', 'reindex']), note: z.string().max(500).optional() }).strict();
 
 function failure(error: unknown) {
   return NextResponse.json({ error: error instanceof KnowledgeError ? error.message : error instanceof Error && /^(资料|PDF|Word|没有提取|请选择|文件|文本|标题|版本)/.test(error.message) ? error.message : '资料库操作失败，请稍后重试' },
@@ -22,24 +25,36 @@ export async function GET(request: Request) {
     const client = knowledgeAdminClient();
     const id = new URL(request.url).searchParams.get('id');
     if (id) {
-      if (!z.uuid().safeParse(id).success) throw new KnowledgeError('资料编号无效', 400);
+      if (!documentId.safeParse(id).success) throw new KnowledgeError('资料编号无效', 400);
       const { data: doc, error } = await client.from('assistant_knowledge_documents').select('*').eq('id', id).single();
       if (error || !doc || !canOpenKnowledge(actor, doc)) throw new KnowledgeError('资料不存在或不在权限范围内', 404);
       const { data: chunks, error: chunkError } = await client.from('assistant_knowledge_chunks').select('ordinal,section,content').eq('document_id', id).order('ordinal').limit(65);
       if (chunkError) throw chunkError;
-      return NextResponse.json({ document: doc, chunks }, { headers: noStore });
+      const owner = actor.role === 'admin' && doc.visibility === 'enterprise' && doc.company_user_id
+        ? await client.from('profiles').select('company_name').eq('user_id', doc.company_user_id).maybeSingle()
+        : null;
+      return NextResponse.json({ document: { ...doc, company_name: owner?.data?.company_name ?? null }, chunks }, { headers: noStore });
     }
     const fields = 'id,title,version,visibility,park_name,company_user_id,status,file_name,embedding_status,uploaded_by,review_note,created_at,reviewed_at,valid_from,valid_until';
-    const query = client.from('assistant_knowledge_documents').select(fields).order('created_at', { ascending: false }).limit(100);
-    const own = await (actor.role === 'admin' ? query.eq('park_name', actor.park) : query.eq('company_user_id', actor.userId));
-    if (own.error) throw own.error;
-    let documents = own.data ?? [];
-    if (actor.role === 'admin') {
-      const publicDocs = await client.from('assistant_knowledge_documents').select(fields).eq('visibility', 'public').eq('uploaded_by', actor.userId).order('created_at', { ascending: false }).limit(100);
-      if (publicDocs.error) throw publicDocs.error;
-      documents = [...documents, ...(publicDocs.data ?? [])];
-    }
-    return NextResponse.json({ documents }, { headers: noStore });
+    const visibleQueries = actor.role === 'admin'
+      ? [client.from('assistant_knowledge_documents').select(fields).order('created_at', { ascending: false }).limit(1000)]
+      : [
+          client.from('assistant_knowledge_documents').select(fields).eq('company_user_id', actor.userId).order('created_at', { ascending: false }).limit(100),
+          client.from('assistant_knowledge_documents').select(fields).eq('visibility', 'public').eq('status', 'published').order('created_at', { ascending: false }).limit(100),
+        ];
+    const results = await Promise.all(visibleQueries);
+    const documents = [...new Map(results.flatMap(result => {
+      if (result.error) throw result.error;
+      return result.data ?? [];
+    }).filter(doc => canOpenKnowledge(actor, doc)).map(doc => [doc.id, doc])).values()]
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
+    if (actor.role !== 'admin') return NextResponse.json({ documents }, { headers: noStore });
+    const owners = [...new Set(documents.filter(doc => doc.visibility === 'enterprise' && doc.company_user_id)
+      .map(doc => doc.company_user_id!))];
+    const profiles = owners.length ? await client.from('profiles').select('user_id,company_name').in('user_id', owners) : null;
+    const names = new Map((profiles?.data ?? []).map(profile => [profile.user_id, profile.company_name]));
+    return NextResponse.json({ documents: documents.map(doc => ({ ...doc,
+      company_name: doc.company_user_id ? names.get(doc.company_user_id) ?? null : null })) }, { headers: noStore });
   } catch (error) { return failure(error); }
 }
 
@@ -51,13 +66,12 @@ export async function POST(request: Request) {
     const form = await request.formData();
     const title = shortText(form, 'title');
     const version = shortText(form, 'version') || '1.0';
-    const visibility = actor.role === 'enterprise' ? 'enterprise' : shortText(form, 'visibility');
+    const visibility = actor.role === 'enterprise' ? 'enterprise' : 'public';
     const validFrom = shortText(form, 'validFrom');
     const validUntil = shortText(form, 'validUntil');
     const sourceUrl = shortText(form, 'sourceUrl');
     if (title.length < 2 || title.length > 180) throw new KnowledgeError('标题应为 2 至 180 字', 400);
     if (version.length > 60 || !version) throw new KnowledgeError('版本信息过长', 400);
-    if (!['public', 'park', 'enterprise'].includes(visibility) || actor.role === 'admin' && visibility === 'enterprise') throw new KnowledgeError('资料范围无效', 400);
     if (!date.safeParse(validFrom).success || !date.safeParse(validUntil).success || validFrom && validUntil && validFrom > validUntil) throw new KnowledgeError('有效日期无效', 400);
     if (sourceUrl && (!/^https:\/\//i.test(sourceUrl) || sourceUrl.length > 500)) throw new KnowledgeError('来源链接必须是 HTTPS 地址', 400);
     const candidate = form.get('file');
@@ -104,7 +118,7 @@ export async function PATCH(request: Request) {
     const { id, action, note } = parsed.data;
     if (action === 'reject' && !note?.trim()) throw new KnowledgeError('请填写退回原因', 400);
     const { data: doc, error } = await client.from('assistant_knowledge_documents').select('*').eq('id', id).single();
-    if (error || !doc || !canReviewKnowledge(actor, doc)) throw new KnowledgeError('资料不存在或不在所属园区', 404);
+    if (error || !doc || !canReviewKnowledge(actor)) throw new KnowledgeError('资料不存在或无权管理', 404);
     if ((action === 'archive' || action === 'reindex') && doc.status !== 'published' ||
       (action === 'approve' || action === 'reject') && doc.status !== 'pending') throw new KnowledgeError('当前资料状态无法执行此操作', 409);
     let embeddingStatus: 'hybrid' | 'keyword' = doc.embedding_status;

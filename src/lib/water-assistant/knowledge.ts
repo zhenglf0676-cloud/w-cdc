@@ -75,3 +75,14 @@ export function keepVerifiedCitations(answer: string, sources: readonly Knowledg
   const allowed = new Set(sources.map(source => source.citation).filter(Boolean));
   return answer.replace(/\[资料\d+\]/g, citation => allowed.has(citation.slice(1, -1)) ? citation : '');
 }
+
+/** Show only sources actually used in the answer, with gap-free citation labels. */
+export function citedKnowledge(answer: string, sources: readonly KnowledgeSource[]): { answer: string; sources: KnowledgeSource[] } {
+  const verified = keepVerifiedCitations(answer, sources);
+  const used = sources.filter(source => source.citation && verified.includes(`[${source.citation}]`));
+  const labels = new Map(used.map((source, index) => [source.citation, `资料${index + 1}`]));
+  return {
+    answer: verified.replace(/\[(资料\d+)\]/g, (_match, label: string) => `[${labels.get(label) ?? label}]`),
+    sources: used.map((source, index) => ({ ...source, citation: `资料${index + 1}` })),
+  };
+}
