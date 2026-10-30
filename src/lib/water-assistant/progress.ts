@@ -10,6 +10,7 @@ export type ProgressStep = {
 
 export type AssistantResult = {
   answer: string;
+  imageObservation?: string;
   evidence: unknown[];
   sources: KnowledgeSource[];
   toolTrace: unknown;

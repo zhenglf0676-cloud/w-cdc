@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { Check, CircleAlert, Droplets, FileSpreadsheet, Loader2, Paperclip, Send, X } from 'lucide-react';
+import { Check, CircleAlert, Droplets, FileSpreadsheet, ImageIcon, Loader2, Paperclip, Send, X } from 'lucide-react';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AnalysisEvidence } from './analysis-evidence';
@@ -12,7 +13,8 @@ import { assistantFetch, AssistantSessionError } from '@/lib/water-assistant/req
 import { readAssistantStream, type AssistantResult, type ProgressStep } from '@/lib/water-assistant/progress';
 import type { AgentPlan } from '@/lib/water-assistant/workflow';
 
-type Message = { role: 'user' | 'assistant'; content: string; evidence?: unknown[]; sources?: KnowledgeSource[]; toolTrace?: unknown; progress?: ProgressStep[]; plan?: AgentPlan; outcome?: AssistantResult['outcome'] };
+const MAX_ASSISTANT_IMAGE_BYTES = 2 * 1024 * 1024;
+type Message = { role: 'user' | 'assistant'; content: string; imageName?: string; imageObservation?: string; evidence?: unknown[]; sources?: KnowledgeSource[]; toolTrace?: unknown; progress?: ProgressStep[]; plan?: AgentPlan; outcome?: AssistantResult['outcome'] };
 type ImportPreview = { success: boolean; count: number; errorCount: number; errors: string[]; warnings: string[]; approvedOutlets: string[]; approvedPollutants: string[]; sample: { outlet: string; time: string; pollutant: string; value: number; unit: string; threshold: number }[] };
 
 function ProgressList({ steps }: { steps: ProgressStep[] }) {
@@ -58,18 +60,28 @@ export function AiChat({ userId, scope, canImport }: { userId: string; scope: st
   const pending = useRef<AbortController | null>(null);
   const importRequest = useRef<AbortController | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const imageInput = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
   const conversation = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState('');
+  const [imageError, setImageError] = useState('');
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
   const [importBusy, setImportBusy] = useState(false);
   const [importError, setImportError] = useState('');
   const [dragging, setDragging] = useState(false);
   useEffect(() => {
-    setMessages([]); setError(''); setLoginRequired(false); setBusy(false); setQuestion(''); setFile(null); setImportPreview(null); setImportError(''); setImportBusy(false); setProgress([]); progressRef.current = []; setPlan(null); planRef.current = null;
+    setMessages([]); setError(''); setLoginRequired(false); setBusy(false); setQuestion(''); setFile(null); setImportPreview(null); setImportError(''); setImportBusy(false); setImageFile(null); setImageError(''); setProgress([]); progressRef.current = []; setPlan(null); planRef.current = null;
     return () => { pending.current?.abort(); importRequest.current?.abort(); };
   }, [userId]);
+  useEffect(() => {
+    if (!imageFile) { setImagePreview(''); return; }
+    const url = URL.createObjectURL(imageFile);
+    setImagePreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [imageFile]);
   useEffect(() => { conversation.current?.scrollTo({ top: conversation.current.scrollHeight, behavior: 'smooth' }); }, [messages, busy, progress, plan, error, importPreview, importError]);
   async function uploadExcel(selected: File, preview: boolean, signal: AbortSignal) {
     const form = new FormData(); form.append('file', selected);
@@ -88,6 +100,23 @@ export function AiChat({ userId, scope, canImport }: { userId: string; scope: st
       if (!controller.signal.aborted) setImportPreview(data);
     } catch (e) { if (!controller.signal.aborted) setImportError(e instanceof Error ? e.message : '预检失败，请重试'); }
     finally { if (importRequest.current === controller) { setImportBusy(false); importRequest.current = null; } }
+  }
+  function selectImage(selected: File) {
+    if (busy || importBusy) return;
+    setImageError('');
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(selected.type) || selected.size > MAX_ASSISTANT_IMAGE_BYTES || !selected.size) {
+      setImageError('请选择不超过 2MB 的 PNG、JPG 或 WEBP 图片');
+      return;
+    }
+    setImageFile(selected);
+  }
+  async function imageDataUrl(selected: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => typeof reader.result === 'string' ? resolve(reader.result) : reject(new Error('读取图片失败'));
+      reader.onerror = () => reject(new Error('读取图片失败'));
+      reader.readAsDataURL(selected);
+    });
   }
   async function confirmImport() {
     if (!file || !importPreview?.success || importBusy || busy) return;
@@ -116,13 +145,15 @@ export function AiChat({ userId, scope, canImport }: { userId: string; scope: st
     } catch (e) { setError(e instanceof Error ? e.message : '资料下载失败'); }
   }
   async function send() {
-    if (busy || importBusy || !question.trim()) return;
+    if (busy || importBusy || (!question.trim() && !imageFile)) return;
     const controller = new AbortController(); pending.current = controller;
-    const next: Message[] = [...messages, { role: 'user', content: question.trim() }];
+    const next: Message[] = [...messages, { role: 'user', content: question.trim() || '请描述图片中的内容，并说明能确认什么、不能确认什么。', imageName: imageFile?.name }];
     progressRef.current = [{ id: 'auth', label: '验证登录与访问权限', state: 'running' }];
     planRef.current = null; setPlan(null); setProgress(progressRef.current); setBusy(true); setError(''); setLoginRequired(false);
     try {
-      const payload = JSON.stringify({ messages: next.slice(-11).map(({ role, content }) => ({ role, content })) });
+      const dataUrl = imageFile ? await imageDataUrl(imageFile) : undefined;
+      controller.signal.throwIfAborted();
+      const payload = JSON.stringify({ messages: next.slice(-11).map(({ role, content }) => ({ role, content })), ...(imageFile && dataUrl ? { image: { name: imageFile.name.slice(0, 120), dataUrl } } : {}) });
       const response = await assistantFetch(token => fetch('/api/assistant/chat', { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', 'x-auth-token': token }, body: payload, signal: controller.signal }), controller.signal);
       if (!response.ok) { const failure = await response.json(); throw new Error(failure.error || '分析失败'); }
       const onProgress = (step: ProgressStep) => {
@@ -136,15 +167,16 @@ export function AiChat({ userId, scope, canImport }: { userId: string; scope: st
       const data: AssistantResult = streamed
         ? await readAssistantStream(response, onProgress, controller.signal, onPlan) : await response.json();
       if (controller.signal.aborted) return;
-      setMessages([...next, { role: 'assistant', content: data.answer, evidence: data.evidence, sources: data.sources, toolTrace: data.toolTrace, progress: streamed ? progressRef.current : [], plan: data.plan ?? planRef.current ?? undefined, outcome: data.outcome }]); setQuestion('');
+      setMessages([...next, { role: 'assistant', content: data.answer, imageObservation: data.imageObservation, evidence: data.evidence, sources: data.sources, toolTrace: data.toolTrace, progress: streamed ? progressRef.current : [], plan: data.plan ?? planRef.current ?? undefined, outcome: data.outcome }]); setQuestion(''); setImageFile(null);
     } catch (e) { if (!controller.signal.aborted) { setLoginRequired(e instanceof AssistantSessionError); setError(e instanceof Error ? e.message : '网络异常，请重试'); } }
     finally { if (pending.current === controller) { setBusy(false); setProgress([]); progressRef.current = []; setPlan(null); planRef.current = null; pending.current = null; } }
   }
   return <div className="relative flex h-full min-h-0 flex-col bg-white"
     onDragEnter={e => { if (!e.dataTransfer.types.includes('Files')) return; e.preventDefault(); dragDepth.current++; setDragging(true); }}
     onDragLeave={e => { e.preventDefault(); dragDepth.current = Math.max(0, dragDepth.current - 1); if (!dragDepth.current) setDragging(false); }}
-    onDragOver={e => { if (!e.dataTransfer.types.includes('Files')) return; e.preventDefault(); e.dataTransfer.dropEffect = canImport ? 'copy' : 'none'; }}
-    onDrop={e => { e.preventDefault(); dragDepth.current = 0; setDragging(false); if (!canImport) { setImportError('目前仅企业账号可通过小水滴录入监测数据'); return; } if (e.dataTransfer.files.length !== 1) { setImportError('一次请上传一个 Excel 文件'); return; } const selected = e.dataTransfer.files[0]; if (selected) void selectFile(selected); }}>
+    onDragOver={e => { if (!e.dataTransfer.types.includes('Files')) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
+    onDrop={e => { e.preventDefault(); dragDepth.current = 0; setDragging(false); if (busy || importBusy) return; if (e.dataTransfer.files.length !== 1) { setImageError('一次请添加一张图片或一个 Excel 文件'); return; } const selected = e.dataTransfer.files[0]; if (!selected) return; if (selected.type.startsWith('image/')) selectImage(selected); else if (canImport) void selectFile(selected); else setImageError('请添加 PNG、JPG 或 WEBP 图片'); }}
+    onPaste={e => { const selected = [...e.clipboardData.files].find(item => item.type.startsWith('image/')); if (selected && !busy && !importBusy) { e.preventDefault(); selectImage(selected); } }}>
     <div className="flex shrink-0 items-center gap-2 border-b border-teal-100 bg-white px-5 py-3 text-sm text-slate-500">
       <span className="size-2 rounded-full bg-emerald-500" aria-hidden="true" />AI 对话 <span className="text-slate-300">/</span> {scope}数据
     </div>
@@ -159,7 +191,8 @@ export function AiChat({ userId, scope, canImport }: { userId: string; scope: st
       {messages.map((m, i) => <div key={i} className={`flex gap-2 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
         {m.role === 'assistant' && <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-teal-100 text-teal-700"><Droplets className="size-4" /></span>}
         <div className={`min-w-0 rounded-2xl px-3.5 py-3 text-sm leading-relaxed shadow-sm ${m.role === 'user' ? 'max-w-[88%] rounded-tr-sm bg-teal-700 text-white' : 'w-full max-w-[calc(100%-2.25rem)] rounded-tl-sm border border-slate-100 bg-slate-50 text-slate-800'}`}>
-          {m.role === 'assistant' ? <AnswerContent content={m.content} /> : <p className="whitespace-pre-wrap break-words">{m.content}</p>}
+          {m.role === 'assistant' ? <AnswerContent content={m.content} /> : <>{m.imageName && <p className="mb-1 flex items-center gap-1 text-xs text-teal-100"><ImageIcon className="size-3.5" />图片 · {m.imageName}</p>}<p className="whitespace-pre-wrap break-words">{m.content}</p></>}
+          {m.imageObservation && <details className="mt-3 rounded-xl border border-teal-100 bg-white px-3 py-2 text-xs"><summary className="cursor-pointer font-medium text-teal-800">查看图片识别内容</summary><p className="mt-2 whitespace-pre-wrap text-slate-600">{m.imageObservation}</p><p className="mt-2 text-slate-500">图片观察仅供分析，不是数据库监测记录。</p></details>}
           {m.role === 'assistant' && (!!m.progress?.length || !!m.plan) && <details className="mt-3 rounded-xl border border-teal-100 bg-white px-3 py-2 text-xs"><summary className="cursor-pointer font-medium text-teal-800">查看本次任务计划与分析过程</summary>{m.plan && <PlanList plan={m.plan} progress={m.progress ?? []} finished outcome={m.outcome} />}{!!m.progress?.length && <ProgressList steps={m.progress} />}</details>}
           <AnalysisEvidence evidence={m.evidence} admin={scope === '所属园区'} />
           <HistoryEvidence evidence={m.evidence} />
@@ -192,15 +225,23 @@ export function AiChat({ userId, scope, canImport }: { userId: string; scope: st
         </>}
       </div>}
       {importError && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{importError}</p>}
+      {imageError && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{imageError}</p>}
     </div>
     <div className="shrink-0 border-t border-slate-100 bg-white p-4">
+      {imageFile && <div className="mb-3 flex items-center gap-3 rounded-xl border border-teal-100 bg-teal-50 p-2 text-xs text-teal-800">
+        {imagePreview && <Image src={imagePreview} alt="待发送图片预览" width={48} height={48} unoptimized className="size-12 shrink-0 rounded-lg object-cover" />}
+        <span className="min-w-0 flex-1 truncate" title={imageFile.name}>{imageFile.name} · 图片提问</span>
+        <Button type="button" size="icon" variant="ghost" aria-label="移除图片" disabled={busy} onClick={() => { setImageFile(null); setImageError(''); }}><X className="size-4" /></Button>
+      </div>}
       <form onSubmit={e => { e.preventDefault(); void send(); }} className="flex items-center gap-2">
         {canImport && <><input ref={fileInput} type="file" accept=".xlsx,.xls" className="sr-only" aria-label="上传 Excel 监测数据" onChange={e => { const selected = e.target.files?.[0]; if (selected) void selectFile(selected); e.target.value = ''; }} /><Button type="button" size="icon" variant="ghost" aria-label="添加 Excel 文件" title="上传 Excel 文件" onClick={() => fileInput.current?.click()}><Paperclip className="size-4" /></Button></>}
+        <input ref={imageInput} type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" aria-label="添加图片提问" onChange={e => { const selected = e.target.files?.[0]; if (selected) selectImage(selected); e.target.value = ''; }} />
+        <Button type="button" size="icon" variant="ghost" aria-label="添加图片提问" title="添加图片提问" disabled={busy || importBusy} onClick={() => imageInput.current?.click()}><ImageIcon className="size-4" /></Button>
         <Input ref={input} aria-label="向小水滴提问" maxLength={2000} value={question} onChange={e => setQuestion(e.target.value)} disabled={busy || importBusy} placeholder="问问小水滴，或继续追问…" className="min-w-0 flex-1 rounded-xl" />
-        <Button type="submit" aria-label="发送问题" className="shrink-0 rounded-xl bg-teal-700 hover:bg-teal-800" disabled={busy || importBusy || !question.trim()}><Send className="size-4" /><span className="hidden sm:inline">发送</span></Button>
+        <Button type="submit" aria-label="发送问题" className="shrink-0 rounded-xl bg-teal-700 hover:bg-teal-800" disabled={busy || importBusy || (!question.trim() && !imageFile)}><Send className="size-4" /><span className="hidden sm:inline">发送</span></Button>
       </form>
-      <div className="mt-2 flex items-center justify-between gap-2 text-xs text-slate-500"><span>{canImport ? '支持拖入 Excel · 先预检再录入' : '仅分析所属园区数据'}</span>{!!messages.length && <Button size="sm" variant="ghost" className="h-auto px-1 py-0 text-xs" disabled={busy} onClick={() => { setMessages([]); setError(''); }}>清空对话</Button>}</div>
+      <div className="mt-2 flex items-center justify-between gap-2 text-xs text-slate-500"><span>{canImport ? '可拖入图片或 Excel · Excel 先预检再录入' : '可拖入或粘贴图片提问 · 仅分析所属园区数据'}</span>{!!messages.length && <Button size="sm" variant="ghost" className="h-auto px-1 py-0 text-xs" disabled={busy} onClick={() => { setMessages([]); setError(''); }}>清空对话</Button>}</div>
     </div>
-    {dragging && <div className="pointer-events-none absolute inset-3 z-10 flex items-center justify-center rounded-2xl border-2 border-dashed border-teal-500 bg-teal-50/95 text-sm font-medium text-teal-800">{canImport ? '松开以添加 Excel 文件' : '当前账号暂不支持数据录入'}</div>}
+    {dragging && <div className="pointer-events-none absolute inset-3 z-10 flex items-center justify-center rounded-2xl border-2 border-dashed border-teal-500 bg-teal-50/95 text-sm font-medium text-teal-800">{canImport ? '松开以添加图片或 Excel 文件' : '松开以添加图片'}</div>}
   </div>;
 }
