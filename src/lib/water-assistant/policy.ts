@@ -1,3 +1,5 @@
+import { wantsChartDownload } from './chart-export';
+
 export type EvidenceTool = 'analyze_water' | 'compare_history' | 'inspect_monitoring_context' | 'inspect_record_evidence';
 
 /** Require every clearly requested data source; the model may add other tools to its plan. */
@@ -6,7 +8,9 @@ export function requiredEvidenceTools(question: string): EvidenceTool[] {
   const isDefinition = /(什么是|是什么意思|定义|如何计算|计算公式|算法原理)/.test(q) &&
     !/(本企业|我的|我们|所属园区|近[0-9一二三四五六七八九十]+天|最近|今天|历史(?:数据|记录|时期)|20\d\d-\d\d-\d\d)/.test(q);
   const required: EvidenceTool[] = [];
-  const history = !isDefinition && /(以前|过去|历史|对比|变化|波动|稳定|升高|下降|趋势|cdc|skew|\bav\b|\bad\b|\bcv\b)/i.test(q);
+  const download = wantsChartDownload(q);
+  const explicitComparison = /(以前|历史|同期|相比|对比|比较|cdc|skew|\bav\b|\bad\b|\bcv\b)/i.test(q);
+  const history = !isDefinition && (!download || explicitComparison) && /(以前|过去|历史|对比|变化|波动|稳定|升高|下降|趋势|cdc|skew|\bav\b|\bad\b|\bcv\b)/i.test(q);
   if (history) required.push('compare_history');
   if (/(原始记录|记录(?:编号|id)|这条记录|核对记录)/i.test(q) || /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(q)) required.push('inspect_record_evidence');
   const entity = /(我(?:的|们)|本企业|所属园区|园区|[\u3400-\u9fff]{2,}企业)/.test(q);
@@ -17,7 +21,7 @@ export function requiredEvidenceTools(question: string): EvidenceTool[] {
   if (context) required.push('inspect_monitoring_context');
   const monitoring = (period && /(水质|监测|排污|污染物|数据|记录|异常|超阈值)/.test(q)) ||
     (entity && /(监测记录|排污情况|异常数据|超阈值|超上限)/.test(q));
-  if (monitoring && !history && !isDefinition) required.push('analyze_water');
+  if ((monitoring || download) && !history && !isDefinition) required.push('analyze_water');
   return required;
 }
 
