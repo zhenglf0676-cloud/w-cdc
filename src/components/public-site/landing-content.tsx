@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { ArrowDown, ArrowRight, ArrowUpRight } from 'lucide-react';
 import { PublicFooter, PublicHeader } from './chrome';
 import '@/app/landing.css';
@@ -10,26 +11,29 @@ import '@/app/landing-cinema.css';
 
 const abilities = [
   {
-    number: '01', eyebrow: '每一条记录，都有来处', title: ['看见', '每一个排污口。'],
+    number: '01', eyebrow: '第一条线索 · 找到位置', title: ['看见', '每一个排污口。'],
     description: '从企业到排污口，再到污染物与监测时间。先找到数据的位置，才谈得上理解变化。',
-    image: '/landing/river.webp', alt: '森林与水流的航拍自然景观',
+    next: '有了位置，下一步让新的监测记录进入。', image: '/landing/river.webp',
   },
   {
-    number: '02', eyebrow: '让时间参与判断', title: ['读懂', '长期的变化。'],
-    description: '把今天的读数放进历史里，结合波动指标与 CDC 分析，观察偏离、持续与反弹。',
-    image: '/landing/karst.webp', alt: '喀斯特山地与河流的自然景观',
-  },
-  {
-    number: '03', eyebrow: '从原始表格走向可追溯记录', title: ['让数据', '进入分析。'],
+    number: '02', eyebrow: '第二条线索 · 接入读数', title: ['让数据', '进入分析。'],
     description: 'Excel 拖入后先预检，再按企业、排污口、污染物和日期录入。异常读数有据可查。',
-    image: '/landing/lake.webp', alt: '山谷与湖泊的航拍自然景观',
+    next: '读数来到平台，需要回到历史中判断。', image: '/landing/lake.webp',
   },
   {
-    number: '04', eyebrow: '让问题有数据，也有依据', title: ['与小水滴', '一起求证。'],
+    number: '03', eyebrow: '第三条线索 · 拉长时间', title: ['读懂', '长期的变化。'],
+    description: '把今天的读数放进历史里，结合波动指标与 CDC 分析，观察偏离、持续与反弹。',
+    next: '发现变化之后，还要继续追问依据。', image: '/landing/karst.webp',
+  },
+  {
+    number: '04', eyebrow: '第四条线索 · 查验证据', title: ['与小水滴', '一起求证。'],
     description: '在授权范围内结合监测记录、历史对比与资料库追问原因，查看分析过程和报告。',
-    image: '/landing/hero.webp', alt: '薄雾中的山间湖泊与水边人物',
+    next: '从屏幕走向现实，看看治理如何回应。', image: '/landing/hero.webp',
   },
 ];
+
+const scenePhotos = ['/landing/hero.webp', '/landing/river.webp', '/landing/lake.webp', ...abilities.map((ability) => ability.image), '/landing/desert.webp'];
+const WaterWorld3D = dynamic(() => import('./water-world-3d').then((module) => module.WaterWorld3D), { ssr: false });
 
 function useLandingMotion() {
   const [active, setActive] = useState(0);
@@ -78,14 +82,21 @@ function useLandingMotion() {
   return active;
 }
 
-function Landscape({ src, alt, priority = false }: { src: string; alt: string; priority?: boolean }) {
+function LandscapeJourney({ active }: { active: number }) {
   return (
-    <>
-      <div className="landing-scene-photo"><Image src={src} alt={alt} fill priority={priority} loading={priority ? undefined : 'eager'} sizes="100vw" className="object-cover" /></div>
+    <div className="landing-unified-scene" aria-hidden="true">
+      <div className="landing-scene-gallery">
+        {scenePhotos.map((src, index) => (
+          <div key={index} className="landing-scene-photo" data-visible={active === index}>
+            <Image src={src} alt="" fill priority={index === 0} loading={index === 0 ? undefined : 'eager'} sizes="100vw" className="object-cover" />
+          </div>
+        ))}
+      </div>
+      <WaterWorld3D />
       <div className="landing-scene-haze" aria-hidden="true" />
       <div className="landing-scene-shade" aria-hidden="true" />
       <div className="landing-horizon" aria-hidden="true"><span className="landing-horizon-outer" /><span className="landing-horizon-middle" /><span className="landing-horizon-inner" /></div>
-    </>
+    </div>
   );
 }
 
@@ -94,6 +105,7 @@ export function LandingContent() {
   return (
     <div className="public-site landing-world">
       <PublicHeader />
+      <LandscapeJourney active={active} />
       <nav className="landing-chapter-rail" aria-label="页面章节">
         <span className="landing-rail-name">W·CDC / WATER INTELLIGENCE</span>
         <div>
@@ -107,12 +119,11 @@ export function LandingContent() {
       <main>
         <section id="landing-top" className="landing-cinema-stage landing-opening" data-landing-stage aria-labelledby="hero-title">
           <div className="landing-cinema-viewport">
-            <Landscape src="/landing/hero.webp" alt="薄雾中的高山与湖水，一名游客站在水边" priority />
             <div className="landing-cinema-frame landing-opening-frame">
               <p className="landing-scene-eyebrow landing-enter">W·CDC / WATER INTELLIGENCE</p>
               <h1 id="hero-title" className="landing-cinema-title landing-enter landing-enter-late"><span>看见水的</span><span>变化。</span></h1>
               <div className="landing-opening-bottom landing-enter landing-enter-later">
-                <p>让监测数据、历史变化与专业依据，<br />成为保护水环境的线索。</p>
+                <p>一条读数从哪里来？<br />沿着水的线索，向下寻找答案。</p>
                 <Link href="/login" className="landing-text-link">进入平台 <ArrowUpRight size={20} aria-hidden="true" /></Link>
               </div>
             </div>
@@ -123,7 +134,6 @@ export function LandingContent() {
 
         <section id="platform" className="landing-cinema-stage landing-platform" data-landing-stage aria-labelledby="platform-title">
           <div className="landing-cinema-viewport">
-            <Landscape src="/landing/river.webp" alt="森林与清澈水流交汇的航拍自然景观" />
             <div className="landing-cinema-frame landing-platform-frame">
               <div className="landing-platform-heading">
                 <p className="landing-scene-eyebrow landing-enter">01 / WHO WE ARE · 平台介绍</p>
@@ -131,7 +141,7 @@ export function LandingContent() {
               </div>
               <div className="landing-platform-aside landing-enter landing-enter-later">
                 <span>FROM DATA TO UNDERSTANDING</span>
-                <p>W·CDC 将工业园区的企业、排污口、污染物和历史记录连接起来。让分散的数据回到时间和位置之中，再追问异常从何而来。</p>
+                <p>W·CDC 把工业园区的企业、排污口、污染物和历史记录连成一条线。从一条读数出发，先找到它的位置，再沿时间追问它的变化。</p>
                 <small>平台分析基于排污口监测记录；治理案例为独立的公众展示内容。</small>
               </div>
             </div>
@@ -141,11 +151,10 @@ export function LandingContent() {
 
         <section id="capabilities" className="landing-cinema-stage landing-capability-intro" data-landing-stage aria-labelledby="capabilities-title">
           <div className="landing-cinema-viewport">
-            <Landscape src="/landing/lake.webp" alt="蓝绿色山间湖泊的航拍自然景观" />
             <div className="landing-cinema-frame landing-intro-frame">
               <p className="landing-scene-eyebrow landing-enter">02 / WHAT WE DO · 核心能力</p>
               <h2 id="capabilities-title" className="landing-cinema-title landing-enter landing-enter-late"><span>从一条记录，</span><span>走向清楚的判断。</span></h2>
-              <p className="landing-intro-caption landing-enter landing-enter-later">数据进入、历史对比、证据核查。四个连续的步骤，理解水环境的变化。</p>
+              <p className="landing-intro-caption landing-enter landing-enter-later">找到位置，接入读数，拉长时间，再查验证据。沿同一条线索走下去。</p>
             </div>
             <span className="landing-cinema-photo-note">自然摄影 · 主题意象</span>
           </div>
@@ -154,13 +163,12 @@ export function LandingContent() {
         {abilities.map((ability) => (
           <section key={ability.number} id={'ability-' + ability.number} className="landing-cinema-stage landing-ability" data-landing-stage aria-labelledby={'ability-title-' + ability.number}>
             <div className="landing-cinema-viewport">
-              <Landscape src={ability.image} alt={ability.alt} />
               <div className="landing-cinema-frame landing-ability-frame">
                 <div className="landing-ability-heading">
                   <p className="landing-scene-eyebrow landing-enter">{ability.number} / 04 · {ability.eyebrow}</p>
                   <h3 id={'ability-title-' + ability.number} className="landing-cinema-title landing-enter landing-enter-late">{ability.title.map((line) => <span key={line}>{line}</span>)}</h3>
                 </div>
-                <div className="landing-ability-bottom landing-enter landing-enter-later"><strong>{ability.number}</strong><p>{ability.description}</p></div>
+                <div className="landing-ability-bottom landing-enter landing-enter-later"><strong>{ability.number}</strong><div><p>{ability.description}</p><small>{ability.next} <ArrowRight size={15} aria-hidden="true" /></small></div></div>
               </div>
               <span className="landing-cinema-photo-note">自然摄影 · 主题意象</span>
             </div>
@@ -169,7 +177,6 @@ export function LandingContent() {
 
         <section id="landing-stories" className="landing-cinema-stage landing-story-portal" data-landing-stage aria-labelledby="stories-teaser-title">
           <div className="landing-cinema-viewport">
-            <Landscape src="/landing/desert.webp" alt="晨光下的沙漠沙丘自然景观，非治理案例现场" />
             <div className="landing-cinema-frame landing-story-frame">
               <p className="landing-scene-eyebrow landing-enter">03 / NEWS & STORIES · 治理案例</p>
               <h2 id="stories-teaser-title" className="landing-cinema-title landing-enter landing-enter-late"><span>看不见的地下水，</span><span>值得被看见。</span></h2>

@@ -1,5 +1,38 @@
 .landing-world {
+  position: relative;
   background: #10282c;
+}
+
+.landing-world main,
+.landing-world .public-footer {
+  position: relative;
+  z-index: 1;
+}
+
+.landing-unified-scene {
+  position: fixed;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: #16343a;
+}
+
+.landing-scene-gallery,
+.landing-3d-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.landing-scene-gallery {
+  z-index: 0;
+}
+
+.landing-3d-canvas {
+  z-index: 1;
+  display: block;
 }
 
 .landing-world .public-header {
@@ -13,7 +46,7 @@
   position: relative;
   min-height: 162svh;
   color: #fff;
-  background: #132f33;
+  background: transparent;
 
   --scene-shift: 0vh;
   --scene-zoom: 1.14;
@@ -36,25 +69,22 @@
 
 .landing-scene-photo {
   position: absolute;
-  z-index: -4;
-  inset: -9%;
-  transform: perspective(1200px) translate3d(var(--scene-pan), var(--scene-shift), 0) rotateY(var(--scene-tilt)) scale(var(--scene-zoom));
+  inset: -4%;
+  opacity: 0;
+  transform: scale(1.08);
   transform-origin: center;
-  will-change: transform;
+  transition: opacity 1400ms ease, transform 3200ms ease;
+  will-change: opacity, transform;
 }
 
-.landing-scene-photo img {
-  object-position: center;
-}
-
-.landing-opening .landing-scene-photo img,
-.landing-ability:has(#ability-title-04) .landing-scene-photo img {
-  object-position: 56% center;
+.landing-scene-photo[data-visible="true"] {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .landing-scene-haze {
   position: absolute;
-  z-index: -3;
+  z-index: 2;
   inset: -8%;
   pointer-events: none;
   background: radial-gradient(ellipse at 74% 49%, rgb(197 229 218 / 22%), transparent 44%),
@@ -65,31 +95,16 @@
 
 .landing-scene-shade {
   position: absolute;
-  z-index: -2;
+  z-index: 3;
   inset: 0;
   pointer-events: none;
   background: linear-gradient(90deg, rgb(5 29 32 / 80%) 0%, rgb(7 35 38 / 49%) 57%, rgb(7 35 38 / 19%) 100%),
     linear-gradient(0deg, rgb(5 28 31 / 70%), transparent 46%);
 }
 
-.landing-platform .landing-scene-shade {
-  background: linear-gradient(90deg, rgb(4 35 36 / 76%), rgb(4 35 36 / 30%) 78%),
-    linear-gradient(0deg, rgb(4 31 34 / 70%), transparent 55%);
-}
-
-.landing-capability-intro .landing-scene-shade {
-  background: linear-gradient(90deg, rgb(6 29 34 / 77%), rgb(6 29 34 / 28%) 85%),
-    linear-gradient(0deg, rgb(4 24 29 / 62%), transparent 50%);
-}
-
-.landing-story-portal .landing-scene-shade {
-  background: linear-gradient(90deg, rgb(26 31 32 / 70%), rgb(26 31 32 / 19%) 90%),
-    linear-gradient(0deg, rgb(20 24 27 / 74%), transparent 50%);
-}
-
 .landing-horizon {
   position: absolute;
-  z-index: -1;
+  z-index: 4;
   right: -8vw;
   bottom: -41vh;
   width: min(91vw, 1230px);
@@ -332,6 +347,16 @@
   line-height: 1.7;
 }
 
+.landing-ability-bottom small {
+  display: flex;
+  align-items: center;
+  margin-top: 18px;
+  gap: 12px;
+  color: #c7e7dc;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
 .landing-story-frame {
   justify-content: center;
 }
@@ -517,6 +542,7 @@
   .landing-scene-photo,
   .landing-scene-haze,
   .landing-horizon { transform: none; }
+  .landing-3d-canvas { display: none; }
   .landing-cinema-stage[data-active="false"] .landing-enter {
     opacity: 1;
     transform: none;
