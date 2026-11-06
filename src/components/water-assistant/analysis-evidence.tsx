@@ -1,13 +1,24 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { analysisEvidenceSchema, analysisChartOption } from '@/lib/water-assistant/chart-evidence';
+import { z } from 'zod';
 
 const ReactECharts = dynamic(() => import('echarts-for-react'), { ssr: false });
+const palette = ['#0ea5e9', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#6366f1'];
+const summary = z.object({
+  outlet: z.string().optional(), pollutant: z.string(), unit: z.string().nullable(),
+  count: z.number(), exceedances: z.number(), missingThreshold: z.number(), unassessable: z.number().optional(),
+  approvedName: z.string().nullable().optional(), currentThreshold: z.number().nullable().optional(),
+  recordThresholds: z.array(z.number().nullable()).optional(), thresholdChanged: z.boolean().optional(),
+  approvalStatus: z.string().optional(),
+  daily: z.array(z.object({ date: z.string(), mean: z.number(), count: z.number(), exceedances: z.number() })),
+});
+const result = z.object({ company: z.string(), approvedOutlets: z.array(z.object({ id: z.string(), name: z.string() })).optional(), summaries: z.array(summary) });
+const evidenceSchema = z.object({ startDate: z.string(), endDate: z.string(), results: z.array(result) });
 
 export function AnalysisEvidence({ evidence, admin }: { evidence?: unknown[]; admin: boolean }) {
   const analyses = (evidence ?? []).flatMap(item => {
-    const parsed = analysisEvidenceSchema.safeParse(item);
+    const parsed = evidenceSchema.safeParse(item);
     return parsed.success ? [parsed.data] : [];
   });
   if (!analyses.length) return null;
@@ -43,7 +54,20 @@ export function AnalysisEvidence({ evidence, admin }: { evidence?: unknown[]; ad
               </div>)}</div>
               {selected.length > visible.length && <p className="mt-2 text-slate-500">这里只显示前 {visible.length} 项，其他结果见下方证据。</p>}
             </div>;
-            const option = analysisChartOption(visible, dates, unit);
+            const option = {
+              color: palette,
+              tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+              legend: { type: 'scroll', bottom: 0, textStyle: { fontSize: 10 } },
+              grid: { left: '3%', right: '5%', top: '7%', bottom: 48, containLabel: true },
+              xAxis: { type: 'category', boundaryGap: false, data: dates.map(date => date.slice(5)) },
+              yAxis: { type: 'value', name: unit === '未标单位' ? '数值' : unit, nameTextStyle: { fontSize: 10 } },
+              series: visible.map((row, i) => ({
+                name: `${row.company} · ${row.outlet ?? '排污口'} · ${row.pollutant}`,
+                type: 'line', smooth: true, symbol: 'circle', symbolSize: 5,
+                lineStyle: { width: 2 }, itemStyle: { color: palette[i % palette.length] },
+                data: dates.map(date => row.daily.find(day => day.date === date)?.mean ?? null),
+              })),
+            };
             return <div key={unit} className="rounded-xl border border-slate-200 bg-white p-2">
               <p className="px-1 text-xs font-medium text-slate-700">按日均值 · {unit}</p>
               <ReactECharts option={option} style={{ height: 240 }} notMerge lazyUpdate />

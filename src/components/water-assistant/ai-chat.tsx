@@ -6,9 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AnalysisEvidence } from './analysis-evidence';
 import { HistoryEvidence } from './history-evidence';
-import { ChartDownloads } from './chart-downloads';
-import { chartsFromEvidence } from '@/lib/water-assistant/chart-evidence';
-import { reusesPreviousChart, wantsChartDownload } from '@/lib/water-assistant/chart-export';
 import { ToolEvidence } from './tool-evidence';
 import { AnswerContent } from './answer-content';
 import type { KnowledgeSource } from '@/lib/water-assistant/knowledge';
@@ -17,7 +14,7 @@ import { readAssistantStream, type AssistantResult, type ProgressStep } from '@/
 import type { AgentPlan } from '@/lib/water-assistant/workflow';
 
 const MAX_ASSISTANT_IMAGE_BYTES = 2 * 1024 * 1024;
-type Message = { role: 'user' | 'assistant'; content: string; imageName?: string; imageObservation?: string; downloadEvidence?: unknown[]; evidence?: unknown[]; sources?: KnowledgeSource[]; toolTrace?: unknown; progress?: ProgressStep[]; plan?: AgentPlan; outcome?: AssistantResult['outcome'] };
+type Message = { role: 'user' | 'assistant'; content: string; imageName?: string; imageObservation?: string; evidence?: unknown[]; sources?: KnowledgeSource[]; toolTrace?: unknown; progress?: ProgressStep[]; plan?: AgentPlan; outcome?: AssistantResult['outcome'] };
 type ImportPreview = { success: boolean; count: number; errorCount: number; errors: string[]; warnings: string[]; approvedOutlets: string[]; approvedPollutants: string[]; sample: { outlet: string; time: string; pollutant: string; value: number; unit: string; threshold: number }[] };
 
 function ProgressList({ steps }: { steps: ProgressStep[] }) {
@@ -149,19 +146,6 @@ export function AiChat({ userId, scope, canImport }: { userId: string; scope: st
   }
   async function send() {
     if (busy || importBusy || (!question.trim() && !imageFile)) return;
-    // A plain follow-up exports the already-authorized snapshot, not a fresh default date range.
-    if (!imageFile && reusesPreviousChart(question)) {
-      const previous = messages.findLast(message => message.role === 'assistant' && (message.evidence || message.downloadEvidence));
-      const snapshot = previous?.evidence ?? previous?.downloadEvidence ?? [];
-      const available = chartsFromEvidence(snapshot).length > 0;
-      setMessages([...messages, { role: 'user', content: question.trim() }, {
-        role: 'assistant',
-        content: available ? '【结论】已为上一轮分析图表提供下载入口，点击下方“下载 PNG”即可保存。\n【提醒】沿用上一轮的数据快照，日期和统计口径见图片；未重新查询或更新数据。' : '【结论】上一轮没有可下载的监测图表。\n【提醒】请先指定有监测记录的日期进行分析，再要求导出图表。',
-        ...(available ? { downloadEvidence: snapshot } : {}),
-      }]);
-      setQuestion(''); setError('');
-      return;
-    }
     const controller = new AbortController(); pending.current = controller;
     const next: Message[] = [...messages, { role: 'user', content: question.trim() || '请描述图片中的内容，并说明能确认什么、不能确认什么。', imageName: imageFile?.name }];
     progressRef.current = [{ id: 'auth', label: '验证登录与访问权限', state: 'running' }];
@@ -183,7 +167,7 @@ export function AiChat({ userId, scope, canImport }: { userId: string; scope: st
       const data: AssistantResult = streamed
         ? await readAssistantStream(response, onProgress, controller.signal, onPlan) : await response.json();
       if (controller.signal.aborted) return;
-      setMessages([...next, { role: 'assistant', content: data.answer, downloadEvidence: !imageFile && wantsChartDownload(question) ? data.evidence : undefined, imageObservation: data.imageObservation, evidence: data.evidence, sources: data.sources, toolTrace: data.toolTrace, progress: streamed ? progressRef.current : [], plan: data.plan ?? planRef.current ?? undefined, outcome: data.outcome }]); setQuestion(''); setImageFile(null);
+      setMessages([...next, { role: 'assistant', content: data.answer, imageObservation: data.imageObservation, evidence: data.evidence, sources: data.sources, toolTrace: data.toolTrace, progress: streamed ? progressRef.current : [], plan: data.plan ?? planRef.current ?? undefined, outcome: data.outcome }]); setQuestion(''); setImageFile(null);
     } catch (e) { if (!controller.signal.aborted) { setLoginRequired(e instanceof AssistantSessionError); setError(e instanceof Error ? e.message : '网络异常，请重试'); } }
     finally { if (pending.current === controller) { setBusy(false); setProgress([]); progressRef.current = []; setPlan(null); planRef.current = null; pending.current = null; } }
   }
@@ -212,7 +196,6 @@ export function AiChat({ userId, scope, canImport }: { userId: string; scope: st
           {m.role === 'assistant' && (!!m.progress?.length || !!m.plan) && <details className="mt-3 rounded-xl border border-teal-100 bg-white px-3 py-2 text-xs"><summary className="cursor-pointer font-medium text-teal-800">查看本次任务计划与分析过程</summary>{m.plan && <PlanList plan={m.plan} progress={m.progress ?? []} finished outcome={m.outcome} />}{!!m.progress?.length && <ProgressList steps={m.progress} />}</details>}
           <AnalysisEvidence evidence={m.evidence} admin={scope === '所属园区'} />
           <HistoryEvidence evidence={m.evidence} />
-          {m.downloadEvidence && <ChartDownloads evidence={m.downloadEvidence} />}
           <ToolEvidence evidence={m.evidence} trace={m.toolTrace} />
           {!!m.sources?.length && <div className="mt-3 space-y-2 border-t border-teal-100 pt-3" aria-label="参考资料"><p className="text-xs font-medium text-teal-800">资料依据</p>{m.sources.map((source, sourceIndex) => <details key={source.id} className="rounded-lg border border-slate-200 bg-white p-2 text-xs"><summary className="cursor-pointer text-slate-700"><span className="font-semibold text-teal-800">[{source.citation ?? `资料${sourceIndex + 1}`}]</span> {source.title} · {source.section}</summary><p className="mt-2 whitespace-pre-wrap text-slate-600">{source.excerpt}</p><p className="mt-1 text-slate-500">{source.version}</p>{source.url && <a href={source.url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-teal-700 underline">查看来源</a>}{source.hasFile && <button type="button" onClick={() => void downloadKnowledge(source)} className="ml-3 mt-1 text-teal-700 underline">下载资料原件</button>}</details>)}</div>}
         </div>
