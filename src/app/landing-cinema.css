@@ -17,6 +17,8 @@
 
   --scene-shift: 0vh;
   --scene-zoom: 1.14;
+  --scene-pan: 0vw;
+  --scene-tilt: 0deg;
   --horizon-shift: 0vh;
 }
 
@@ -36,7 +38,7 @@
   position: absolute;
   z-index: -4;
   inset: -9%;
-  transform: translate3d(0, var(--scene-shift), 0) scale(var(--scene-zoom));
+  transform: perspective(1200px) translate3d(var(--scene-pan), var(--scene-shift), 0) rotateY(var(--scene-tilt)) scale(var(--scene-zoom));
   transform-origin: center;
   will-change: transform;
 }

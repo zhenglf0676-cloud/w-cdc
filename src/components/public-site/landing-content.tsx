@@ -51,6 +51,8 @@ function useLandingMotion() {
           stage.style.setProperty('--scene-progress', progress.toFixed(3));
           stage.style.setProperty('--scene-shift', (progress * -7).toFixed(2) + 'vh');
           stage.style.setProperty('--scene-zoom', (1.14 - progress * 0.09).toFixed(3));
+          stage.style.setProperty('--scene-pan', (4 - progress * 8).toFixed(2) + 'vw');
+          stage.style.setProperty('--scene-tilt', (2 - progress * 4).toFixed(2) + 'deg');
           stage.style.setProperty('--horizon-shift', (progress * 11 - 5).toFixed(2) + 'vh');
         }
       });
@@ -79,7 +81,7 @@ function useLandingMotion() {
 function Landscape({ src, alt, priority = false }: { src: string; alt: string; priority?: boolean }) {
   return (
     <>
-      <div className="landing-scene-photo"><Image src={src} alt={alt} fill priority={priority} sizes="100vw" className="object-cover" /></div>
+      <div className="landing-scene-photo"><Image src={src} alt={alt} fill priority={priority} loading={priority ? undefined : 'eager'} sizes="100vw" className="object-cover" /></div>
       <div className="landing-scene-haze" aria-hidden="true" />
       <div className="landing-scene-shade" aria-hidden="true" />
       <div className="landing-horizon" aria-hidden="true"><span className="landing-horizon-outer" /><span className="landing-horizon-middle" /><span className="landing-horizon-inner" /></div>
