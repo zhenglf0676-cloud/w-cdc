@@ -2,38 +2,17 @@
 
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
-import { z } from 'zod';
+import { historyEvidenceSchema, historyChartOption, type HistoryMetricData } from '@/lib/water-assistant/chart-evidence';
 
 const ReactECharts = dynamic(() => import('echarts-for-react'), { ssr: false });
-const stats = z.object({ av: z.number(), ad: z.number(), cv: z.number(), skew: z.number() }).nullable();
-const points = z.array(z.object({ date: z.string(), value: z.number() }));
-const metric = z.object({
-  pollutant: z.string(), label: z.string(), unit: z.string(), comparable: z.boolean(), note: z.string().nullable(),
-  current: z.object({ stats, cdc: z.number().nullable(), records: z.number(), exceedances: z.number(), positiveDays: z.number() }),
-  previous: z.object({ stats, cdc: z.number().nullable(), records: z.number() }),
-  normalReference: z.object({ days: z.number(), excludedDays: z.number(), stats, daily: points }),
-  currentDaily: points,
-  change: z.object({ av: z.number(), ad: z.number(), cv: z.number(), skew: z.number(), avPercent: z.number().nullable() }).nullable(),
-  outletWarnings: z.array(z.object({ name: z.string(), count: z.number() })),
-});
-const history = z.object({
-  comparison: z.literal(true), current: z.object({ startDate: z.string(), endDate: z.string() }),
-  baseline: z.object({ startDate: z.string(), endDate: z.string() }), totalCompanies: z.number(), note: z.string(),
-  results: z.array(z.object({ company: z.string(), currentCDC: z.number().nullable(), previousCDC: z.number().nullable(), currentRecords: z.number(), previousRecords: z.number(), currentExceedances: z.number(), previousExceedances: z.number(), pollutants: z.array(metric) })),
-});
+
 const fmt = (value: number | null | undefined) => value === null || value === undefined ? '—' : Number(value.toFixed(3)).toString();
-type Metric = z.infer<typeof metric>;
+type Metric = HistoryMetricData;
 
 function HistoryMetric({ item, initiallyOpen }: { item: Metric; initiallyOpen: boolean }) {
   const [expanded, setExpanded] = useState(initiallyOpen);
   const days = [...new Set([...item.normalReference.daily, ...item.currentDaily].map(point => point.date))].sort();
-  const option = { color: ['#0ea5e9', '#f59e0b'], tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
-    legend: { bottom: 0, textStyle: { fontSize: 10 } }, grid: { left: '3%', right: '5%', top: '7%', bottom: 38, containLabel: true },
-    xAxis: { type: 'category', data: days.map(day => day.slice(5)), boundaryGap: false }, yAxis: { type: 'value', name: item.unit },
-    series: [
-      { name: '历史参考日汇总', type: 'line', smooth: true, symbolSize: 5, data: days.map(day => item.normalReference.daily.find(p => p.date === day)?.value ?? null) },
-      { name: '当前日汇总', type: 'line', smooth: true, symbolSize: 5, data: days.map(day => item.currentDaily.find(p => p.date === day)?.value ?? null) },
-    ] };
+  const option = historyChartOption(item, days);
   return <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
     <button type="button" className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-3 py-2.5 text-left hover:bg-teal-50/50 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-teal-600" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>
       <span className="text-sm font-bold text-slate-900">{item.label} <span className="text-xs font-normal text-slate-500">· {item.unit}</span></span>
@@ -54,7 +33,7 @@ function HistoryMetric({ item, initiallyOpen }: { item: Metric; initiallyOpen: b
 }
 
 export function HistoryEvidence({ evidence }: { evidence?: unknown[] }) {
-  const reports = (evidence ?? []).flatMap(item => { const parsed = history.safeParse(item); return parsed.success ? [parsed.data] : []; });
+  const reports = (evidence ?? []).flatMap(item => { const parsed = historyEvidenceSchema.safeParse(item); return parsed.success ? [parsed.data] : []; });
   if (!reports.length) return null;
   return <div className="mt-3 space-y-3 border-t border-teal-100 pt-3" aria-label="历史正常参考与当前期对比">
     {reports.map((report, i) => <section key={i} className="space-y-3">
