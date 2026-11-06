@@ -64,7 +64,7 @@ const stories: Story[] = [
     lesson: '发现异常只是起点，溯源需要证据。',
     source: '生态环境部 · 四川首例跨省环保民事公益诉讼案报道',
     url: 'https://www.mee.gov.cn/ywdt/dfnews/202008/t20200824_794840.shtml',
-    image: '/landing/hero.webp', imageAlt: '山间湖泊的自然摄影，非玉壶井案例现场照片',
+    image: '/landing/karst.webp', imageAlt: '喀斯特山地与河流的自然摄影，非玉壶井案例现场照片',
   },
 ];
 
@@ -160,7 +160,7 @@ export function StoriesExperience() {
       <main>
         <section className="story-stage story-prologue" data-story-stage aria-labelledby="stories-title">
           <div className="story-sticky">
-            <div className="story-photo"><Image src="/landing/river.webp" alt="森林和水流的航拍自然景观" fill priority sizes="100vw" className="object-cover" /></div>
+            <div className="story-photo"><Image src="/landing/hero.webp" alt="薄雾中的山间湖泊与水边人物" fill priority sizes="100vw" className="object-cover" /></div>
             <div className="story-gradient story-gradient-prologue" aria-hidden="true" />
             <WaterOrbit />
             <div className="story-frame">
