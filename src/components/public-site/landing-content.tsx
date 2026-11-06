@@ -1,59 +1,187 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { ArrowDown, ArrowRight, ArrowUpRight, BarChart3, FileSpreadsheet, MapPinned, Sparkles } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowUpRight } from 'lucide-react';
 import { PublicFooter, PublicHeader } from './chrome';
 import '@/app/landing.css';
+import '@/app/landing-cinema.css';
 
-const capabilities = [
-  { number: '01', icon: MapPinned, title: '看见每一个排污口', description: '把企业、排污口与监测记录放在同一张图上，追踪数据来自哪里。' },
-  { number: '02', icon: BarChart3, title: '读懂长期的变化', description: '结合历史正常参考、波动指标与 CDC 分析，辨别值得关注的变化。' },
-  { number: '03', icon: FileSpreadsheet, title: '让数据进入分析', description: '上传 Excel 后先预检，再按企业、排污口、污染物与日期录入监测数据。' },
-  { number: '04', icon: Sparkles, title: '与小水滴一起求证', description: '结合授权数据与资料依据问答，查看分析过程、图表与报告。' },
+const abilities = [
+  {
+    number: '01', eyebrow: '每一条记录，都有来处', title: ['看见', '每一个排污口。'],
+    description: '从企业到排污口，再到污染物与监测时间。先找到数据的位置，才谈得上理解变化。',
+    image: '/landing/river.webp', alt: '森林与水流的航拍自然景观',
+  },
+  {
+    number: '02', eyebrow: '让时间参与判断', title: ['读懂', '长期的变化。'],
+    description: '把今天的读数放进历史里，结合波动指标与 CDC 分析，观察偏离、持续与反弹。',
+    image: '/landing/karst.webp', alt: '喀斯特山地与河流的自然景观',
+  },
+  {
+    number: '03', eyebrow: '从原始表格走向可追溯记录', title: ['让数据', '进入分析。'],
+    description: 'Excel 拖入后先预检，再按企业、排污口、污染物和日期录入。异常读数有据可查。',
+    image: '/landing/lake.webp', alt: '山谷与湖泊的航拍自然景观',
+  },
+  {
+    number: '04', eyebrow: '让问题有数据，也有依据', title: ['与小水滴', '一起求证。'],
+    description: '在授权范围内结合监测记录、历史对比与资料库追问原因，查看分析过程和报告。',
+    image: '/landing/hero.webp', alt: '薄雾中的山间湖泊与水边人物',
+  },
 ];
 
-export function LandingContent() {
+function useLandingMotion() {
+  const [active, setActive] = useState(0);
+  useEffect(() => {
+    const stages = Array.from(document.querySelectorAll<HTMLElement>('[data-landing-stage]'));
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let frame = 0;
+    let previous = -1;
+    const update = () => {
+      const viewport = window.innerHeight;
+      let nearest = 0;
+      let distance = Infinity;
+      stages.forEach((stage, index) => {
+        const rect = stage.getBoundingClientRect();
+        const value = Math.abs(rect.top + Math.min(rect.height, viewport) / 2 - viewport / 2);
+        if (value < distance) { distance = value; nearest = index; }
+        if (!reduced.matches) {
+          const progress = Math.max(0, Math.min(1, -rect.top / Math.max(1, rect.height - viewport)));
+          stage.style.setProperty('--scene-progress', progress.toFixed(3));
+          stage.style.setProperty('--scene-shift', (progress * -7).toFixed(2) + 'vh');
+          stage.style.setProperty('--scene-zoom', (1.14 - progress * 0.09).toFixed(3));
+          stage.style.setProperty('--horizon-shift', (progress * 11 - 5).toFixed(2) + 'vh');
+        }
+      });
+      stages.forEach((stage, index) => {
+        const value = index === nearest ? 'true' : 'false';
+        if (stage.dataset.active !== value) stage.dataset.active = value;
+      });
+      if (previous !== nearest) { previous = nearest; setActive(nearest); }
+      frame = 0;
+    };
+    const schedule = () => { if (!frame) frame = window.requestAnimationFrame(update); };
+    schedule();
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    reduced.addEventListener('change', schedule);
+    return () => {
+      window.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+      reduced.removeEventListener('change', schedule);
+      window.cancelAnimationFrame(frame);
+    };
+  }, []);
+  return active;
+}
+
+function Landscape({ src, alt, priority = false }: { src: string; alt: string; priority?: boolean }) {
   return (
-    <div className="public-site">
+    <>
+      <div className="landing-scene-photo"><Image src={src} alt={alt} fill priority={priority} sizes="100vw" className="object-cover" /></div>
+      <div className="landing-scene-haze" aria-hidden="true" />
+      <div className="landing-scene-shade" aria-hidden="true" />
+      <div className="landing-horizon" aria-hidden="true"><span className="landing-horizon-outer" /><span className="landing-horizon-middle" /><span className="landing-horizon-inner" /></div>
+    </>
+  );
+}
+
+export function LandingContent() {
+  const active = useLandingMotion();
+  return (
+    <div className="public-site landing-world">
       <PublicHeader />
+      <nav className="landing-chapter-rail" aria-label="页面章节">
+        <span className="landing-rail-name">W·CDC / WATER INTELLIGENCE</span>
+        <div>
+          <a href="#landing-top" aria-label="回到首页开场" aria-current={active === 0 ? 'location' : undefined}><i /></a>
+          <a href="#platform" aria-label="前往平台介绍" aria-current={active === 1 ? 'location' : undefined}><i /></a>
+          <a href="#capabilities" aria-label="前往核心能力" aria-current={active >= 2 && active <= 6 ? 'location' : undefined}><i /></a>
+          <a href="#landing-stories" aria-label="前往治理案例" aria-current={active === 7 ? 'location' : undefined}><i /></a>
+        </div>
+        <span>{String(Math.min(active + 1, 8)).padStart(2, '0')} / 08</span>
+      </nav>
       <main>
-        <section className="landing-hero relative isolate flex min-h-[760px] flex-col justify-end overflow-hidden pb-24 pt-36 text-white md:min-h-[92svh] md:pb-28" aria-labelledby="hero-title">
-          <Image src="/landing/hero.webp" alt="薄雾中的高山与湖水，一名游客站在水边" fill priority sizes="100vw" className="landing-hero-image object-cover object-center" />
-          <div className="landing-hero-shade absolute inset-0" aria-hidden="true" />
-          <div className="relative mx-auto w-full max-w-[1480px] px-6 md:px-12 lg:px-16">
-            <div className="landing-rise mb-7 flex items-center gap-3 text-[11px] font-semibold tracking-[0.3em] text-white/90 md:text-xs"><span className="h-px w-9 bg-white/75" /> WATER INTELLIGENCE / W·CDC</div>
-            <h1 id="hero-title" className="landing-rise landing-rise-delay max-w-[1050px] text-[clamp(3.6rem,9.2vw,9.5rem)] font-semibold leading-[1.05] tracking-[-0.075em]">看见水的<span className="landing-hero-outline">变化。</span></h1>
-            <div className="landing-rise landing-rise-later mt-8 flex max-w-3xl flex-col gap-8 md:mt-11 md:flex-row md:items-end md:justify-between">
-              <p className="max-w-md text-base leading-8 text-white/90 md:text-lg">从排污口监测记录到历史波动分析，让每一条数据成为理解水环境的线索。</p>
-              <Link href="/login" className="landing-pill inline-flex w-fit shrink-0 items-center gap-8 rounded-full bg-white px-6 py-4 text-sm font-semibold text-[#12333c] hover:bg-[#dff4ec] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white">进入平台 <ArrowUpRight size={18} aria-hidden="true" /></Link>
+        <section id="landing-top" className="landing-cinema-stage landing-opening" data-landing-stage aria-labelledby="hero-title">
+          <div className="landing-cinema-viewport">
+            <Landscape src="/landing/hero.webp" alt="薄雾中的高山与湖水，一名游客站在水边" priority />
+            <div className="landing-cinema-frame landing-opening-frame">
+              <p className="landing-scene-eyebrow landing-enter">W·CDC / WATER INTELLIGENCE</p>
+              <h1 id="hero-title" className="landing-cinema-title landing-enter landing-enter-late"><span>看见水的</span><span>变化。</span></h1>
+              <div className="landing-opening-bottom landing-enter landing-enter-later">
+                <p>让监测数据、历史变化与专业依据，<br />成为保护水环境的线索。</p>
+                <Link href="/login" className="landing-text-link">进入平台 <ArrowUpRight size={20} aria-hidden="true" /></Link>
+              </div>
             </div>
-          </div>
-          <div className="absolute bottom-7 left-6 hidden items-center gap-3 text-[11px] font-semibold tracking-[0.2em] text-white/80 md:left-12 md:flex lg:left-16"><ArrowDown size={15} aria-hidden="true" /> 向下探索</div>
-          <span className="absolute bottom-7 right-6 text-[10px] tracking-widest text-white/80 md:right-12 lg:right-16">自然摄影 · 主题意象</span>
-        </section>
-
-        <section id="platform" className="scroll-mt-20 bg-[#f4f5f0] px-6 py-24 text-[#153a3e] md:px-12 md:py-36 lg:px-16" aria-labelledby="platform-title">
-          <div className="mx-auto grid max-w-[1480px] gap-14 lg:grid-cols-[minmax(0,1fr)_minmax(330px,0.65fr)] lg:gap-24">
-            <div><p className="landing-kicker mb-9">01 / 平台介绍 <span>THE PLATFORM</span></p><h2 id="platform-title" className="max-w-4xl text-[clamp(2.7rem,5.6vw,6rem)] font-semibold leading-[1.22] tracking-[-0.065em]">水的变化不总是显而易见，<span className="text-[#6a8c84]">数据可以先一步发现。</span></h2></div>
-            <div className="flex flex-col justify-end gap-8 border-t border-[#a9b9ae] pt-8 lg:pt-0"><span className="text-[11px] font-semibold tracking-[0.24em] text-[#568476]">FROM DATA TO UNDERSTANDING</span><p className="max-w-xl text-lg leading-9 text-[#486467]">W·CDC 面向工业园区的排污口监测与水环境分析。它连接企业、排污口、污染物和历史记录，通过可视化、统计分析与小水滴智能问答，帮助使用者有依据地发现异常、追问原因。</p><p className="text-sm leading-7 text-[#688080]">平台记录对应排污口数据；地下水治理案例用于公众展示，不代表平台已监测案例地点。</p></div>
+            <a href="#platform" className="landing-cinema-next">向下，走进水的世界 <ArrowDown size={17} aria-hidden="true" /></a>
+            <span className="landing-cinema-photo-note">自然摄影 · 主题意象</span>
           </div>
         </section>
 
-        <section id="capabilities" className="scroll-mt-20 bg-[#12343b] px-6 py-24 text-white md:px-12 md:py-32 lg:px-16" aria-labelledby="capabilities-title">
-          <div className="mx-auto max-w-[1480px]">
-            <p className="landing-kicker landing-kicker-light mb-10">02 / 核心能力 <span>WHAT WE DO</span></p>
-            <div className="mb-16 flex flex-col gap-5 md:mb-20 md:flex-row md:items-end md:justify-between"><h2 id="capabilities-title" className="max-w-3xl text-[clamp(2.8rem,5.5vw,6rem)] font-semibold leading-[1.15] tracking-[-0.065em]">把复杂的监测，<br />变成清楚的判断。</h2><p className="max-w-sm text-base leading-8 text-white/65">从数据进入、趋势理解到证据核查，每一步都能找到来处。</p></div>
-            <div className="grid border-t border-white/25 md:grid-cols-2 lg:grid-cols-4">{capabilities.map((item) => <div key={item.number} className="landing-capability group flex min-h-[290px] flex-col border-b border-white/25 py-7 pr-8 md:min-h-[330px] lg:border-r lg:pl-7 first:pl-0 last:border-r-0"><span className="text-xs tracking-[0.2em] text-white/55">{item.number} / 04</span><item.icon className="mt-auto mb-7 h-7 w-7 stroke-[1.4] text-[#b1d7c5] transition-transform duration-500 group-hover:-translate-y-2" aria-hidden="true" /><h3 className="mb-3 text-2xl font-semibold tracking-[-0.04em]">{item.title}</h3><p className="max-w-xs text-sm leading-7 text-white/65">{item.description}</p></div>)}</div>
+        <section id="platform" className="landing-cinema-stage landing-platform" data-landing-stage aria-labelledby="platform-title">
+          <div className="landing-cinema-viewport">
+            <Landscape src="/landing/river.webp" alt="森林与清澈水流交汇的航拍自然景观" />
+            <div className="landing-cinema-frame landing-platform-frame">
+              <div className="landing-platform-heading">
+                <p className="landing-scene-eyebrow landing-enter">01 / WHO WE ARE · 平台介绍</p>
+                <h2 id="platform-title" className="landing-cinema-title landing-enter landing-enter-late"><span>水的变化，</span><span>不总在眼前。</span></h2>
+              </div>
+              <div className="landing-platform-aside landing-enter landing-enter-later">
+                <span>FROM DATA TO UNDERSTANDING</span>
+                <p>W·CDC 将工业园区的企业、排污口、污染物和历史记录连接起来。让分散的数据回到时间和位置之中，再追问异常从何而来。</p>
+                <small>平台分析基于排污口监测记录；治理案例为独立的公众展示内容。</small>
+              </div>
+            </div>
+            <span className="landing-cinema-photo-note">自然摄影 · 主题意象</span>
           </div>
         </section>
 
-        <section className="bg-[#e3ede6] px-6 py-24 text-[#153a3e] md:px-12 md:py-36 lg:px-16" aria-labelledby="stories-teaser-title">
-          <div className="mx-auto grid max-w-[1480px] items-center gap-12 lg:grid-cols-2 lg:gap-24">
-            <div className="relative min-h-[400px] overflow-hidden md:min-h-[610px]"><Image src="/landing/river.webp" alt="森林与水流的航拍自然景观" fill sizes="(max-width: 1024px) 100vw, 50vw" className="object-cover transition-transform duration-[1200ms] hover:scale-[1.035]" /><span className="absolute bottom-5 left-5 bg-[#12343b]/80 px-3 py-2 text-[11px] tracking-widest text-white backdrop-blur-sm">自然摄影 · 非案例现场</span></div>
-            <div><p className="landing-kicker mb-10">03 / 治理案例 <span>NEWS & STORIES</span></p><h2 id="stories-teaser-title" className="text-[clamp(2.7rem,5vw,5.6rem)] font-semibold leading-[1.2] tracking-[-0.065em]">看不见的地下水，<br />值得被看见。</h2><p className="mt-8 max-w-xl text-lg leading-9 text-[#4e6d6d]">地下水污染可能沿着地下通道迁移，也可能需要漫长的调查与修复。通过中国的真实案例，理解为什么源头预防、持续监测与协同治理缺一不可。</p><Link href="/stories" className="mt-12 inline-flex items-center gap-8 border-b border-[#153a3e] pb-3 text-sm font-semibold tracking-wide hover:text-[#4d8271] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#153a3e]">阅读治理案例 <ArrowRight size={18} aria-hidden="true" /></Link></div>
+        <section id="capabilities" className="landing-cinema-stage landing-capability-intro" data-landing-stage aria-labelledby="capabilities-title">
+          <div className="landing-cinema-viewport">
+            <Landscape src="/landing/lake.webp" alt="蓝绿色山间湖泊的航拍自然景观" />
+            <div className="landing-cinema-frame landing-intro-frame">
+              <p className="landing-scene-eyebrow landing-enter">02 / WHAT WE DO · 核心能力</p>
+              <h2 id="capabilities-title" className="landing-cinema-title landing-enter landing-enter-late"><span>从一条记录，</span><span>走向清楚的判断。</span></h2>
+              <p className="landing-intro-caption landing-enter landing-enter-later">数据进入、历史对比、证据核查。四个连续的步骤，理解水环境的变化。</p>
+            </div>
+            <span className="landing-cinema-photo-note">自然摄影 · 主题意象</span>
           </div>
         </section>
 
-        <section className="bg-[#f4f5f0] px-6 py-24 text-center text-[#153a3e] md:py-32" aria-label="开始使用"><p className="text-xs font-semibold tracking-[0.3em] text-[#6b8b80]">W·CDC / WATER INTELLIGENCE</p><h2 className="mx-auto mt-7 max-w-4xl text-[clamp(2.6rem,6vw,6.5rem)] font-semibold leading-[1.15] tracking-[-0.07em]">让每一份数据，<br />成为保护水的开始。</h2><Link href="/login" className="mt-10 inline-flex items-center gap-8 rounded-full bg-[#153a3e] px-7 py-4 text-sm font-semibold text-white hover:bg-[#386d64] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#153a3e]">登录平台 <ArrowUpRight size={18} aria-hidden="true" /></Link></section>
+        {abilities.map((ability) => (
+          <section key={ability.number} id={'ability-' + ability.number} className="landing-cinema-stage landing-ability" data-landing-stage aria-labelledby={'ability-title-' + ability.number}>
+            <div className="landing-cinema-viewport">
+              <Landscape src={ability.image} alt={ability.alt} />
+              <div className="landing-cinema-frame landing-ability-frame">
+                <div className="landing-ability-heading">
+                  <p className="landing-scene-eyebrow landing-enter">{ability.number} / 04 · {ability.eyebrow}</p>
+                  <h3 id={'ability-title-' + ability.number} className="landing-cinema-title landing-enter landing-enter-late">{ability.title.map((line) => <span key={line}>{line}</span>)}</h3>
+                </div>
+                <div className="landing-ability-bottom landing-enter landing-enter-later"><strong>{ability.number}</strong><p>{ability.description}</p></div>
+              </div>
+              <span className="landing-cinema-photo-note">自然摄影 · 主题意象</span>
+            </div>
+          </section>
+        ))}
+
+        <section id="landing-stories" className="landing-cinema-stage landing-story-portal" data-landing-stage aria-labelledby="stories-teaser-title">
+          <div className="landing-cinema-viewport">
+            <Landscape src="/landing/desert.webp" alt="晨光下的沙漠沙丘自然景观，非治理案例现场" />
+            <div className="landing-cinema-frame landing-story-frame">
+              <p className="landing-scene-eyebrow landing-enter">03 / NEWS & STORIES · 治理案例</p>
+              <h2 id="stories-teaser-title" className="landing-cinema-title landing-enter landing-enter-late"><span>看不见的地下水，</span><span>值得被看见。</span></h2>
+              <div className="landing-story-bottom landing-enter landing-enter-later"><p>四个中国案例。去看发现、溯源与修复怎样发生。</p><Link href="/stories" className="landing-text-link">走进治理案例 <ArrowRight size={20} aria-hidden="true" /></Link></div>
+            </div>
+            <span className="landing-cinema-photo-note">自然摄影 · 非案例现场</span>
+          </div>
+        </section>
+
+        <section className="landing-cinema-end" aria-label="开始使用">
+          <p>W·CDC / WATER INTELLIGENCE</p>
+          <h2>让每一份数据，<br /><span>成为保护水的开始。</span></h2>
+          <Link href="/login">登录平台 <ArrowUpRight size={19} aria-hidden="true" /></Link>
+        </section>
       </main>
       <PublicFooter />
     </div>
