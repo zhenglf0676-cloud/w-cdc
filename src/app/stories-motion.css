@@ -4,7 +4,10 @@
 }
 
 .story-world .public-header {
+  position: fixed;
   z-index: 50;
+  background: rgb(5 30 35 / 26%);
+  backdrop-filter: blur(12px);
 }
 
 .story-stage {
