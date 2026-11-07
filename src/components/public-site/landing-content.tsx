@@ -20,27 +20,48 @@ const WaterWorld3D=dynamic(()=>import('./water-world-3d').then((m)=>m.WaterWorld
 
 export function LandingContent(){
   const [active,setActive]=useState(0);
+  const [rendererStatus,setRendererStatus]=useState<string|null>(null);
   useEffect(()=>{
     const sections=Array.from(document.querySelectorAll<HTMLElement>('[data-landing-stage]'));
+    const photos=Array.from(document.querySelectorAll<HTMLElement>('.landing-scene-photo'));
     let frame=0;
     const update=()=>{
       let current=0;
       sections.forEach((el,index)=>{if(el.getBoundingClientRect().top<window.innerHeight*.38)current=index;});
       setActive(current);
-      sections.forEach((el,index)=>{el.dataset.active=String(index===current);});
+      sections.forEach((el,index)=>{
+        el.dataset.active=String(index===current);
+        if(index===current){
+          const distance=Math.max(1,el.offsetHeight-window.innerHeight);
+          const progress=Math.max(0,Math.min(1,(window.scrollY-el.offsetTop)/distance));
+          photos[index]?.style.setProperty('--image-scale',(1.045+progress*.065).toFixed(3));
+          photos[index]?.style.setProperty('--image-shift',`${(-progress*1.7).toFixed(2)}%`);
+          photos[index]?.style.setProperty('--foreground-shift',`${(-progress*5.5).toFixed(2)}%`);
+        }
+      });
       frame=0;
     };
     const schedule=()=>{if(!frame)frame=requestAnimationFrame(update);};
     update();window.addEventListener('scroll',schedule,{passive:true});window.addEventListener('resize',schedule);
     return()=>{cancelAnimationFrame(frame);window.removeEventListener('scroll',schedule);window.removeEventListener('resize',schedule);};
   },[]);
+  useEffect(()=>{
+    if(new URLSearchParams(window.location.search).get('debug3d')!=='1')return;
+    setRendererStatus('检测渲染状态中…');
+    const onStatus=(event:Event)=>setRendererStatus((event as CustomEvent<string>).detail);
+    window.addEventListener('landing-renderer',onStatus);
+    const current=document.querySelector<HTMLCanvasElement>('.landing-3d-canvas')?.dataset.status;
+    if(current)setRendererStatus(current);
+    return()=>window.removeEventListener('landing-renderer',onStatus);
+  },[]);
   return <div className="public-site landing-world">
     <PublicHeader />
     <div className="landing-unified-scene" aria-hidden="true">
-      <div className="landing-scene-gallery">{scenes.map((scene,index)=><div key={scene.id} className="landing-scene-photo" data-visible={active===index}><Image src={'/landing/journey/'+scene.image+'.webp'} alt="" fill priority={index===0} sizes="100vw" className="object-cover" /></div>)}</div>
+      <div className="landing-scene-gallery">{scenes.map((scene,index)=><div key={scene.id} className="landing-scene-photo" data-visible={active===index}><div className="landing-photo-base"><Image src={'/landing/journey/'+scene.image+'.webp'} alt="" fill priority={index===0} sizes="100vw" className="object-cover" /></div><div className="landing-photo-foreground"><Image src={'/landing/journey/'+scene.image+'.webp'} alt="" fill sizes="100vw" className="object-cover" /></div></div>)}</div>
       <WaterWorld3D />
       <div className="landing-scene-shade" />
     </div>
+    {rendererStatus&&<output className="landing-renderer-status" aria-live="polite">{rendererStatus}</output>}
     <nav className="landing-chapter-rail" aria-label="水的旅程">
       <span className="landing-rail-name">A JOURNEY OF WATER</span>
       <div>{scenes.map((scene,index)=><a key={scene.id} href={'#'+scene.id} aria-label={scene.name} aria-current={active===index?'location':undefined}><i /></a>)}</div>

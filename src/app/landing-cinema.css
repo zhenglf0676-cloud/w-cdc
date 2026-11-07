@@ -721,3 +721,49 @@
   transition: none;
 }
 }
+
+/* A gentle depth cue for browsers without WebGL: near terrain moves more than the horizon. */
+.landing-photo-base,
+.landing-photo-foreground {
+  position: absolute;
+  inset: -5%;
+  overflow: hidden;
+}
+
+.landing-photo-base {
+  transform: translate3d(0, var(--image-shift, 0%), 0) scale(var(--image-scale, 1.045));
+  will-change: transform;
+}
+
+.landing-photo-foreground {
+  mask-image: linear-gradient(to bottom, transparent 51%, rgb(0 0 0 / 65%) 76%, black 100%);
+  transform: translate3d(0, var(--foreground-shift, 0%), 0) scale(1.09);
+  will-change: transform;
+}
+
+.landing-unified-scene:has(.landing-3d-canvas[data-ready="true"]) .landing-photo-foreground {
+  display: none;
+}
+
+.landing-renderer-status {
+  position: fixed;
+  z-index: 50;
+  bottom: 18px;
+  left: 18px;
+  max-width: min(90vw, 340px);
+  padding: 9px 14px;
+  border: 1px solid rgb(255 255 255 / 28%);
+  border-radius: 6px;
+  color: #fff;
+  background: rgb(10 32 39 / 86%);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-photo-base,
+  .landing-photo-foreground {
+    transform: none;
+    will-change: auto;
+  }
+}

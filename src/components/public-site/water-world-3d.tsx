@@ -2,22 +2,25 @@
 
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 export const journeyImages = ['snow', 'canyon', 'river', 'soil', 'ocean'].map((name) => `/landing/journey/${name}.webp`);
 
-/** Image-based relief scenery, with a physical 3D water drop. Not a hydrological simulation. */
+/** Image-based relief scenery. The scroll controls one continuous scene timeline. */
 export function WaterWorld3D() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const report = (value: string) => {
+      canvas.dataset.status = value;
+      window.dispatchEvent(new CustomEvent('landing-renderer', { detail: value }));
+    };
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
-    if (reduced.matches) return;
+    if (reduced.matches) { report('已启用减少动态效果'); return; }
     let renderer: THREE.WebGLRenderer;
     try {
       renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'low-power' });
-    } catch { return; }
+    } catch { report('WebGL 不可用，正在使用景观动效'); return; }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -25,12 +28,6 @@ export function WaterWorld3D() {
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 50);
     camera.position.z = 5;
-    const pmrem = new THREE.PMREMGenerator(renderer);
-    const room = new RoomEnvironment();
-    const environment = pmrem.fromScene(room, 0.04);
-    scene.environment = environment.texture;
-    room.dispose();
-    pmrem.dispose();
     let disposed = false;
     let ready = false;
     let frame = 0;
@@ -76,24 +73,6 @@ export function WaterWorld3D() {
     const landscape = new THREE.Mesh(geometry, material);
     landscape.position.z = -2;
     scene.add(landscape);
-    const profile = [new THREE.Vector2(0,-.36),new THREE.Vector2(.18,-.32),new THREE.Vector2(.27,-.18),new THREE.Vector2(.28,0),new THREE.Vector2(.23,.17),new THREE.Vector2(.12,.38),new THREE.Vector2(0,.64)];
-    const smoothProfile = new THREE.SplineCurve(profile).getPoints(48).map((p) => new THREE.Vector2(Math.max(0,p.x),p.y));
-    const dropGeometry = new THREE.LatheGeometry(smoothProfile,64);
-    const dropMaterial = new THREE.MeshPhysicalMaterial({ color: '#c4f2f5', metalness: 0, roughness: .045, transmission: .97, thickness: .7, ior: 1.333, clearcoat: 1, envMapIntensity: 2 });
-    const drop = new THREE.Mesh(dropGeometry,dropMaterial);
-    drop.position.z = .6;
-    scene.add(drop);
-    scene.add(new THREE.HemisphereLight('#eefaff','#294557',2));
-    const light = new THREE.DirectionalLight('#ffffff',3);
-    light.position.set(-3,5,5);scene.add(light);
-    const dropPath = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(.62,.40,.6),new THREE.Vector3(.50,-.02,.6),
-      new THREE.Vector3(.65,-.28,.6),new THREE.Vector3(.52,-.38,.6),new THREE.Vector3(.62,-.55,.6),
-    ]);
-    const ringGeometry = new THREE.RingGeometry(.48,.485,100);
-    const ringMaterial = new THREE.MeshBasicMaterial({ color:'#c2edf3', transparent:true, opacity:0, side:THREE.DoubleSide, depthWrite:false });
-    const ring = new THREE.Mesh(ringGeometry,ringMaterial);
-    ring.scale.y=.28; ring.position.z=.5;scene.add(ring);
     const sections = Array.from(document.querySelectorAll<HTMLElement>('[data-landing-stage]'));
     const readScroll = () => {
       const anchors=sections.map((el)=>el.offsetTop);
@@ -112,7 +91,7 @@ export function WaterWorld3D() {
       readScroll();
     };
     const move=(event:PointerEvent)=>{pointerTarget=(event.clientX/window.innerWidth-.5)*2;};
-    const contextLost=(event:Event)=>{event.preventDefault();ready=false;canvas.dataset.ready='false';};
+    const contextLost=(event:Event)=>{event.preventDefault();ready=false;canvas.dataset.ready='false';report('WebGL 连接中断，正在使用景观动效');};
     const render=(time:number)=>{
       if(disposed)return;
       const dt=Math.min((time-previousTime)/1000,.05); previousTime=time;
@@ -123,16 +102,6 @@ export function WaterWorld3D() {
         uniforms.uA.value=textures[index];uniforms.uB.value=textures[index+1];
         uniforms.uMix.value=THREE.MathUtils.smoothstep(progress-index,.58,1);
         uniforms.uTravel.value=progress-index;uniforms.uPointer.value=pointer;
-        const p=dropPath.getPoint(THREE.MathUtils.clamp(progress/4,0,1));
-        const visibleHeight=2*Math.tan(THREE.MathUtils.degToRad(22.5))*4.4;
-        drop.position.set(p.x*visibleHeight*camera.aspect*.48,p.y*visibleHeight*.5,.6);
-        drop.rotation.z=THREE.MathUtils.lerp(-.08,.08,progress/4);
-        const vanish=1-THREE.MathUtils.smoothstep(progress,3.65,4);
-        const scale=(window.innerWidth<700?.36:.63)*vanish;
-        drop.scale.setScalar(scale);
-        ring.position.x=drop.position.x;ring.position.y=drop.position.y;
-        const arrival=THREE.MathUtils.smoothstep(progress,3.5,4);
-        ring.scale.set(1+arrival*1.6,.28+arrival*.4,1);ringMaterial.opacity=arrival*.35;
         renderer.render(scene,camera);
       }
       frame=requestAnimationFrame(render);
@@ -142,14 +111,14 @@ export function WaterWorld3D() {
     Promise.all(journeyImages.map((url)=>loader.loadAsync(url).then((texture)=>{
       if(disposed){texture.dispose();return texture;}
       texture.colorSpace=THREE.SRGBColorSpace;textures.push(texture);return texture;
-    }))).then((ordered)=>{if(!disposed){textures.splice(0,textures.length,...ordered);ready=true;canvas.dataset.ready='true';}}).catch(()=>{canvas.dataset.ready='false';});
+    }))).then((ordered)=>{if(!disposed){textures.splice(0,textures.length,...ordered);ready=!reduced.matches;canvas.dataset.ready=String(ready);report(ready?'WebGL 景观已启用':'已启用减少动态效果');}}).catch(()=>{canvas.dataset.ready='false';report('景观素材加载失败，正在使用备用画面');});
     frame=requestAnimationFrame(render);
     window.addEventListener('scroll',readScroll,{passive:true});window.addEventListener('resize',resize);window.addEventListener('pointermove',move,{passive:true});canvas.addEventListener('webglcontextlost',contextLost);
-    const preference=()=>{if(reduced.matches){ready=false;canvas.dataset.ready='false';}};
+    const preference=()=>{ready=!reduced.matches&&textures.length===journeyImages.length;canvas.dataset.ready=String(ready);report(ready?'WebGL 景观已启用':'已启用减少动态效果');};
     reduced.addEventListener('change',preference);
     return ()=>{
       disposed=true;cancelAnimationFrame(frame);window.removeEventListener('scroll',readScroll);window.removeEventListener('resize',resize);window.removeEventListener('pointermove',move);canvas.removeEventListener('webglcontextlost',contextLost);reduced.removeEventListener('change',preference);
-      textures.forEach((texture)=>texture.dispose());emptyA.dispose();emptyB.dispose();geometry.dispose();material.dispose();dropGeometry.dispose();dropMaterial.dispose();ringGeometry.dispose();ringMaterial.dispose();environment.dispose();renderer.dispose();
+      textures.forEach((texture)=>texture.dispose());emptyA.dispose();emptyB.dispose();geometry.dispose();material.dispose();renderer.dispose();
     };
   },[]);
   return <canvas ref={canvasRef} className="landing-3d-canvas" aria-hidden="true" />;
