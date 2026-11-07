@@ -2,222 +2,155 @@
 
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
-const cameraStops = [
-  [0, 8, 45], [8, 10, 20], [-6, 9, -4], [6, 7, -31],
-  [-6, 9, -66], [6, 8, -98], [-5, 9, -130], [0, 12, -165],
-] as const;
+export const journeyImages = ['snow', 'canyon', 'river', 'soil', 'ocean'].map((name) => `/landing/journey/${name}.webp`);
 
-const lookStops = [
-  [0, 3, -22], [0, 3, -39], [0, 2, -59], [0, 2, -89],
-  [0, 2, -115], [0, 2, -145], [0, 2, -180], [0, 3, -211],
-] as const;
-
-function noise(x: number, z: number) {
-  const a = Math.sin(x * 0.83 + z * 0.19) * Math.cos(z * 0.47 - x * 0.26);
-  const b = Math.sin(x * 0.22 - z * 0.34) * Math.cos(x * 0.49 + z * 0.59);
-  return a * 0.57 + b * 0.43;
-}
-
-function elevation(x: number, z: number) {
-  const bank = Math.max(0, (Math.abs(x) - 7.3) / 68);
-  const ridges = noise(x * 0.8, z * 0.85) * 7.5 + noise(x * 2.1, z * 1.9) * 2.2;
-  return -1.8 + Math.pow(bank, 1.18) * (34 + ridges) + bank * noise(x * 4, z * 4) * 1.2;
-}
-
-function makeLandscape(scene: THREE.Scene) {
-  const ground = new THREE.PlaneGeometry(176, 270, 150, 180);
-  ground.rotateX(-Math.PI / 2);
-  ground.translate(0, 0, -82);
-  const positions = ground.getAttribute('position') as THREE.BufferAttribute;
-  const colors = new Float32Array(positions.count * 3);
-  const low = new THREE.Color('#0b3537');
-  const mid = new THREE.Color('#285349');
-  const high = new THREE.Color('#769080');
-  const color = new THREE.Color();
-
-  for (let i = 0; i < positions.count; i++) {
-    const x = positions.getX(i);
-    const z = positions.getZ(i);
-    const h = elevation(x, z);
-    positions.setY(i, h);
-    const slope = Math.min(1, Math.max(0, h / 30));
-    color.copy(low).lerp(mid, Math.min(1, slope * 2.5)).lerp(high, Math.max(0, (slope - 0.6) * 0.85));
-    const grain = 0.88 + (noise(x * 7, z * 7) + 1) * 0.075;
-    colors[i * 3] = color.r * grain;
-    colors[i * 3 + 1] = color.g * grain;
-    colors[i * 3 + 2] = color.b * grain;
-  }
-
-  ground.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  ground.computeVertexNormals();
-  const landMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.98, side: THREE.DoubleSide });
-  const land = new THREE.Mesh(ground, landMaterial);
-  scene.add(land);
-
-  const waterGeometry = new THREE.PlaneGeometry(17.5, 270, 20, 130);
-  waterGeometry.rotateX(-Math.PI / 2);
-  waterGeometry.translate(0, 0, -82);
-  const waterMaterial = new THREE.ShaderMaterial({
-    uniforms: { uTime: { value: 0 } },
-    transparent: true,
-    depthWrite: false,
-    vertexShader: [
-      'uniform float uTime;',
-      'varying vec3 vWorld;',
-      'void main() {',
-      '  vec3 p = position;',
-      '  p.y += 0.08 * sin(p.z * 0.39 + p.x * 0.8 + uTime * 0.55);',
-      '  p.y += 0.04 * sin(p.z * 0.93 - p.x * 1.3 - uTime * 0.82);',
-      '  vWorld = p;',
-      '  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);',
-      '}',
-    ].join('\n'),
-    fragmentShader: [
-      'uniform float uTime;',
-      'varying vec3 vWorld;',
-      'void main() {',
-      '  float wave = sin(vWorld.z * 0.42 + vWorld.x * 0.95 + uTime * 0.5);',
-      '  float small = sin(vWorld.z * 1.41 - vWorld.x * 1.7 - uTime * 0.9);',
-      '  float light = pow(max(0.0, wave * 0.5 + small * 0.25 + 0.35), 4.0);',
-      '  vec3 deep = vec3(0.025, 0.19, 0.20);',
-      '  vec3 color = mix(deep, vec3(0.29, 0.56, 0.52), light * 0.8);',
-      '  gl_FragColor = vec4(color, 0.87);',
-      '}',
-    ].join('\n'),
-  });
-  const water = new THREE.Mesh(waterGeometry, waterMaterial);
-  water.position.y = 0.08;
-  scene.add(water);
-
-  const pineGeometry = new THREE.ConeGeometry(0.5, 3.8, 5);
-  const pineMaterial = new THREE.MeshStandardMaterial({ color: '#163c39', roughness: 1 });
-  const pines = new THREE.InstancedMesh(pineGeometry, pineMaterial, 830);
-  const dummy = new THREE.Object3D();
-  const tones = [new THREE.Color('#102f31'), new THREE.Color('#1b4540'), new THREE.Color('#315347')];
-  let count = 0;
-  let seed = 7621;
-  const random = () => {
-    seed = (seed * 1664525 + 1013904223) >>> 0;
-    return seed / 4294967296;
-  };
-  for (let i = 0; i < 1450 && count < 830; i++) {
-    const x = (random() - 0.5) * 162;
-    const z = 48 - random() * 252;
-    const y = elevation(x, z);
-    if (Math.abs(x) < 14 || y < 1.7 || y > 27) continue;
-    const size = 0.65 + random() * 1.55;
-    dummy.position.set(x, y + size * 1.6, z);
-    dummy.scale.set(size * (0.65 + random() * 0.3), size, size * (0.65 + random() * 0.3));
-    dummy.rotation.y = random() * Math.PI * 2;
-    dummy.updateMatrix();
-    pines.setMatrixAt(count, dummy.matrix);
-    pines.setColorAt(count, tones[Math.floor(random() * tones.length)]);
-    count++;
-  }
-  pines.count = count;
-  pines.instanceMatrix.needsUpdate = true;
-  scene.add(pines);
-
-  return {
-    waterMaterial,
-    dispose: () => {
-      scene.remove(land, water, pines);
-      ground.dispose();
-      landMaterial.dispose();
-      waterGeometry.dispose();
-      waterMaterial.dispose();
-      pineGeometry.dispose();
-      pineMaterial.dispose();
-      pines.dispose();
-    },
-  };
-}
-
+/** Image-based relief scenery, with a physical 3D water drop. Not a hydrological simulation. */
 export function WaterWorld3D() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (!canvas) return;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+    if (reduced.matches) return;
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'low-power' });
-    } catch {
-      return;
-    }
-
+      renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'low-power' });
+    } catch { return; }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.5;
-    renderer.setClearColor('#102d34', 0);
-
+    renderer.toneMappingExposure = 1.15;
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2('#86a9a3', 0.012);
-    scene.add(new THREE.HemisphereLight('#d5f3ee', '#0b302f', 2.4));
-    const sunlight = new THREE.DirectionalLight('#d7e9d7', 2.7);
-    sunlight.position.set(-35, 60, -80);
-    scene.add(sunlight);
-    const landscape = makeLandscape(scene);
-    const camera = new THREE.PerspectiveCamera(61, 1, 0.1, 260);
-    const path = new THREE.CatmullRomCurve3(cameraStops.map((p) => new THREE.Vector3(...p)), false, 'catmullrom', 0.38);
-    const lookPath = new THREE.CatmullRomCurve3(lookStops.map((p) => new THREE.Vector3(...p)), false, 'catmullrom', 0.38);
-    const stages = Array.from(document.querySelectorAll<HTMLElement>('[data-landing-stage]'));
-    const marker = new THREE.Vector3();
-    let target = 0;
-    let current = 0;
-    let pointer = 0;
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 50);
+    camera.position.z = 5;
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const room = new RoomEnvironment();
+    const environment = pmrem.fromScene(room, 0.04);
+    scene.environment = environment.texture;
+    room.dispose();
+    pmrem.dispose();
+    let disposed = false;
+    let ready = false;
     let frame = 0;
-    let stopped = false;
-    const resize = () => {
-      renderer.setSize(window.innerWidth, window.innerHeight, false);
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
+    let target = 0;
+    let progress = 0;
+    let previousTime = 0;
+    let pointer = 0;
+    let pointerTarget = 0;
+    const textures: THREE.Texture[] = [];
+    const uniforms = {
+      uA: { value: new THREE.Texture() }, uB: { value: new THREE.Texture() },
+      uMix: { value: 0 }, uAspect: { value: 1 }, uTravel: { value: 0 }, uPointer: { value: 0 },
     };
-    const updateScroll = () => {
-      const position = window.scrollY + window.innerHeight * 0.5;
-      const centers = stages.map((stage) => stage.offsetTop + stage.offsetHeight * 0.42);
-      const last = centers.length - 1;
-      if (position <= centers[0]) { target = 0; return; }
-      if (position >= centers[last]) { target = 1; return; }
-      for (let i = 0; i < last; i++) {
-        if (position <= centers[i + 1]) {
-          target = (i + (position - centers[i]) / (centers[i + 1] - centers[i])) / last;
-          return;
-        }
+    const emptyA = uniforms.uA.value;
+    const emptyB = uniforms.uB.value;
+    const geometry = new THREE.PlaneGeometry(1, 1, 96, 64);
+    const material = new THREE.ShaderMaterial({
+      uniforms,
+      vertexShader: `varying vec2 vUv;
+        void main(){vUv=uv; vec3 p=position;
+          float nearField=pow(1.0-uv.y,2.0);
+          p.z=nearField*0.35;
+          gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.0);}`,
+      fragmentShader: `uniform sampler2D uA; uniform sampler2D uB;
+        uniform float uMix; uniform float uAspect; uniform float uTravel; uniform float uPointer;
+        varying vec2 vUv;
+        void main(){
+          vec2 cover=vec2(min(1.0,uAspect/(16.0/9.0)),min(1.0,(16.0/9.0)/uAspect));
+          vec2 uv=(vUv-.5)*cover/(1.04+uTravel*.018)+.5;
+          float depth=pow(1.0-vUv.y,2.0);
+          uv.x+=uPointer*(.002+depth*.006);
+          uv.y+=uTravel*.008*depth;
+          vec4 a=texture2D(uA,uv); vec4 b=texture2D(uB,uv);
+          float blend=smoothstep(0.0,1.0,uMix);
+          vec3 color=mix(a.rgb,b.rgb,blend);
+          float mist=sin(blend*3.14159265)*.12;
+          color=mix(color,vec3(.64,.75,.78),mist);
+          gl_FragColor=vec4(color,1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }`,
+    });
+    const landscape = new THREE.Mesh(geometry, material);
+    landscape.position.z = -2;
+    scene.add(landscape);
+    const profile = [new THREE.Vector2(0,-.36),new THREE.Vector2(.18,-.32),new THREE.Vector2(.27,-.18),new THREE.Vector2(.28,0),new THREE.Vector2(.23,.17),new THREE.Vector2(.12,.38),new THREE.Vector2(0,.64)];
+    const smoothProfile = new THREE.SplineCurve(profile).getPoints(48).map((p) => new THREE.Vector2(Math.max(0,p.x),p.y));
+    const dropGeometry = new THREE.LatheGeometry(smoothProfile,64);
+    const dropMaterial = new THREE.MeshPhysicalMaterial({ color: '#c4f2f5', metalness: 0, roughness: .045, transmission: .97, thickness: .7, ior: 1.333, clearcoat: 1, envMapIntensity: 2 });
+    const drop = new THREE.Mesh(dropGeometry,dropMaterial);
+    drop.position.z = .6;
+    scene.add(drop);
+    scene.add(new THREE.HemisphereLight('#eefaff','#294557',2));
+    const light = new THREE.DirectionalLight('#ffffff',3);
+    light.position.set(-3,5,5);scene.add(light);
+    const dropPath = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(.62,.40,.6),new THREE.Vector3(.50,-.02,.6),
+      new THREE.Vector3(.65,-.28,.6),new THREE.Vector3(.52,-.38,.6),new THREE.Vector3(.62,-.55,.6),
+    ]);
+    const ringGeometry = new THREE.RingGeometry(.48,.485,100);
+    const ringMaterial = new THREE.MeshBasicMaterial({ color:'#c2edf3', transparent:true, opacity:0, side:THREE.DoubleSide, depthWrite:false });
+    const ring = new THREE.Mesh(ringGeometry,ringMaterial);
+    ring.scale.y=.28; ring.position.z=.5;scene.add(ring);
+    const sections = Array.from(document.querySelectorAll<HTMLElement>('[data-landing-stage]'));
+    const readScroll = () => {
+      const anchors=sections.map((el)=>el.offsetTop);
+      const y=window.scrollY;
+      target=4;
+      for(let i=0;i<anchors.length-1;i++){
+        if(y<anchors[i+1]){target=i+THREE.MathUtils.clamp((y-anchors[i])/(anchors[i+1]-anchors[i]),0,1);break;}
       }
     };
-    const updatePointer = (event: PointerEvent) => {
-      pointer = (event.clientX / window.innerWidth - 0.5) * 1.7;
+    const resize = () => {
+      const width=window.innerWidth,height=window.innerHeight;
+      renderer.setSize(width,height,false);camera.aspect=width/height;camera.updateProjectionMatrix();
+      uniforms.uAspect.value=camera.aspect;
+      const h=2*Math.tan(THREE.MathUtils.degToRad(22.5))*7;
+      landscape.scale.set(h*camera.aspect*1.1,h*1.1,1);
+      readScroll();
     };
-    const render = (time: number) => {
-      if (stopped) return;
-      current += (target - current) * 0.065;
-      camera.position.copy(path.getPoint(Math.max(0, Math.min(1, current))));
-      camera.position.x += pointer * 0.3;
-      marker.copy(lookPath.getPoint(Math.max(0, Math.min(1, current))));
-      camera.lookAt(marker);
-      landscape.waterMaterial.uniforms.uTime.value = time * 0.001;
-      if (!document.hidden) renderer.render(scene, camera);
-      frame = window.requestAnimationFrame(render);
+    const move=(event:PointerEvent)=>{pointerTarget=(event.clientX/window.innerWidth-.5)*2;};
+    const contextLost=(event:Event)=>{event.preventDefault();ready=false;canvas.dataset.ready='false';};
+    const render=(time:number)=>{
+      if(disposed)return;
+      const dt=Math.min((time-previousTime)/1000,.05); previousTime=time;
+      const easing=1-Math.exp(-dt*7);
+      progress+=(target-progress)*easing;pointer+=(pointerTarget-pointer)*easing;
+      if(ready&&!document.hidden){
+        const index=Math.min(3,Math.floor(progress));
+        uniforms.uA.value=textures[index];uniforms.uB.value=textures[index+1];
+        uniforms.uMix.value=THREE.MathUtils.smoothstep(progress-index,.58,1);
+        uniforms.uTravel.value=progress-index;uniforms.uPointer.value=pointer;
+        const p=dropPath.getPoint(THREE.MathUtils.clamp(progress/4,0,1));
+        const visibleHeight=2*Math.tan(THREE.MathUtils.degToRad(22.5))*4.4;
+        drop.position.set(p.x*visibleHeight*camera.aspect*.48,p.y*visibleHeight*.5,.6);
+        drop.rotation.z=THREE.MathUtils.lerp(-.08,.08,progress/4);
+        const vanish=1-THREE.MathUtils.smoothstep(progress,3.65,4);
+        const scale=(window.innerWidth<700?.36:.63)*vanish;
+        drop.scale.setScalar(scale);
+        ring.position.x=drop.position.x;ring.position.y=drop.position.y;
+        const arrival=THREE.MathUtils.smoothstep(progress,3.5,4);
+        ring.scale.set(1+arrival*1.6,.28+arrival*.4,1);ringMaterial.opacity=arrival*.35;
+        renderer.render(scene,camera);
+      }
+      frame=requestAnimationFrame(render);
     };
-    resize();
-    updateScroll();
-    frame = window.requestAnimationFrame(render);
-    window.addEventListener('resize', resize);
-    window.addEventListener('scroll', updateScroll, { passive: true });
-    window.addEventListener('pointermove', updatePointer, { passive: true });
-    return () => {
-      stopped = true;
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener('resize', resize);
-      window.removeEventListener('scroll', updateScroll);
-      window.removeEventListener('pointermove', updatePointer);
-      landscape.dispose();
-      renderer.dispose();
+    resize();progress=target;
+    const loader=new THREE.TextureLoader();
+    Promise.all(journeyImages.map((url)=>loader.loadAsync(url).then((texture)=>{
+      if(disposed){texture.dispose();return texture;}
+      texture.colorSpace=THREE.SRGBColorSpace;textures.push(texture);return texture;
+    }))).then((ordered)=>{if(!disposed){textures.splice(0,textures.length,...ordered);ready=true;canvas.dataset.ready='true';}}).catch(()=>{canvas.dataset.ready='false';});
+    frame=requestAnimationFrame(render);
+    window.addEventListener('scroll',readScroll,{passive:true});window.addEventListener('resize',resize);window.addEventListener('pointermove',move,{passive:true});canvas.addEventListener('webglcontextlost',contextLost);
+    const preference=()=>{if(reduced.matches){ready=false;canvas.dataset.ready='false';}};
+    reduced.addEventListener('change',preference);
+    return ()=>{
+      disposed=true;cancelAnimationFrame(frame);window.removeEventListener('scroll',readScroll);window.removeEventListener('resize',resize);window.removeEventListener('pointermove',move);canvas.removeEventListener('webglcontextlost',contextLost);reduced.removeEventListener('change',preference);
+      textures.forEach((texture)=>texture.dispose());emptyA.dispose();emptyB.dispose();geometry.dispose();material.dispose();dropGeometry.dispose();dropMaterial.dispose();ringGeometry.dispose();ringMaterial.dispose();environment.dispose();renderer.dispose();
     };
-  }, []);
-
+  },[]);
   return <canvas ref={canvasRef} className="landing-3d-canvas" aria-hidden="true" />;
 }

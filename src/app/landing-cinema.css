@@ -33,13 +33,15 @@
 .landing-3d-canvas {
   z-index: 1;
   display: block;
+  opacity: 0;
+  transition: opacity 1s ease;
 }
 
 .landing-world .public-header {
   position: fixed;
-  background: rgb(9 30 34 / 36%);
-  border-color: rgb(255 255 255 / 20%);
-  backdrop-filter: blur(16px);
+  background: linear-gradient(rgb(9 26 38 / 30%), transparent);
+  backdrop-filter: none;
+  border-color: rgb(255 255 255 / 15%);
 }
 
 .landing-cinema-stage {
@@ -69,17 +71,17 @@
 
 .landing-scene-photo {
   position: absolute;
-  inset: -4%;
   opacity: 0;
-  transform: scale(1.08);
   transform-origin: center;
-  transition: opacity 1400ms ease, transform 3200ms ease;
   will-change: opacity, transform;
+  inset: 0;
+  transform: none;
+  transition: opacity 1s ease;
 }
 
 .landing-scene-photo[data-visible="true"] {
   opacity: 1;
-  transform: scale(1);
+  transform: none;
 }
 
 .landing-scene-haze {
@@ -98,8 +100,7 @@
   z-index: 3;
   inset: 0;
   pointer-events: none;
-  background: linear-gradient(90deg, rgb(5 29 32 / 80%) 0%, rgb(7 35 38 / 49%) 57%, rgb(7 35 38 / 19%) 100%),
-    linear-gradient(0deg, rgb(5 28 31 / 70%), transparent 46%);
+  background: linear-gradient(90deg, rgb(6 23 34 / 58%), rgb(5 23 34 / 15%) 55%, transparent 85%), linear-gradient(0deg, rgb(5 23 34 / 32%), transparent 35%);
 }
 
 .landing-horizon {
@@ -175,20 +176,20 @@
 .landing-enter {
   opacity: 1;
   transform: translate3d(0, 0, 0);
-  transition: opacity 700ms ease, transform 1100ms cubic-bezier(0.19, 1, 0.22, 1);
+  transition: opacity .65s ease, transform .8s cubic-bezier(.22, 1, .36, 1);
 }
 
 .landing-enter-late {
-  transition-delay: 150ms;
+  transition-delay: .08s;
 }
 
 .landing-enter-later {
-  transition-delay: 350ms;
+  transition-delay: .16s;
 }
 
 .landing-cinema-stage[data-active="false"] .landing-enter {
   opacity: 0;
-  transform: translate3d(0, 65px, 0);
+  transform: translate3d(0, 22px, 0);
 }
 
 .landing-opening-frame {
@@ -455,96 +456,268 @@
 }
 
 @media (width <= 800px) {
-  .landing-cinema-stage { min-height: 135svh; }
-  .landing-cinema-viewport { min-height: 550px; }
-  .landing-cinema-frame { padding: 155px 6% 105px; }
+  .landing-cinema-stage {
+  min-height: 135svh;
+}
+  .landing-cinema-viewport {
+  min-height: 550px;
+}
+  .landing-cinema-frame {
+  padding: 155px 6% 105px;
+}
   .landing-cinema-title,
   .landing-opening .landing-cinema-title,
   .landing-platform .landing-cinema-title,
   .landing-capability-intro .landing-cinema-title,
   .landing-ability .landing-cinema-title,
-  .landing-story-portal .landing-cinema-title { font-size: clamp(3.2rem, 10.5vw, 6.5rem); }
+  .landing-story-portal .landing-cinema-title {
+  font-size: clamp(3.2rem, 10.5vw, 6.5rem);
+}
   .landing-scene-eyebrow {
-    margin-bottom: 22px;
-    letter-spacing: 0.17em;
-  }
+  margin-bottom: 22px;
+  letter-spacing: 0.17em;
+}
 
   .landing-platform-frame,
   .landing-ability-frame {
-    justify-content: center;
-    gap: 8vh;
-  }
+  justify-content: center;
+  gap: 8vh;
+}
 
   .landing-platform-aside {
-    max-width: 95%;
-    align-self: start;
-  }
+  max-width: 95%;
+  align-self: start;
+}
 
-  .landing-ability-bottom { max-width: 95%; }
-  .landing-chapter-rail { right: 2%; }
-  .landing-rail-name { display: none; }
+  .landing-ability-bottom {
+  max-width: 95%;
+}
+  .landing-chapter-rail {
+  right: 2%;
+}
+  .landing-rail-name {
+  display: none;
+}
 }
 
 @media (width <= 600px) {
-  .landing-cinema-frame { padding: 150px 7% 95px; }
-  .landing-opening-frame { justify-content: center; }
+  .landing-cinema-frame {
+  padding: 150px 7% 95px;
+}
+  .landing-opening-frame {
+  justify-content: center;
+}
   .landing-opening-bottom,
   .landing-story-bottom {
-    align-items: start;
-    flex-direction: column;
-    margin-top: 32px;
-    gap: 24px;
-  }
+  align-items: start;
+  flex-direction: column;
+  margin-top: 32px;
+  gap: 24px;
+}
 
   .landing-opening-bottom p,
-  .landing-story-bottom p { font-size: 15px; }
+  .landing-story-bottom p {
+  font-size: 15px;
+}
   .landing-platform-frame,
-  .landing-ability-frame { gap: 8vh; }
-  .landing-platform-aside p { font-size: 16px; }
-  .landing-platform-aside small { font-size: 10px; }
-  .landing-ability-bottom { gap: 25px; }
-  .landing-ability-bottom strong { font-size: 60px; }
-  .landing-ability-bottom p { font-size: 14px; }
-  .landing-intro-caption { font-size: 16px; }
+  .landing-ability-frame {
+  gap: 8vh;
+}
+  .landing-platform-aside p {
+  font-size: 16px;
+}
+  .landing-platform-aside small {
+  font-size: 10px;
+}
+  .landing-ability-bottom {
+  gap: 25px;
+}
+  .landing-ability-bottom strong {
+  font-size: 60px;
+}
+  .landing-ability-bottom p {
+  font-size: 14px;
+}
+  .landing-intro-caption {
+  font-size: 16px;
+}
   .landing-cinema-photo-note {
-    right: 7%;
-    bottom: 25px;
-    font-size: 9px;
-  }
+  right: 7%;
+  bottom: 25px;
+  font-size: 9px;
+}
 
   .landing-cinema-next {
-    left: 7%;
-    bottom: 25px;
-    font-size: 10px;
-  }
+  left: 7%;
+  bottom: 25px;
+  font-size: 10px;
+}
 
   .landing-chapter-rail {
-    right: 1%;
-    gap: 15px;
-    font-size: 8px;
-    opacity: 0.72;
-  }
+  right: 1%;
+  gap: 15px;
+  font-size: 8px;
+  opacity: 0.72;
+}
 
   .landing-chapter-rail a {
-    width: 18px;
-    height: 18px;
-  }
+  width: 18px;
+  height: 18px;
+}
 
   .landing-horizon {
-    right: -85vw;
-    width: 150vw;
-    opacity: 0.27;
-  }
+  right: -85vw;
+  width: 150vw;
+  opacity: 0.27;
+}
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .landing-cinema-stage { min-height: 100svh; }
+  .landing-cinema-stage {
+  min-height: 100svh;
+}
   .landing-scene-photo,
   .landing-scene-haze,
-  .landing-horizon { transform: none; }
-  .landing-3d-canvas { display: none; }
+  .landing-horizon {
+  transform: none;
+}
+  .landing-3d-canvas {
+  display: none;
+}
   .landing-cinema-stage[data-active="false"] .landing-enter {
-    opacity: 1;
-    transform: none;
-  }
+  opacity: 1;
+  transform: none;
+}
+}
+
+/* One water journey. Quiet camera, spacious typography, restrained reveals. */
+.landing-3d-canvas[data-ready="true"] {
+  opacity: 1;
+}
+.journey-stage {
+  min-height: 175svh;
+}
+.journey-stage:last-of-type {
+  min-height: 150svh;
+}
+.journey-frame {
+  padding: 150px 7% 110px;
+  justify-content: center;
+}
+.journey-frame .landing-cinema-title {
+  font-size: clamp(3.8rem, 7.7vw, 8.5rem);
+  font-weight: 450;
+  letter-spacing: -.065em;
+  line-height: 1.15;
+}
+.journey-snow .landing-cinema-title {
+  font-size: clamp(4rem, 8.8vw, 10rem);
+}
+.journey-frame .landing-scene-eyebrow {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: .22em;
+  margin-bottom: 30px;
+}
+.journey-frame .landing-scene-eyebrow span {
+  margin-left: 24px;
+  opacity: .7;
+  letter-spacing: .12em;
+}
+.journey-description {
+  max-width: 460px;
+  margin: 32px 0 0;
+  font-size: clamp(15px, 1.35vw, 19px);
+  line-height: 1.9;
+  color: rgb(255 255 255 / 85%);
+}
+.journey-link {
+  align-self: start;
+  margin-top: 30px;
+  min-width: 180px;
+  font-weight: 400;
+}
+.journey-caption {
+  position: absolute;
+  bottom: 34px;
+  left: 7%;
+  right: 7%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid rgb(255 255 255 / 25%);
+  padding-top: 20px;
+  font-size: 10px;
+  letter-spacing: .12em;
+}
+.journey-caption a {
+  padding: 12px;
+  margin: -12px;
+}
+.journey-capabilities {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  margin-top: 30px;
+  font-size: 13px;
+}
+.journey-capabilities b {
+  margin-right: 20px;
+  font-size: 10px;
+  font-weight: 400;
+  opacity: .55;
+}
+.journey-context {
+  max-width: 360px;
+  margin: 26px 0 0;
+  font-size: 10px;
+  line-height: 1.8;
+  opacity: .6;
+}
+.journey-art-credit {
+  max-width: 500px;
+  margin-top: 60px;
+  font-size: 10px;
+  line-height: 1.8;
+  opacity: .65;
+}
+
+@media (width <= 700px) {
+  .journey-stage {
+  min-height: 145svh;
+}
+  .journey-frame {
+  padding: 135px 8% 110px;
+}
+  .journey-frame .landing-cinema-title {
+  font-size: clamp(3.2rem, 11vw, 5rem);
+}
+  .journey-frame .landing-scene-eyebrow span {
+  display: block;
+  margin: 8px 0 0;
+}
+  .journey-description {
+  max-width: 82%;
+  font-size: 14px;
+}
+  .journey-caption {
+  left: 8%;
+  right: 8%;
+  font-size: 9px;
+}
+  .journey-context {
+  max-width: 78%;
+}
+  .journey-link {
+  font-size: 12px;
+}
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .journey-stage {
+  min-height: 100svh;
+}
+  .landing-enter, .landing-scene-photo {
+  transition: none;
+}
 }
