@@ -1,0 +1,25 @@
+.alpine-opening { position:relative; color:#fff; background:#9eb2c4; font-family:Arial,"PingFang SC","Microsoft YaHei",sans-serif; }
+.alpine-canvas { position:fixed; inset:0; width:100%; height:100%; display:block; }
+.alpine-vignette { position:fixed; inset:0; pointer-events:none; background:linear-gradient(90deg,rgba(9,22,39,.38),transparent 58%),linear-gradient(0deg,rgba(8,19,33,.32),transparent 24%); }
+.alpine-nav { position:fixed; z-index:4; top:0; left:0; right:0; height:96px; padding:0 5%; display:flex; align-items:center; justify-content:space-between; gap:24px; border-bottom:1px solid #ffffff30; font-size:12px; letter-spacing:.14em; }
+.alpine-logo { font-size:23px; font-weight:700; letter-spacing:.06em; }
+.alpine-logo span { display:block; font-size:9px; font-weight:400; margin-top:5px; letter-spacing:.16em; opacity:.7; }
+.alpine-edition { font-size:10px; opacity:.7; letter-spacing:.28em; }
+.alpine-nav>a:last-child { display:flex; gap:20px; align-items:center; }
+.alpine-opening main { position:relative; z-index:2; pointer-events:none; }
+.alpine-section { min-height:140svh; padding:29svh 8% 0; display:flex; align-items:flex-start; }
+.alpine-copy { position:sticky; top:29svh; padding-top:0; padding-bottom:16svh; width:min(500px,46%); pointer-events:auto; }
+.alpine-eyebrow { font-size:11px; letter-spacing:.24em; margin:0 0 30px; opacity:.8; }
+.alpine-copy h1 { margin:0; font-weight:500; font-size:clamp(44px,5.4vw,86px); line-height:1.28; letter-spacing:-.035em; text-shadow:0 3px 30px #0e263b30; }
+.alpine-copy h1 span { display:block; }
+.alpine-copy h2 { margin:0; font-size:clamp(34px,3.5vw,57px); line-height:1.4; font-weight:450; letter-spacing:-.025em; }
+.alpine-caption { margin:30px 0 0; font-size:13px; line-height:2.1; letter-spacing:.08em; color:#ffffffbc; }
+.alpine-explore { display:inline-flex; margin-top:36px; align-items:center; justify-content:space-between; min-width:136px; gap:24px; padding-bottom:14px; border-bottom:1px solid #ffffff80; font-size:12px; letter-spacing:.1em; }
+.alpine-explore span { font-size:21px; }
+.alpine-footer { position:fixed; z-index:3; bottom:23px; left:5%; right:5%; display:flex; justify-content:space-between; gap:20px; font-size:9px; letter-spacing:.16em; color:#ffffffa0; pointer-events:none; }
+.alpine-status { position:fixed; z-index:5; right:5%; bottom:65px; max-width:340px; padding:12px 16px; background:#102338c9; font-size:12px; line-height:1.8; transition:opacity .5s; }
+.alpine-status-ready { opacity:0; pointer-events:none; }
+.alpine-status button { display:block; margin-top:10px; border-bottom:1px solid white; cursor:pointer; }
+.alpine-opening a:focus-visible,.alpine-opening button:focus-visible { outline:2px solid #fff; outline-offset:8px; }
+@media(max-width:700px) { .alpine-nav { height:76px; padding:0 6%; } .alpine-edition { display:none; } .alpine-section { padding:40svh 7% 0; } .alpine-copy { top:40svh; padding-top:0; width:100%; } .alpine-copy h1 { font-size:48px; } .alpine-caption { font-size:12px; } .alpine-footer span:first-child { display:none; } .alpine-footer { left:7%; } .alpine-eyebrow { margin-bottom:18px; } }
+@media(prefers-reduced-motion:reduce) { .alpine-status { transition:none; } }
