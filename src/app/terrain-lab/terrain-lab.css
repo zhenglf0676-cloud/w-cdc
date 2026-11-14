@@ -1,0 +1,20 @@
+.terrain-lab { position:relative; min-height:500svh; background:#10242c; color:white; }
+.terrain-lab-view { position:fixed; inset:0; z-index:0; }
+.terrain-lab-shade { position:fixed; inset:0; z-index:1; pointer-events:none; background:linear-gradient(90deg,rgba(5,23,29,.45),rgba(5,23,29,.12) 42%,transparent 80%),linear-gradient(0deg,rgba(3,19,24,.4),transparent 35%); }
+.terrain-lab-header { position:fixed; z-index:5; inset:0 0 auto; height:84px; padding:0 5%; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,.25); font-size:12px; font-weight:650; letter-spacing:.12em; }
+.terrain-lab-header a { display:inline-flex; align-items:center; gap:10px; }
+.terrain-lab-status { position:fixed; z-index:5; right:4%; bottom:54px; max-width:320px; padding:9px 13px; color:#d6e9e9; background:rgba(3,19,24,.55); border-radius:2px; font-size:11px; }
+.terrain-lab main { position:relative; z-index:2; pointer-events:none; }
+.terrain-lab-chapter { min-height:160svh; position:relative; display:flex; align-items:center; padding:0 8%; }
+.terrain-lab-content { position:sticky; top:20svh; width:min(660px,65vw); pointer-events:auto; }
+.terrain-lab-content p { margin:0 0 35px; font-size:13px; letter-spacing:.26em; }
+.terrain-lab-content h1,.terrain-lab-content h2 { margin:0; white-space:pre-line; font-size:clamp(48px,6.2vw,100px); font-weight:650; line-height:1.12; letter-spacing:-.075em; text-wrap:balance; text-shadow:0 4px 40px rgba(2,16,22,.22); }
+.terrain-lab-content span { display:block; margin-top:48px; max-width:390px; font-size:clamp(15px,1.25vw,19px); line-height:1.9; color:#d4e4e4; }
+.terrain-lab-content a { display:inline-flex; margin-top:45px; border-bottom:1px solid rgba(255,255,255,.65); padding:12px 0; }
+.terrain-lab-anchor { position:absolute; bottom:0; }
+.terrain-lab-credit { position:fixed; z-index:5; bottom:20px; left:5%; font-size:10px; color:#d2d9d6; }
+@media(max-width:680px) { .terrain-lab-header { height:68px; } .terrain-lab-header span { display:none; } .terrain-lab-chapter { padding:0 7%; } .terrain-lab-content { width:100%; } .terrain-lab-content p { margin-bottom:20px; } .terrain-lab-content span { margin-top:25px; } .terrain-lab-status { right:6%; bottom:50px; } }
+
+.terrain-lab-view { width:100%; height:100%; display:block; }
+.terrain-lab-content a:focus-visible,.terrain-lab-header a:focus-visible { outline:2px solid #fff; outline-offset:8px; }
+@media(prefers-reduced-motion:reduce) { .terrain-lab { scroll-behavior:auto; } }
