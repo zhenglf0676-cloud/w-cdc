@@ -2,7 +2,6 @@ import * as THREE from 'three';
 
 const BASE = '/landing/alpine/';
 const GRID = 401;
-const smooth = THREE.MathUtils.smoothstep;
 
 /** One intentionally composed opening shot, independent of the older journey. */
 export async function mountAlpine(canvas: HTMLCanvasElement, signal: AbortSignal, report: (message: string) => void) {
@@ -85,11 +84,15 @@ export async function mountAlpine(canvas: HTMLCanvasElement, signal: AbortSignal
           vec3 alpineP = alpinePosition;
           vec3 rockColor = alpineTri(alpineRock,alpineP*.027,alpineWeights).rgb;
           float grain = alpineTri(alpineRockBump,alpineP*.019,alpineWeights).r;
+          float broadGrain = alpineTri(alpineRockBump,alpineP*.0043,alpineWeights).r;
           float snowCover = alpineCover(alpineP,alpineN,grain-.5);
           float snowGrain = texture2D(alpineSnowBump,alpineP.xz*.12).r;
           float strata = .90 + .10*sin(alpineP.y*.48 + grain*8. + alpineP.x*.018);
-          vec3 stone = rockColor * vec3(.43,.48,.55) * strata;
+          vec3 stone = rockColor * vec3(.48,.50,.53) * strata * mix(.72,1.18,broadGrain);
           vec3 ice = mix(vec3(.64,.77,.83),vec3(.91,.95,.98),snowGrain*.35+.55);
+          // Broad wind-scoured patches break repeated texture at landscape scale.
+          float wind = sin(alpineP.x*.046 + alpineP.z*.023 + broadGrain*5.);
+          ice *= .96 + .04*wind;
           diffuseColor.rgb *= mix(stone,ice,snowCover);
         `)
         .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
@@ -101,10 +104,32 @@ export async function mountAlpine(canvas: HTMLCanvasElement, signal: AbortSignal
           normal = perturbNormalArb(-vViewPosition,normal,gradient,faceDirection);
         `);
     };
-    material.customProgramCacheKey = () => 'alpine-triplanar-snow-v1';
+    material.customProgramCacheKey = () => 'alpine-triplanar-snow-v2';
     const scene = new THREE.Scene();
     scene.fog = new THREE.FogExp2('#b1c4d3', .00115);
     const mountain = new THREE.Mesh(terrain, material); mountain.castShadow = true; mountain.receiveShadow = true; scene.add(mountain);
+    // Real silhouettes behind the hero massif, with lower detail and no extra textures.
+    // Layered distance replaces the empty horizon without increasing first-load bytes.
+    for (let layer = 0; layer < 3; layer++) {
+      const ridge = own(new THREE.PlaneGeometry(4600, 1000, mobile ? 80 : 140, 24));
+      ridge.rotateX(-Math.PI / 2);
+      const p = ridge.getAttribute('position');
+      for (let i = 0; i < p.count; i++) {
+        const x = p.getX(i), z = p.getZ(i);
+        const crest = Math.pow(Math.abs(Math.sin(x*.0031 + layer*1.9)), 1.5)*170
+          + Math.abs(Math.sin(x*.0077 + layer))*75
+          + Math.abs(Math.sin(x*.019 + layer*2.4))*24;
+        const envelope = Math.max(0, 1 - Math.abs(z)/500);
+        p.setY(i, 35 + (crest + 90)*envelope);
+      }
+      ridge.computeVertexNormals();
+      const ridgeMaterial = own(new THREE.MeshStandardMaterial({
+        color: new THREE.Color().setHSL(.59,.12,.49 + layer*.055), roughness: 1,
+      }));
+      const mesh = new THREE.Mesh(ridge, ridgeMaterial);
+      mesh.position.set(layer%2 ? -230 : 160, 0, -1000-layer*500);
+      scene.add(mesh);
+    }
     scene.add(new THREE.HemisphereLight('#b9d8f4', '#40516a', 1.25));
     const sun = new THREE.DirectionalLight('#ffe1b7', 3.1); sun.position.set(-380, 430, 260); sun.target.position.set(40, 100, -100);
     sun.castShadow = true; sun.shadow.mapSize.set(mobile ? 1024 : 2048, mobile ? 1024 : 2048);
@@ -122,12 +147,15 @@ export async function mountAlpine(canvas: HTMLCanvasElement, signal: AbortSignal
         #include <colorspace_fragment>
       }`,
     }));
-    const sky = new THREE.Mesh(own(new THREE.SphereGeometry(2500, 24, 16)), skyMaterial); scene.add(sky);
+    const sky = new THREE.Mesh(own(new THREE.SphereGeometry(3500, 24, 16)), skyMaterial); scene.add(sky);
     // A thin, translucent valley layer creates depth without hiding the ridge silhouette.
     const hazeMaterial = own(new THREE.ShaderMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide,
       vertexShader: `varying vec2 coord;void main(){coord=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
       fragmentShader: `varying vec2 coord;void main(){vec2 p=coord*2.-1.;float a=exp(-p.x*p.x*2.-p.y*p.y*6.);
-        float wisps=.65+.35*sin(p.x*16.+sin(p.y*12.));gl_FragColor=vec4(.74,.83,.88,a*wisps*.12);}`,
+        float wisps=.65+.35*sin(p.x*16.+sin(p.y*12.));gl_FragColor=vec4(.74,.83,.88,a*wisps*.12);
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+      }`,
     }));
     for (let i = 0; i < 3; i++) {
       const haze = new THREE.Mesh(own(new THREE.PlaneGeometry(1500, 180)), hazeMaterial);
@@ -141,13 +169,20 @@ export async function mountAlpine(canvas: HTMLCanvasElement, signal: AbortSignal
     const scrollProgress = () => { target = THREE.MathUtils.clamp(window.scrollY / Math.max(1, document.documentElement.scrollHeight - window.innerHeight), 0, 1); };
     const resize = () => { renderer.setSize(window.innerWidth, window.innerHeight, false); camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); scrollProgress(); };
     const aim = new THREE.Vector3();
+    const placeCamera = () => {
+      // The same parameter for position and gaze prevents an accelerating look
+      // direction while the camera itself is easing at a different rate.
+      path.getPoint(progress,camera.position);
+      camera.position.y = Math.max(camera.position.y,sampleHeight(camera.position.x,camera.position.z)+22);
+      aims.getPoint(progress,aim);
+      camera.lookAt(aim);
+      sky.position.copy(camera.position);
+    };
     const draw = (time: number) => {
       frame = 0; if (disposed || lost || document.hidden) return;
       const dt = Math.min((time - lastTime) / 1000,.05); lastTime = time;
       progress = reduced.matches ? target : THREE.MathUtils.lerp(progress,target,1-Math.exp(-dt*3.5));
-      path.getPoint(smooth(progress,0,1),camera.position);
-      camera.position.y = Math.max(camera.position.y,sampleHeight(camera.position.x,camera.position.z)+16);
-      aims.getPoint(progress,aim); camera.lookAt(aim); sky.position.copy(camera.position);
+      placeCamera();
       renderer.render(scene,camera);
       // Static lighting: render the shadow map once, not on every scroll frame.
       renderer.shadowMap.autoUpdate = false;
@@ -159,7 +194,7 @@ export async function mountAlpine(canvas: HTMLCanvasElement, signal: AbortSignal
     const onVisible = () => {if(document.hidden){cancelAnimationFrame(frame);frame=0;}else wake();};
     const onLost = (event: Event) => {event.preventDefault();lost=true;cancelAnimationFrame(frame);frame=0;report('三维画面已中断，请刷新重试');};
     resize();progress=target;
-    path.getPoint(progress,camera.position);aims.getPoint(progress,aim);camera.lookAt(aim);
+    placeCamera();
     await renderer.compileAsync(scene,camera);
     if(shaderFailed) throw new Error('Mountain shader compilation failed');
     if(signal.aborted){cleanResources();return () => {};}
