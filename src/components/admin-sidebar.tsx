@@ -70,7 +70,7 @@ export function AdminSidebar() {
   return (
     <aside
       className={cn(
-        'fixed left-0 top-0 z-40 flex h-screen flex-col bg-[#0F2B46] text-white transition-all duration-300',
+        'workbench-sidebar fixed left-0 top-0 z-40 flex h-screen flex-col bg-[#0F2B46] text-white transition-all duration-300',
         collapsed ? 'w-16' : 'w-64'
       )}
     >
@@ -102,11 +102,12 @@ export function AdminSidebar() {
               key={item.href}
               onClick={() => router.push(item.href)}
               className={cn(
-                'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors',
+                'workbench-nav-item flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors',
                 isActive
                   ? 'bg-[#0EA5E9] text-white'
                   : 'text-white/70 hover:bg-white/10 hover:text-white'
               )}
+              aria-current={isActive ? 'page' : undefined}
             >
               <div className="relative flex-shrink-0">
                 <Icon className="h-5 w-5" />

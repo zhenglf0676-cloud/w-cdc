@@ -81,7 +81,7 @@ export function EnterpriseSidebar({ activeItem = 'home' }: EnterpriseSidebarProp
   return (
     <div
       className={cn(
-        'fixed left-0 top-0 z-40 flex h-full flex-col bg-[#0F2B46] text-white transition-all duration-300',
+        'workbench-sidebar fixed left-0 top-0 z-40 flex h-full flex-col bg-[#0F2B46] text-white transition-all duration-300',
         collapsed ? 'w-16' : 'w-64'
       )}
     >
@@ -104,12 +104,13 @@ export function EnterpriseSidebar({ activeItem = 'home' }: EnterpriseSidebarProp
               key={item.id}
               onClick={() => router.push(item.href)}
               className={cn(
-                'flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors',
+                'workbench-nav-item flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors',
                 isActive
                   ? 'bg-sky-600 text-white'
                   : 'text-slate-300 hover:bg-white/10 hover:text-white'
               )}
               title={collapsed ? item.label : undefined}
+              aria-current={isActive ? 'page' : undefined}
             >
               <Icon className="h-5 w-5 shrink-0" />
               {!collapsed && (
