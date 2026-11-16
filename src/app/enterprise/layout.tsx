@@ -19,7 +19,7 @@ export default function EnterpriseLayout({ children }: { children: React.ReactNo
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className={pathname === '/enterprise' ? 'min-h-screen bg-slate-50' : 'workbench-shell min-h-screen bg-slate-50'}>
       <EnterpriseSidebar activeItem={activeItem} />
       <div className="ml-64">{children}</div>
     </div>
