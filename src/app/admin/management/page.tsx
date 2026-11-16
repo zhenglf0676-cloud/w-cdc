@@ -474,18 +474,18 @@ export default function ManagementPage() {
   }
 
   return (
-    <div className="p-6">
+    <div className="wb-page wb-management p-6">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">企业管理</h1>
         <p className="text-sm text-gray-500 mt-1">审批企业的污染物和排污口申请</p>
       </div>
 
       {/* Tab 切换 */}
-      <div className="flex gap-4 mb-6 border-b">
+      <div className="wb-tabs flex gap-4 mb-6 border-b" data-active={activeTab}>
         <button
           onClick={() => setActiveTab('pollutant')}
           className={cn(
-            'pb-3 px-4 text-sm font-medium transition-colors relative',
+            'wb-tab pb-3 px-4 text-sm font-medium transition-colors relative',
             activeTab === 'pollutant'
               ? 'text-blue-600'
               : 'text-gray-500 hover:text-gray-700'
@@ -504,7 +504,7 @@ export default function ManagementPage() {
         <button
           onClick={() => setActiveTab('discharge')}
           className={cn(
-            'pb-3 px-4 text-sm font-medium transition-colors relative',
+            'wb-tab pb-3 px-4 text-sm font-medium transition-colors relative',
             activeTab === 'discharge'
               ? 'text-blue-600'
               : 'text-gray-500 hover:text-gray-700'
@@ -541,7 +541,7 @@ export default function ManagementPage() {
                   {pendingApps.map((app) => (
                     <div
                       key={app.id}
-                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
+                      className="wb-approval-row flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors"
                     >
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
@@ -765,7 +765,7 @@ export default function ManagementPage() {
 
       {/* 排污口审批弹窗 */}
       <Dialog open={outletDialogOpen} onOpenChange={setOutletDialogOpen}>
-        <DialogContent>
+        <DialogContent className="wb-dialog">
           <DialogHeader>
             <DialogTitle>排污口审批</DialogTitle>
             <DialogDescription>
@@ -826,7 +826,7 @@ export default function ManagementPage() {
 
       {/* 审批弹窗 */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="wb-dialog max-w-2xl">
           <DialogHeader>
             <DialogTitle>污染物审批 - {selectedApp?.company_name}</DialogTitle>
             <DialogDescription>
