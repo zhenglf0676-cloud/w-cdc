@@ -85,6 +85,19 @@
   isolation: isolate;
 }
 
+.public-hero-stage::after {
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 64svh;
+  background: linear-gradient(180deg, transparent 0%, rgb(164 226 223 / 14%) 24%, rgb(198 239 233 / 55%) 51%, #e9f8f4 88%);
+  content: '';
+  opacity: var(--dive-exit, 0);
+  pointer-events: none;
+}
+
 .public-sea-surface {
   position: absolute;
   inset: 0;
@@ -118,7 +131,7 @@
   inset: var(--sea-line, 105%) 0 0;
   overflow: hidden;
   background: #83d9df;
-  box-shadow: 0 -15px 40px rgb(218 255 250 / 27%);
+  mask-image: linear-gradient(180deg, transparent, #000 27px);
 }
 
 .public-underwater-window::before {
@@ -128,9 +141,7 @@
   right: 0;
   left: 0;
   height: 29px;
-  border-top: 2px solid rgb(255 255 255 / 86%);
-  background: linear-gradient(180deg, rgb(246 255 253 / 55%), transparent);
-  box-shadow: 0 3px 13px rgb(240 255 255 / 35%);
+  background: linear-gradient(180deg, rgb(246 255 253 / 38%), transparent);
   content: '';
   pointer-events: none;
 }
@@ -224,6 +235,7 @@
 .public-hero-bottom {
   bottom: 58px;
   color: #2e6272;
+  opacity: var(--hero-copy-opacity, 1);
   text-shadow: 0 1px 10px rgb(255 255 255 / 70%);
 }
 
@@ -253,11 +265,11 @@
 }
 
 .public-advantages {
-  margin-top: -32px;
-  padding-top: 123px;
-  border-radius: 34px 34px 0 0;
-  background: linear-gradient(170deg, #f6fbf8, #eaf6f2 58%, #f6faf7);
-  box-shadow: 0 -20px 45px rgb(54 144 151 / 9%);
+  margin-top: 0;
+  padding-top: 110px;
+  border-radius: 0;
+  background: radial-gradient(ellipse 75% 340px at 86% 0%, rgb(137 222 211 / 20%), transparent 80%), linear-gradient(180deg, #e9f8f4, #f4fbf8 310px, #eaf6f2 72%, #f6faf7);
+  box-shadow: none;
 }
 
 .public-feature-shell {
