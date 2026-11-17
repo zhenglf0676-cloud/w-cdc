@@ -170,7 +170,7 @@ body {
   margin-bottom: 4px;
 }
 
-/* Interior workbench only. Public and role home pages retain their original UI. */
+/* Shared workbench treatment for both role home pages and interior pages. */
 .workbench-shell {
   --wb-canvas: #edf5f8;
   --wb-surface: #fff;
@@ -187,14 +187,20 @@ body {
 }
 
 .workbench-shell .workbench-sidebar {
+  top: 12px;
+  left: 12px;
+  height: calc(100vh - 24px);
+  border: 1px solid rgb(172 232 241 / 20%);
+  border-radius: 22px;
   border-right: 1px solid #335060;
   background: radial-gradient(circle at 5% 0%, #1b6179, #123b61 42%, #102842 100%);
   border-right-color: rgb(136 208 224 / 25%);
-  box-shadow: 8px 0 32px rgb(18 57 81 / 13%);
+  box-shadow: 0 22px 50px rgb(14 52 77 / 22%), inset 0 1px rgb(255 255 255 / 15%);
 }
 
 .workbench-shell .workbench-sidebar nav {
   padding-top: 22px;
+  overflow-y: auto;
 }
 
 .workbench-shell .workbench-nav-item {
@@ -678,6 +684,359 @@ body {
     transform: translateY(0) scale(1);
   }
 }
+
+/* Floating workbench frame. Scoped selectors below belong to distinct page components. */
+/* stylelint-disable no-descending-specificity -- These selectors do not target the same descendants. */
+
+.workbench-shell .workbench-sidebar[data-collapsed='true'] nav button {
+  justify-content: center;
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.workbench-shell .workbench-main {
+  width: calc(100% - 284px);
+  min-height: 100vh;
+  margin-left: 284px;
+  padding-right: 16px;
+  transition: margin-left 300ms ease, width 300ms ease;
+}
+
+.workbench-shell .workbench-sidebar[data-collapsed='true'] + .workbench-main {
+  width: calc(100% - 92px);
+  margin-left: 92px;
+}
+
+.workbench-shell .wb-floating-nav {
+  position: sticky;
+  top: 12px;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: clamp(12px, 2vw, 30px);
+  width: min(100%, 1480px);
+  min-height: 68px;
+  margin: 12px auto 20px;
+  padding: 9px 13px 9px 23px;
+  border: 1px solid rgb(255 255 255 / 85%);
+  border-radius: 23px;
+  background: linear-gradient(120deg, rgb(255 255 255 / 88%), rgb(229 247 252 / 78%));
+  box-shadow: 0 15px 42px rgb(26 94 126 / 14%), inset 0 1px rgb(255 255 255 / 95%);
+  backdrop-filter: blur(24px) saturate(170%);
+}
+
+.workbench-shell .wb-floating-brand {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  color: #15415a;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .14em;
+  white-space: nowrap;
+}
+
+.workbench-shell .wb-floating-brand strong { color: #078eaa; }
+
+.workbench-shell .wb-liquid-mark {
+  display: block;
+  width: 31px;
+  height: 31px;
+  border-radius: 44% 56% 61% 39%;
+  background: radial-gradient(circle at 31% 25%, #d6ffff 0 12%, transparent 34%), linear-gradient(140deg, #3cd7d1, #197dc8 76%);
+  box-shadow: inset -4px -4px 8px rgb(4 62 130 / 28%), 0 6px 14px rgb(16 146 185 / 25%);
+  animation: wb-liquid 6s ease-in-out infinite alternate;
+}
+
+.workbench-shell .wb-floating-links {
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+}
+.workbench-shell .wb-floating-actions {
+  display: flex;
+  gap: 7px;
+}
+
+.workbench-shell .wb-magnetic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 15px;
+  border-radius: 14px;
+  color: #507388;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  transform: translate(var(--magnet-x, 0), var(--magnet-y, 0));
+  transition: transform 260ms cubic-bezier(.2, 1.35, .35, 1), background-color 250ms ease, box-shadow 250ms ease, color 250ms ease;
+}
+
+.workbench-shell .wb-magnetic:hover,
+.workbench-shell .wb-magnetic.is-active {
+  color: #075d80;
+  background: rgb(117 214 230 / 20%);
+  box-shadow: inset 0 1px rgb(255 255 255 / 75%), 0 5px 15px rgb(21 111 153 / 9%);
+}
+
+.workbench-shell .wb-magnetic:active { transform: scale(.93); }
+.workbench-shell .wb-magnetic:focus-visible,
+.workbench-shell .wb-floating-brand:focus-visible {
+  outline: 2px solid #087f9a;
+  outline-offset: 3px;
+}
+
+.workbench-shell .wb-floating-action,
+.workbench-shell .wb-floating-avatar {
+  width: 42px;
+  padding: 0;
+  border: 1px solid rgb(167 218 230 / 45%);
+}
+.workbench-shell .wb-floating-avatar {
+  color: #fff;
+  background: linear-gradient(130deg, #108ea0, #306ab1);
+}
+.workbench-shell .wb-floating-avatar:hover {
+  color: #fff;
+  background: linear-gradient(130deg, #097d97, #2664a5);
+}
+
+.workbench-shell .wb-page .wb-topbar,
+.workbench-shell .wb-enterprise-home .wb-home-topbar { top: 88px; }
+
+/* Role entry pages: a wider map, calm card hierarchy, and room for existing controls. */
+.workbench-shell .wb-admin-home {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  align-content: start;
+  gap: 18px;
+  width: min(100%, 1480px);
+  margin: 0 auto;
+}
+
+.workbench-shell .wb-admin-home > :first-child { grid-column: 1 / -1; }
+.workbench-shell .wb-admin-enterprises {
+  grid-column: 1;
+  grid-row: 2 / 4;
+  max-height: 660px;
+  overflow-y: auto;
+  padding: 3px 7px 12px 3px;
+}
+.workbench-shell .wb-admin-map {
+  grid-column: 2;
+  grid-row: 2;
+  min-width: 0;
+}
+.workbench-shell .wb-admin-legend {
+  grid-column: 2;
+  grid-row: 3;
+}
+
+.workbench-shell .wb-home-card,
+.workbench-shell .wb-home-panels > div,
+.workbench-shell .wb-home-map > div {
+  border: 1px solid rgb(185 218 229 / 70%);
+  border-radius: 22px;
+  background: linear-gradient(148deg, rgb(255 255 255 / 97%), rgb(242 250 253 / 92%));
+  box-shadow: inset 0 1px #fff, 0 14px 34px rgb(33 101 135 / 8%);
+}
+
+.workbench-shell .wb-home-card { transition: transform 300ms cubic-bezier(.2, .9, .2, 1), box-shadow 300ms ease; }
+.workbench-shell .wb-admin-enterprises .wb-home-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 20px 32px rgb(33 101 135 / 13%);
+}
+.workbench-shell .wb-admin-map > div { border-radius: 15px; }
+.workbench-shell .wb-enterprise-home {
+  width: min(100%, 1510px);
+  margin: 0 auto;
+}
+.workbench-shell .wb-home-topbar { border-radius: 18px; }
+.workbench-shell .wb-home-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(285px, 325px);
+  align-items: start;
+}
+.workbench-shell .wb-home-map { min-width: 0; }
+.workbench-shell .wb-home-map > div { overflow: hidden; }
+.workbench-shell .wb-home-panels {
+  width: auto;
+  min-width: 0;
+}
+
+/* The complete notification list remains visible in a layered deck. */
+.workbench-shell .wb-notification-section { max-width: 970px; }
+.workbench-shell .wb-notification-stack {
+  position: relative;
+  isolation: isolate;
+  padding: 2px 2px 8px;
+}
+.workbench-shell .wb-notification-stack::after {
+  position: absolute;
+  right: 17px;
+  bottom: -1px;
+  left: 17px;
+  height: 15px;
+  z-index: -1;
+  border: 1px solid #c2dce5;
+  border-radius: 0 0 20px 20px;
+  background: #e2f0f5;
+  content: '';
+  box-shadow: 0 8px 17px rgb(25 107 142 / 10%);
+}
+
+.workbench-shell .wb-notification-card {
+  display: block;
+  position: relative;
+  border-radius: 20px;
+  border-color: #cfe2e9;
+  box-shadow: inset 0 1px #fff, 0 9px 21px rgb(29 100 132 / 7%);
+  transition: transform 280ms cubic-bezier(.2, 1, .25, 1), box-shadow 280ms ease, border-color 280ms ease;
+}
+
+.workbench-shell .wb-notification-card:hover,
+.workbench-shell .wb-notification-card:focus-visible {
+  z-index: 1;
+  border-color: #8acddb;
+  box-shadow: 0 17px 28px rgb(29 100 132 / 15%);
+  transform: translateY(-3px) scale(1.005);
+}
+
+.workbench-shell .wb-notification-card:focus-visible {
+  outline: 2px solid #087f9a;
+  outline-offset: 2px;
+}
+.workbench-shell .wb-notification-card:not(:first-child) { margin-top: -7px; }
+
+.workbench-shell .wb-approval-history {
+  position: relative;
+  overflow: hidden;
+}
+.workbench-shell .wb-approval-history[data-expanded='false']::after {
+  position: absolute;
+  right: 18px;
+  bottom: -4px;
+  left: 18px;
+  height: 12px;
+  border-radius: 100%;
+  background: #b9dbe4;
+  content: '';
+  pointer-events: none;
+}
+.workbench-shell .wb-history-list > div {
+  border-radius: 16px;
+  border-color: #cde5e8;
+  box-shadow: inset 0 1px #fff;
+}
+.workbench-shell .wb-page [data-slot='card'] { border-radius: 20px; }
+
+@keyframes wb-liquid {
+  to {
+    border-radius: 57% 43% 40% 60%;
+    transform: rotate(12deg) scale(1.04);
+  }
+}
+
+@media (width <= 1200px) {
+  .workbench-shell .wb-floating-brand > span:last-child { display: none; }
+  .workbench-shell .wb-home-content { grid-template-columns: minmax(0, 1fr); }
+  .workbench-shell .wb-home-panels {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+  .workbench-shell .wb-home-panels > div { margin-top: 0; }
+}
+
+@media (width <= 900px) {
+  .workbench-shell .workbench-sidebar { width: 64px; }
+  .workbench-shell .workbench-sidebar nav button {
+    justify-content: center;
+    padding-right: 0;
+    padding-left: 0;
+  }
+  .workbench-shell .workbench-sidebar nav button > span,
+  .workbench-shell .workbench-sidebar > div:first-child span,
+  .workbench-shell .workbench-sidebar > div:nth-last-child(2) > div,
+  .workbench-shell .workbench-sidebar > div:nth-last-child(2) button span { display: none; }
+  .workbench-shell .workbench-sidebar nav button > span.bg-red-500 {
+    position: absolute;
+    top: 4px;
+    right: 3px;
+    display: flex;
+    width: 8px;
+    min-width: 8px;
+    height: 8px;
+    overflow: hidden;
+    padding: 0;
+    color: transparent;
+  }
+  .workbench-shell .workbench-main,
+  .workbench-shell .workbench-sidebar[data-collapsed='true'] + .workbench-main {
+    width: calc(100% - 92px);
+    margin-left: 92px;
+  }
+  .workbench-shell .wb-floating-link {
+    padding-right: 9px;
+    padding-left: 9px;
+  }
+  .workbench-shell .wb-floating-link span { display: none; }
+  .workbench-shell .wb-admin-home { grid-template-columns: minmax(0, 1fr); }
+  .workbench-shell .wb-admin-enterprises,
+  .workbench-shell .wb-admin-map,
+  .workbench-shell .wb-admin-legend {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .workbench-shell .wb-admin-enterprises {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    max-height: 300px;
+  }
+  .workbench-shell .wb-profile > .flex { flex-direction: column; }
+  .workbench-shell .wb-profile > .flex > aside {
+    width: 100%;
+    min-height: auto;
+  }
+  .workbench-shell .wb-profile > .flex > aside nav {
+    display: flex;
+    flex-wrap: wrap;
+  }
+}
+
+@media (width <= 560px) {
+  .workbench-shell .wb-floating-nav {
+    gap: 3px;
+    padding: 7px;
+    border-radius: 18px;
+  }
+  .workbench-shell .wb-floating-links { gap: 0; }
+  .workbench-shell .wb-floating-action { display: none; }
+  .workbench-shell .wb-floating-brand { display: none; }
+  .workbench-shell .wb-admin-home,
+  .workbench-shell .wb-enterprise-home { padding: 12px; }
+  .workbench-shell .wb-home-content { padding: 0; }
+  .workbench-shell .wb-profile > .flex > main { padding: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workbench-shell .wb-liquid-mark { animation: none; }
+  .workbench-shell .wb-magnetic,
+  .workbench-shell .wb-notification-card,
+  .workbench-shell .wb-notification-card:hover { transform: none; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .workbench-shell .wb-floating-nav {
+    background: #f8fcfe;
+    backdrop-filter: none;
+  }
+}
+/* stylelint-enable no-descending-specificity */
 
 @keyframes wb-water-glow {
   from {
