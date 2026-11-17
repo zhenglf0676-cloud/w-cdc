@@ -71,7 +71,7 @@ export default function Home() {
     window.addEventListener('scroll', schedule, { passive: true });
     window.addEventListener('resize', schedule);
     return () => { window.removeEventListener('scroll', schedule); window.removeEventListener('resize', schedule); if (frame) window.cancelAnimationFrame(frame); };
-  }, []);
+  }, [isLoading, isAuthenticated, role]);
 
   if (isLoading || (isAuthenticated && role)) return <div className="flex min-h-screen items-center justify-center bg-[#071b34]"><Loader2 className="h-8 w-8 animate-spin text-cyan-300" /></div>;
 

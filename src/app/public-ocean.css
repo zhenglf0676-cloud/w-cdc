@@ -69,6 +69,7 @@
   display: block;
   height: 163svh;
   min-height: 0;
+  overflow: clip;
   background: #bdebf1;
   color: #12394c;
 }
