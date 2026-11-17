@@ -268,7 +268,7 @@
   margin-top: 0;
   padding-top: 110px;
   border-radius: 0;
-  background: radial-gradient(ellipse 75% 340px at 86% 0%, rgb(137 222 211 / 20%), transparent 80%), linear-gradient(180deg, #e9f8f4, #f4fbf8 310px, #eaf6f2 72%, #f6faf7);
+  background: linear-gradient(180deg, #e9f8f4, transparent 160px), radial-gradient(ellipse 75% 340px at 86% 0%, rgb(137 222 211 / 20%), transparent 80%), linear-gradient(180deg, #e9f8f4, #f4fbf8 310px, #eaf6f2 72%, #f6faf7);
   box-shadow: none;
 }
 
