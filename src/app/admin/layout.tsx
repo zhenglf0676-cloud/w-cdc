@@ -2,14 +2,13 @@
 
 import { useAuth } from '@/lib/auth-context';
 import { AdminSidebar } from '@/components/admin-sidebar';
+import { FloatingWorkbenchNav } from '@/components/floating-workbench-nav';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { usePathname } from 'next/navigation';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { session, isLoading } = useAuth();
   const router = useRouter();
-  const pathname = usePathname();
   const [redirecting, setRedirecting] = useState(false);
 
   useEffect(() => {
@@ -31,9 +30,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (!session) return null;
 
   return (
-    <div className={pathname === '/admin' ? 'flex min-h-screen bg-slate-50' : 'workbench-shell flex min-h-screen bg-slate-50'}>
+    <div className="workbench-shell flex min-h-screen bg-slate-50">
       <AdminSidebar />
-      <div className="flex-1 ml-64">
+      <div className="workbench-main min-w-0 flex-1">
+        <FloatingWorkbenchNav role="admin" />
         {children}
       </div>
     </div>

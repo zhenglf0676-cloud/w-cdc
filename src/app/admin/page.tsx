@@ -289,18 +289,18 @@ export default function AdminHome() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="wb-admin-home p-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">{parkName || '园区'}</h1>
         <p className="text-sm text-gray-500 mt-1">共 {enterprises.length} 家企业</p>
       </div>
 
       {/* 企业列表 */}
-      <div className="space-y-3">
+      <div className="wb-admin-enterprises space-y-3">
         {enterprises.map((enterprise) => (
           <div
             key={enterprise.user_id}
-            className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow"
+            className="wb-home-card bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow"
           >
             <div className="flex items-start gap-3">
               <MapPin className="h-5 w-5 text-blue-500 mt-0.5" />
@@ -322,13 +322,13 @@ export default function AdminHome() {
       </div>
 
       {/* 地图 */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
+      <div className="wb-home-card wb-admin-map bg-white rounded-lg border border-gray-200 p-4">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">园区地图</h2>
         <div ref={mapContainerRef} className="w-full h-[500px] rounded-lg overflow-hidden" />
       </div>
 
       {/* 图例 */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
+      <div className="wb-home-card wb-admin-legend bg-white rounded-lg border border-gray-200 p-4">
         <h3 className="text-sm font-semibold text-gray-900 mb-3">图例</h3>
         <div className="flex gap-6 text-sm">
           <div className="flex items-center gap-2">
