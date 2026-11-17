@@ -578,10 +578,11 @@ export default function ManagementPage() {
 
           {/* 已审批列表 */}
           {(approvedApps.length > 0 || rejectedApps.length > 0) && (
-            <Card>
+            <Card className="wb-approval-history" data-expanded={showApproved}>
               <CardHeader>
                 <button
                   onClick={() => setShowApproved(!showApproved)}
+                  aria-expanded={showApproved}
                   className="flex items-center justify-between w-full"
                 >
                   <CardTitle className="flex items-center gap-2 text-base">
@@ -600,7 +601,7 @@ export default function ManagementPage() {
               </CardHeader>
               {showApproved && (
                 <CardContent>
-                  <div className="space-y-3">
+                  <div className="wb-history-list space-y-3">
                     {approvedApps.map((app) => (
                       <div
                         key={app.id}
