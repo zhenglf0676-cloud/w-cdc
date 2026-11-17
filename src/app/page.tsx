@@ -63,7 +63,8 @@ export default function Home() {
       const progress = Math.min(1, Math.max(0, -hero.getBoundingClientRect().top / distance));
       hero.style.setProperty('--sea-line', `${105 - progress * 110}%`);
       hero.style.setProperty('--dive-progress', progress.toString());
-      hero.style.setProperty('--hero-copy-opacity', (1 - progress * .76).toString());
+      hero.style.setProperty('--dive-exit', Math.min(1, Math.max(0, (progress - .48) / .52)).toString());
+      hero.style.setProperty('--hero-copy-opacity', (1 - Math.min(1, Math.max(0, (progress - .12) / .65))).toString());
       hero.style.setProperty('--hero-offset', `${-progress * 32}px`);
     };
     const schedule = () => { if (!frame) frame = window.requestAnimationFrame(updateDive); };
