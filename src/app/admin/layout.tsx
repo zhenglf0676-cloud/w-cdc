@@ -2,6 +2,7 @@
 
 import { useAuth } from '@/lib/auth-context';
 import { AdminSidebar } from '@/components/admin-sidebar';
+import { FloatingWorkbenchNav } from '@/components/floating-workbench-nav';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
@@ -29,9 +30,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (!session) return null;
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="workbench-shell flex min-h-screen bg-slate-50">
       <AdminSidebar />
-      <div className="flex-1 ml-64">
+      <div className="workbench-main min-w-0 flex-1">
+        <FloatingWorkbenchNav role="admin" />
         {children}
       </div>
     </div>

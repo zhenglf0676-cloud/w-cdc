@@ -69,8 +69,9 @@ export function AdminSidebar() {
 
   return (
     <aside
+      data-collapsed={collapsed}
       className={cn(
-        'fixed left-0 top-0 z-40 flex h-screen flex-col bg-[#0F2B46] text-white transition-all duration-300',
+        'workbench-sidebar fixed left-0 top-0 z-40 flex h-screen flex-col bg-[#0F2B46] text-white transition-all duration-300',
         collapsed ? 'w-16' : 'w-64'
       )}
     >
@@ -101,12 +102,14 @@ export function AdminSidebar() {
             <button
               key={item.href}
               onClick={() => router.push(item.href)}
+              aria-label={item.title}
               className={cn(
-                'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors',
+                'workbench-nav-item flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors',
                 isActive
                   ? 'bg-[#0EA5E9] text-white'
                   : 'text-white/70 hover:bg-white/10 hover:text-white'
               )}
+              aria-current={isActive ? 'page' : undefined}
             >
               <div className="relative flex-shrink-0">
                 <Icon className="h-5 w-5" />
@@ -132,6 +135,7 @@ export function AdminSidebar() {
         )}
         <button
           onClick={handleLogout}
+          aria-label="退出登录"
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-white/70 transition-colors hover:bg-white/10 hover:text-white"
         >
           <LogOut className="h-5 w-5 flex-shrink-0" />
@@ -142,6 +146,7 @@ export function AdminSidebar() {
       {/* Collapse Toggle */}
       <button
         onClick={() => setCollapsed(!collapsed)}
+        aria-label={collapsed ? '展开侧边栏' : '收起侧边栏'}
         className="absolute -right-3 top-20 flex h-6 w-6 items-center justify-center rounded-full border border-white/20 bg-[#0F2B46] text-white/70 transition-colors hover:bg-white/10 hover:text-white"
       >
         {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}

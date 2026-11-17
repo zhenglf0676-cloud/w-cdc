@@ -448,9 +448,9 @@ export default function MonitoringPage() {
   const companyName = user.user_metadata?.company_name || user.user_metadata?.full_name || '企业用户';
 
   return (
-    <div className="flex h-screen flex-col bg-slate-50">
+    <div className="wb-page wb-monitoring flex h-screen flex-col bg-slate-50">
       {/* Top Bar */}
-      <header className="flex h-14 items-center justify-between border-b bg-white px-6 shadow-sm">
+      <header className="wb-topbar flex h-14 items-center justify-between border-b bg-white px-6 shadow-sm">
         <div className="flex items-center gap-4">
           <button
             onClick={() => router.push('/enterprise')}
@@ -475,7 +475,7 @@ export default function MonitoringPage() {
       {/* Main Content */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left Panel - Outlet List */}
-        <div className="w-72 border-r bg-white">
+        <div className="wb-outlet-list w-72 border-r bg-white">
           <div className="border-b p-4">
             <h3 className="mb-3 font-semibold text-slate-900">排污口列表</h3>
             <div className="relative">
@@ -504,11 +504,12 @@ export default function MonitoringPage() {
                   <button
                     key={outlet.id}
                     onClick={() => setSelectedOutlet(outlet)}
-                    className={`w-full rounded-md px-3 py-2.5 text-left text-sm transition-colors ${
+                    className={`wb-outlet-item w-full rounded-md px-3 py-2.5 text-left text-sm transition-colors ${
                       selectedOutlet?.id === outlet.id
                         ? 'bg-sky-50 text-sky-700'
                         : 'text-slate-700 hover:bg-slate-50'
                     }`}
+                    aria-pressed={selectedOutlet?.id === outlet.id}
                   >
                     <div className="flex items-center gap-2">
                       <MapPin className="h-4 w-4 shrink-0" />
@@ -548,7 +549,7 @@ export default function MonitoringPage() {
             <button
               onClick={handleOpenUpload}
               disabled={!selectedOutlet}
-              className="flex w-full items-center justify-center gap-2 rounded-md bg-sky-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky-700 disabled:opacity-50"
+              className="wb-primary flex w-full items-center justify-center gap-2 rounded-md bg-sky-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-sky-700 disabled:opacity-50"
             >
               <Upload className="h-4 w-4" />
               上传数据
@@ -557,7 +558,7 @@ export default function MonitoringPage() {
         </div>
 
         {/* Right Panel - Data Display */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="wb-content flex-1 overflow-y-auto p-6">
           {selectedOutlet ? (
             <div className="space-y-6">
               {/* Header */}
@@ -595,14 +596,15 @@ export default function MonitoringPage() {
                     return (
                       <div
                         key={pollutant.id}
-                        className="rounded-lg border bg-white p-4 shadow-sm"
+                        className="wb-panel wb-metric rounded-lg border bg-white p-4 shadow-sm"
+                        data-status={status}
                       >
                         <div className="mb-2 text-sm text-slate-600">
                           {pollutant.label}
                           <span className="ml-1 text-slate-400">({pollutant.unit})</span>
                         </div>
                         <div className="mb-2 flex items-baseline gap-1">
-                          <span className="text-3xl font-semibold text-slate-900">
+                          <span className="wb-number text-3xl font-semibold text-slate-900">
                             {value}
                           </span>
                           <span className="text-sm text-slate-400">/ {pollutant.threshold}</span>
@@ -628,27 +630,29 @@ export default function MonitoringPage() {
 
               {/* 趋势图表 */}
               {approvedPollutants.length > 0 && chartData.length > 0 && (
-                <div className="rounded-lg border bg-white shadow-sm">
+                <div className="wb-panel wb-trend rounded-lg border bg-white shadow-sm">
                   <div className="flex items-center justify-between border-b p-4">
                     <h3 className="font-semibold text-slate-900">监测趋势</h3>
-                    <div className="flex gap-2">
+                    <div className="wb-segment flex gap-2" data-range={timeRange}>
                       <button
                         onClick={() => setTimeRange('today')}
-                        className={`rounded px-3 py-1 text-sm ${
+                        className={`wb-segment-item rounded px-3 py-1 text-sm ${
                           timeRange === 'today'
                             ? 'bg-blue-600 text-white'
                             : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                         }`}
+                        aria-pressed={timeRange === 'today'}
                       >
                         当天
                       </button>
                       <button
                         onClick={() => setTimeRange('7days')}
-                        className={`rounded px-3 py-1 text-sm ${
+                        className={`wb-segment-item rounded px-3 py-1 text-sm ${
                           timeRange === '7days'
                             ? 'bg-blue-600 text-white'
                             : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                         }`}
+                        aria-pressed={timeRange === '7days'}
                       >
                         前七天
                       </button>
@@ -665,7 +669,7 @@ export default function MonitoringPage() {
               )}
 
               {/* Monitoring Records */}
-              <div className="rounded-lg border bg-white shadow-sm">
+              <div className="wb-panel wb-records rounded-lg border bg-white shadow-sm">
                 <div className="flex items-center justify-between border-b p-4">
                   <h3 className="font-semibold text-slate-900">监测记录</h3>
                 </div>
@@ -747,7 +751,7 @@ export default function MonitoringPage() {
       {/* Upload Dialog */}
       {showUploadDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
+          <div className="wb-dialog w-full max-w-md rounded-lg bg-white shadow-xl">
             <div className="flex items-center justify-between border-b p-4">
               <h3 className="text-lg font-semibold text-slate-900">上传监测数据</h3>
               <button
@@ -843,7 +847,7 @@ function ChartOption({
   console.log('- 污染物列表:', pollutants.map(p => p.id));
 
   // 为每个污染物分配固定颜色
-  const colors = ['#0ea5e9', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#6366f1'];
+  const colors = ['#197d88', '#719b76', '#b18a50', '#7c87a4', '#9b7f8c', '#607d91'];
 
   // 为每个污染物生成系列数据
   const series = pollutants.map((p, index) => {
@@ -871,6 +875,9 @@ function ChartOption({
     tooltip: {
       trigger: 'axis' as const,
       axisPointer: { type: 'cross' as const },
+      backgroundColor: '#fbfdfc',
+      borderColor: '#dce5e4',
+      textStyle: { color: '#183244' },
     },
     legend: {
       data: pollutants.map(p => p.label),
@@ -886,6 +893,8 @@ function ChartOption({
     xAxis: {
       type: 'category' as const,
       boundaryGap: false,
+      axisLine: { lineStyle: { color: '#cbd9d9' } },
+      axisLabel: { color: '#627884' },
       data: times.map(t => {
         const date = new Date(t);
         if (timeRange === 'today') {
@@ -897,6 +906,9 @@ function ChartOption({
     yAxis: {
       type: 'value' as const,
       name: '数值',
+      nameTextStyle: { color: '#627884' },
+      axisLabel: { color: '#627884' },
+      splitLine: { lineStyle: { color: '#e5eceb', type: 'dashed' as const } },
     },
     series,
   }), [data, pollutants, timeRange, times, series]);

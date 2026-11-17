@@ -3,15 +3,14 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
-import { Eye, EyeOff, Droplets, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Droplets, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { PublicWaterScene } from '@/components/public-water-scene';
 import { getSupabaseBrowserClientWithRetry } from '@/lib/supabase-browser';
 import { useSupabaseConfig } from '@/lib/supabase-config-inject';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-const APP_ICON_URL = 'https://coze-coding-project.tos.coze.site/gen_project_icon/2026-07-19/7664132817533763599_1784448963.png?sign=4906513018-895757e6df-0-736898d83ce3829565980b6ed3d392d92eb800346f56fde50229a2899b5a2cc6';
 const APP_NAME = '基于虚拟质点系与高维矩张量耦合的水污染动态评估系统';
 
 export default function LoginPage() {
@@ -66,101 +65,31 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-[#0F2B46] overflow-hidden">
-      {/* 背景 */}
-      <div className="absolute inset-0 opacity-[0.03]">
-        <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
-              <path d="M 48 0 L 0 0 0 48" fill="none" stroke="white" strokeWidth="0.5" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#grid)" />
-        </svg>
-      </div>
-      <div className="absolute -top-32 -right-32 h-96 w-96 rounded-full bg-[#0EA5E9] opacity-[0.06] blur-3xl" />
-      <div className="absolute -bottom-40 -left-32 h-[500px] w-[500px] rounded-full bg-[#0EA5E9] opacity-[0.04] blur-3xl" />
-
-      {/* 登录表单 */}
-      <div className="relative z-10 w-full max-w-[400px] px-6">
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 backdrop-blur-sm">
-            {APP_ICON_URL ? (
-              <Image src={APP_ICON_URL} alt={APP_NAME} width={36} height={36} className="rounded-xl object-contain" />
-            ) : (
-              <Droplets className="h-7 w-7 text-[#0EA5E9]" />
-            )}
-          </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">{APP_NAME}</h1>
-        </div>
-
-        <div className="rounded-xl border border-white/[0.06] bg-white/[0.04] backdrop-blur-sm p-7">
-          <form onSubmit={handleLogin} className="space-y-4">
-            {error && (
-              <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-                {error}
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm font-medium text-white/70">邮箱地址</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="请输入邮箱地址"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="h-10 border-white/10 bg-white/[0.06] text-white placeholder:text-white/25 focus-visible:border-[#0EA5E9]/50 focus-visible:ring-[#0EA5E9]/20"
-                autoComplete="email"
-                disabled={isLoading}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm font-medium text-white/70">密码</Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="请输入密码"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="h-10 border-white/10 bg-white/[0.06] pr-10 text-white placeholder:text-white/25 focus-visible:border-[#0EA5E9]/50 focus-visible:ring-[#0EA5E9]/20"
-                  autoComplete="current-password"
-                  disabled={isLoading}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/50"
-                  tabIndex={-1}
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
-
-            <Button
-              type="submit"
-              className="h-10 w-full bg-[#0EA5E9] text-white hover:bg-[#0284C7] disabled:opacity-50"
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />登录中...</>
-              ) : (
-                '登录'
-              )}
-            </Button>
-
-            <div className="text-center text-sm text-white/30">
-              还没有账号？{' '}
-              <Link href="/register" className="font-medium text-[#0EA5E9] hover:text-[#38BDF8]">
-                去注册
-              </Link>
-            </div>
+    <main className="public-auth public-login">
+      <section className="public-auth-visual" aria-label="水环境主题视觉">
+        <PublicWaterScene />
+        <div className="public-auth-visual-shade" />
+        <Link href="/" className="public-auth-brand"><span className="public-brand-mark"><Droplets size={22} /></span><span>水域<span className="public-brand-dot">·</span>洞察</span></Link>
+        <div className="public-auth-message"><span className="public-auth-index">01 / THE JOURNEY</span><h1>读懂水的脉络，<br /><em>从这里开始。</em></h1><p>让数据变得可见，让管理更有方向。</p></div>
+        <div className="public-auth-caption">WATER INTELLIGENCE <span>—</span> 以水为始，向未来延伸</div>
+      </section>
+      <section className="public-auth-form-side">
+        <div className="public-auth-top"><Link href="/" className="public-auth-back"><ArrowLeft size={16} /> 返回首页</Link><span>还没有账号？ <Link href="/register">立即注册 <ArrowRight size={14} /></Link></span></div>
+        <div className="public-auth-card">
+          <div className="public-auth-kicker"><span /> 欢迎回来 / WELCOME BACK</div>
+          <h2>登录系统</h2>
+          <p className="public-auth-intro">使用您的账号，继续探索水环境的每一处变化。</p>
+          <form onSubmit={handleLogin} className="public-auth-form">
+            {error && <div role="alert" className="public-auth-error">{error}</div>}
+            <div className="public-field"><Label htmlFor="email">邮箱地址</Label><Input id="email" type="email" placeholder="请输入邮箱地址" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" disabled={isLoading} /></div>
+            <div className="public-field"><Label htmlFor="password">密码</Label><div className="public-password"><Input id="password" type={showPassword ? 'text' : 'password'} placeholder="请输入密码" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" disabled={isLoading} /><button type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? '隐藏密码' : '显示密码'}>{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></div>
+            <Button type="submit" className="public-auth-submit" disabled={isLoading}>{isLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> 登录中...</> : <>登录 <ArrowRight size={18} /></>}</Button>
           </form>
+          <div className="public-auth-divider"><span>水环境管理，从清晰开始</span></div>
+          <div className="public-auth-foot">企业用户可<Link href="/register">创建账号</Link>；管理者使用已有账号登录。</div>
         </div>
-      </div>
-    </div>
+        <p className="public-auth-system-name">{APP_NAME}</p>
+      </section>
+    </main>
   );
 }

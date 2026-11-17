@@ -80,8 +80,9 @@ export function EnterpriseSidebar({ activeItem = 'home' }: EnterpriseSidebarProp
 
   return (
     <div
+      data-collapsed={collapsed}
       className={cn(
-        'fixed left-0 top-0 z-40 flex h-full flex-col bg-[#0F2B46] text-white transition-all duration-300',
+        'workbench-sidebar fixed left-0 top-0 z-40 flex h-full flex-col bg-[#0F2B46] text-white transition-all duration-300',
         collapsed ? 'w-16' : 'w-64'
       )}
     >
@@ -103,13 +104,15 @@ export function EnterpriseSidebar({ activeItem = 'home' }: EnterpriseSidebarProp
             <button
               key={item.id}
               onClick={() => router.push(item.href)}
+              aria-label={item.label}
               className={cn(
-                'flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors',
+                'workbench-nav-item flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors',
                 isActive
                   ? 'bg-sky-600 text-white'
                   : 'text-slate-300 hover:bg-white/10 hover:text-white'
               )}
               title={collapsed ? item.label : undefined}
+              aria-current={isActive ? 'page' : undefined}
             >
               <Icon className="h-5 w-5 shrink-0" />
               {!collapsed && (
@@ -142,6 +145,7 @@ export function EnterpriseSidebar({ activeItem = 'home' }: EnterpriseSidebarProp
         )}
         <button
           onClick={handleLogout}
+          aria-label="退出登录"
           className={cn(
             'flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-red-500/20 hover:text-red-400',
             collapsed && 'justify-center'
@@ -156,6 +160,7 @@ export function EnterpriseSidebar({ activeItem = 'home' }: EnterpriseSidebarProp
       {/* Collapse Toggle */}
       <button
         onClick={() => setCollapsed(!collapsed)}
+        aria-label={collapsed ? '展开侧边栏' : '收起侧边栏'}
         className="absolute -right-3 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:bg-slate-50"
       >
         {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}

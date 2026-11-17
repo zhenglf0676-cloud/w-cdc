@@ -170,12 +170,12 @@ export default function CDCPage() {
   // 为每个污染物生成雷达图配置（使用最后一天的数据）
   // 为每个污染物分配不同的颜色
   const pollutantColors = [
-    { line: '#3B82F6', area: 'rgba(59, 130, 246, 0.2)' },   // 蓝色
-    { line: '#10B981', area: 'rgba(16, 185, 129, 0.2)' },   // 绿色
-    { line: '#F59E0B', area: 'rgba(245, 158, 11, 0.2)' },   // 橙色
-    { line: '#8B5CF6', area: 'rgba(139, 92, 246, 0.2)' },   // 紫色
-    { line: '#EC4899', area: 'rgba(236, 72, 153, 0.2)' },   // 粉色
-    { line: '#06B6D4', area: 'rgba(6, 182, 212, 0.2)' },    // 青色
+    { line: '#197d88', area: 'rgba(25, 125, 136, 0.14)' },
+    { line: '#719b76', area: 'rgba(113, 155, 118, 0.14)' },
+    { line: '#b18a50', area: 'rgba(177, 138, 80, 0.14)' },
+    { line: '#7c87a4', area: 'rgba(124, 135, 164, 0.14)' },
+    { line: '#9b7f8c', area: 'rgba(155, 127, 140, 0.14)' },
+    { line: '#607d91', area: 'rgba(96, 125, 145, 0.14)' },
   ];
 
   const getPollutantRadarOption = (pollutant: PollutantCDC, index: number) => {
@@ -271,6 +271,9 @@ export default function CDCPage() {
     return {
       tooltip: {
         trigger: 'axis',
+        backgroundColor: '#fbfdfc',
+        borderColor: '#dce5e4',
+        textStyle: { color: '#183244' },
         formatter: (params: any) => {
           if (!params || params.length === 0) return '';
           let result = `${params[0].axisValue}<br/>`;
@@ -360,9 +363,9 @@ export default function CDCPage() {
   };
 
   return (
-    <div className="flex h-screen flex-col bg-slate-50">
+    <div className="wb-page wb-cdc flex h-screen flex-col bg-slate-50">
       {/* Top Bar */}
-      <header className="flex h-14 items-center justify-between border-b bg-white px-6 shadow-sm">
+      <header className="wb-topbar flex h-14 items-center justify-between border-b bg-white px-6 shadow-sm">
         <div className="flex items-center gap-4">
           <button
             onClick={() => router.push('/enterprise')}
@@ -385,9 +388,9 @@ export default function CDCPage() {
       </header>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="wb-content flex-1 overflow-y-auto p-6">
         {/* 时间范围选择 */}
-        <div className="mb-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="wb-toolbar mb-6 rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
           <div className="mb-3 flex items-center gap-2">
             <CalendarIcon className="h-4 w-4 text-slate-500" />
             <h3 className="font-semibold text-slate-900">分析周期</h3>
@@ -414,7 +417,7 @@ export default function CDCPage() {
             <button
               onClick={fetchCDCData}
               disabled={loading}
-              className="mt-5 rounded-md bg-sky-500 px-4 py-2 text-sm font-medium text-white hover:bg-sky-600 disabled:opacity-50"
+              className="wb-primary mt-5 rounded-md bg-sky-500 px-4 py-2 text-sm font-medium text-white hover:bg-sky-600 disabled:opacity-50"
             >
               {loading ? '分析中...' : '重新分析'}
             </button>
@@ -437,12 +440,12 @@ export default function CDCPage() {
             {/* 总体指标卡片 */}
             <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
               {/* 综合 CDC 值 */}
-              <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="wb-panel wb-stat wb-stat-primary rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-sm text-slate-500">综合 CDC 值</span>
                   <Activity className="h-4 w-4 text-slate-400" />
                 </div>
-                <div className="text-2xl font-bold text-slate-900">
+                <div className="wb-number text-2xl font-bold text-slate-900">
                   {(cdcData.overallCDC || 0).toFixed(2)}
                 </div>
                 <div className="mt-1 flex items-center gap-2">
@@ -465,7 +468,7 @@ export default function CDCPage() {
               </div>
 
               {/* 风险等级 */}
-              <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="wb-panel wb-stat rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-sm text-slate-500">风险等级</span>
                   <AlertTriangle className="h-4 w-4 text-slate-400" />
@@ -483,7 +486,7 @@ export default function CDCPage() {
               </div>
 
               {/* 排污口数量 */}
-              <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="wb-panel wb-stat rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-sm text-slate-500">排污口数量</span>
                   <CheckCircle className="h-4 w-4 text-slate-400" />
@@ -497,7 +500,7 @@ export default function CDCPage() {
               </div>
 
               {/* 监测污染物 */}
-              <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="wb-panel wb-stat rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="mb-2 flex items-center justify-between">
                   <span className="text-sm text-slate-500">监测污染物</span>
                   <CheckCircle className="h-4 w-4 text-slate-400" />
@@ -516,7 +519,7 @@ export default function CDCPage() {
               <h3 className="mb-4 font-semibold text-slate-900">各污染物 CDC 分析</h3>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {cdcData.pollutants.map((pollutant, index) => (
-                  <div key={index} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                  <div key={index} className="wb-panel wb-pollutant rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="mb-3 flex items-center justify-between">
                       <h4 className="font-medium text-slate-900">{pollutant.pollutantName}</h4>
                       <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${
@@ -559,7 +562,7 @@ export default function CDCPage() {
             </div>
 
             {/* CDC 趋势图 */}
-            <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="wb-panel wb-trend rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
               <h3 className="mb-4 font-semibold text-slate-900">各污染物 CDC 对比</h3>
               <ReactECharts option={lineOption} style={{ height: '350px' }} />
             </div>

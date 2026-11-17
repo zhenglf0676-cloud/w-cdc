@@ -392,9 +392,9 @@ export default function AdminMonitoringPage() {
   }, [trendData]);
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="wb-page wb-admin-monitoring min-h-screen bg-slate-50">
       {/* 顶部导航栏 */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
+      <header className="wb-topbar bg-white border-b border-slate-200 sticky top-0 z-50">
         <div className="px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -458,7 +458,7 @@ export default function AdminMonitoringPage() {
       </header>
 
       {/* 主内容区 */}
-      <main className="p-6">
+      <main className="wb-content p-6">
         <div className="grid grid-cols-12 gap-6">
           {/* 左侧：CDC 风险排行 */}
           <div className="col-span-4">

@@ -168,7 +168,7 @@ export function KnowledgeLibrary({ admin }: { admin: boolean }) {
     {!authLoading && <Button asChild><Link href="/login">去登录</Link></Button>}
   </main>;
 
-  return <main className="mx-auto max-w-5xl space-y-6 px-5 py-8 sm:px-8">
+  return <main className="wb-page wb-knowledge mx-auto max-w-5xl space-y-6 px-5 py-8 sm:px-8">
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div><h1 className="text-2xl font-bold text-slate-900">小水滴资料库</h1>
         <p className="mt-1 text-sm text-slate-500">{admin ? '查看和审核全部企业资料；上传的资料向所有企业公开。' : '检索公共资料与本企业资料，提交内容供管理员审核。'}</p>
@@ -215,7 +215,7 @@ export function KnowledgeLibrary({ admin }: { admin: boolean }) {
     </section>}
 
     <Dialog open={uploadOpen} onOpenChange={open => { if (!busy) setUploadOpen(open); }}>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
+      <DialogContent className="wb-dialog max-h-[90dvh] overflow-y-auto sm:max-w-xl">
         <DialogHeader><DialogTitle>上传资料</DialogTitle><DialogDescription>{admin ? '管理员上传的资料将公开给所有企业；核对并发布后进入检索。' : '上传的资料只供本企业与管理员查看；审核发布后才进入检索。'}</DialogDescription></DialogHeader>
         {error && <p role="alert" className="flex items-center gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700"><CircleAlert className="size-4 shrink-0" />{error}</p>}
         <form onSubmit={upload} className="space-y-4">
@@ -233,7 +233,7 @@ export function KnowledgeLibrary({ admin }: { admin: boolean }) {
     </Dialog>
 
     <Dialog open={!!preview} onOpenChange={open => { if (!open && !busy) setPreview(null); }}>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-3xl">
+      <DialogContent className="wb-dialog max-h-[90dvh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader><DialogTitle className="pr-5 leading-snug">{preview?.document.title ?? '资料详情'}</DialogTitle><DialogDescription>{admin && preview?.document.visibility === 'enterprise' && `${preview.document.company_name || '未知企业'} · 企业资料。`}已提取 {preview?.chunks.length ?? 0} 个片段。发布前请核对原文；问答引用将指向对应章节或页码。</DialogDescription></DialogHeader>
         {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
         {preview && <><div className="max-h-[42dvh] space-y-2 overflow-y-auto rounded-xl bg-slate-50 p-3">{preview.chunks.map(chunk => <div key={chunk.ordinal} className="rounded-lg bg-white p-3 text-xs leading-6 text-slate-700"><p className="mb-1 font-bold text-teal-800">{chunk.section} · 片段 {chunk.ordinal + 1}</p>{chunk.content}</div>)}</div>

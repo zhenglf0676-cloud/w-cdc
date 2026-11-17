@@ -3,8 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
-import { Eye, EyeOff, Droplets, Loader2, Building2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Eye, EyeOff, Droplets, Loader2, Building2 } from 'lucide-react';
+import { PublicWaterScene } from '@/components/public-water-scene';
 import { getSupabaseBrowserClientWithRetry } from '@/lib/supabase-browser';
 import { useSupabaseConfig } from '@/lib/supabase-config-inject';
 import { Button } from '@/components/ui/button';
@@ -13,15 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { LocationPicker } from '@/components/location-picker';
 
-const APP_ICON_URL = 'https://coze-coding-project.tos.coze.site/gen_project_icon/2026-07-19/7664132817533763599_1784448963.png?sign=4906513018-895757e6df-0-736898d83ce3829565980b6ed3d392d92eb800346f56fde50229a2899b5a2cc6';
 const APP_NAME = '基于虚拟质点系与高维矩张量耦合的水污染动态评估系统';
-
-const highlights = [
-  { label: '实时监测', desc: '7天周期数据采集与分析' },
-  { label: 'CDC指数', desc: '多维度污染风险量化评估' },
-  { label: '超标预警', desc: '自动触发分级预警通知' },
-  { label: '地图可视化', desc: '园区排污口分布一目了然' },
-];
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -145,28 +137,20 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-start justify-center bg-[#F8FAFC] px-4 py-8">
-      <div className="w-full max-w-md">
-        {/* Brand */}
-        <div className="mb-6 flex flex-col items-center gap-2">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#0F2B46] shadow-lg">
-            {APP_ICON_URL ? (
-              <Image
-                src={APP_ICON_URL}
-                alt={APP_NAME}
-                width={36}
-                height={36}
-                className="rounded-lg object-contain"
-              />
-            ) : (
-              <Droplets className="h-6 w-6 text-[#0EA5E9]" />
-            )}
-          </div>
-          <h1 className="text-lg font-bold tracking-tight text-[#0F172A]">{APP_NAME}</h1>
-        </div>
-
+    <main className="public-auth public-register">
+      <section className="public-auth-visual" aria-label="水环境主题视觉">
+        <PublicWaterScene />
+        <div className="public-auth-visual-shade" />
+        <Link href="/" className="public-auth-brand"><span className="public-brand-mark"><Droplets size={22} /></span><span>水域<span className="public-brand-dot">·</span>洞察</span></Link>
+        <div className="public-auth-message"><span className="public-auth-index">02 / A NEW BEGINNING</span><h1>每一个新的连接，<br /><em>都让水更清晰。</em></h1><p>创建企业账号，开始管理您的水环境信息。</p></div>
+        <div className="public-auth-caption">WATER INTELLIGENCE <span>—</span> 让每一步都有迹可循</div>
+      </section>
+      <section className="public-auth-form-side">
+        <div className="public-auth-top"><Link href="/" className="public-auth-back"><ArrowLeft size={16} /> 返回首页</Link><span>已有账号？ <Link href="/login">去登录 <ArrowRight size={14} /></Link></span></div>
+        <div className="public-register-wrap">
+          <div className="public-auth-kicker"><span /> 加入我们 / CREATE ACCOUNT</div>
         {/* Register Card */}
-        <Card className="border-[#E2E8F0] shadow-sm">
+        <Card className="public-register-card">
           <CardHeader className="pb-4 text-center">
             <CardTitle className="text-lg font-semibold text-[#0F172A]">创建账户</CardTitle>
             <CardDescription className="text-[#64748B]">
@@ -347,7 +331,9 @@ export default function RegisterPage() {
             </form>
           </CardContent>
         </Card>
-      </div>
-    </div>
+        </div>
+        <p className="public-auth-system-name">{APP_NAME}</p>
+      </section>
+    </main>
   );
 }

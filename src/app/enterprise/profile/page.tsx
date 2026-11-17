@@ -13,7 +13,6 @@ import {
   CheckCircle,
   XCircle,
   Clock,
-  ChevronRight,
   Mail,
   MailOpen,
   Trash2,
@@ -196,9 +195,9 @@ export default function EnterpriseProfilePage() {
   }
 
   return (
-    <div className="p-6">
+    <div className="wb-page wb-profile p-6">
       {/* 顶部导航 */}
-        <header className="sticky top-0 z-30 border-b bg-white">
+        <header className="wb-topbar sticky top-0 z-30 border-b bg-white">
           <div className="flex h-16 items-center justify-between px-6">
             <h1 className="text-lg font-semibold text-foreground">个人中心</h1>
           </div>
@@ -286,13 +285,15 @@ export default function EnterpriseProfilePage() {
                     <p>暂无消息</p>
                   </div>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="wb-notification-section">
+                    <div className="wb-notification-stack space-y-2">
                     {notifications.map((notification) => (
-                      <div
+                      <button
+                        type="button"
                         key={notification.id}
                         onClick={() => openNotification(notification)}
                         className={cn(
-                          'p-4 rounded-lg border transition-all cursor-pointer group',
+                          'wb-notification-card w-full text-left p-4 rounded-lg border transition-all cursor-pointer group',
                           notification.is_read
                             ? 'bg-white hover:bg-muted/50 hover:shadow-sm'
                             : 'bg-blue-50 border-blue-200 hover:bg-blue-100 hover:shadow-md'
@@ -349,8 +350,9 @@ export default function EnterpriseProfilePage() {
                             <div className="h-2 w-2 rounded-full bg-blue-500 mt-2 animate-pulse"></div>
                           )}
                         </div>
-                      </div>
+                      </button>
                     ))}
+                    </div>
                   </div>
                 )}
               </div>

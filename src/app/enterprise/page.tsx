@@ -426,9 +426,9 @@ export default function EnterpriseHome() {
   const companyName = user.user_metadata?.company_name || user.user_metadata?.full_name || '企业用户';
 
   return (
-    <div className="p-6">
+    <div className="wb-enterprise-home p-6">
       {/* Top Bar */}
-      <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-white px-6 shadow-sm">
+      <header className="wb-home-topbar sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-white px-6 shadow-sm">
         <div>
           <h1 className="text-lg font-semibold text-slate-900">首页（污染物管理）</h1>
           <p className="text-xs text-slate-500">管理企业污染物与排污口，实时掌握排污情况</p>
@@ -442,9 +442,9 @@ export default function EnterpriseHome() {
       </header>
 
       {/* Content */}
-      <div className="flex gap-4 p-4">
+      <div className="wb-home-content flex gap-4 p-4">
         {/* Map Area */}
-        <div className="flex-1">
+        <div className="wb-home-map flex-1">
           <div className="relative rounded-lg border bg-white shadow-sm">
             {/* Search Bar */}
             <div className="absolute left-4 top-4 z-10 flex items-center gap-2 rounded-md border bg-white px-3 py-1.5 shadow-sm">
@@ -481,7 +481,7 @@ export default function EnterpriseHome() {
         </div>
 
         {/* Right Panel */}
-        <div className="w-80 space-y-4">
+        <div className="wb-home-panels w-80 space-y-4">
           {/* Apply Pollutants */}
           <div className="rounded-lg border bg-white p-4 shadow-sm">
             <div className="mb-3 flex items-center gap-2">
